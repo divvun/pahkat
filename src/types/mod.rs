@@ -63,7 +63,7 @@ pub struct PackageIndexInstaller {
     pub guid: String,
     pub size: usize,
     pub installed_size: usize,
-    pub signature: PackageIndexInstallerSignature
+    pub signature: Option<PackageIndexInstallerSignature>
 }
 
 #[derive(Debug, Serialize, Deserialize)]

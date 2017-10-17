@@ -5,13 +5,13 @@ extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;
 
-use clap::{App, AppSettings, SubCommand};
+use clap::{Arg, App, AppSettings, SubCommand};
 use std::env;
 use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 mod cli;
 mod types;
@@ -184,16 +184,24 @@ fn repo_index_packages() {
     file.write(&[b'\n']).unwrap();
 }
 
-enum OpenRepoError {
+enum OpenIndexError {
     FileError(std::io::Error),
     JsonError(serde_json::Error)
 }
 
-fn open_repo(path: &Path) -> Result<RepoIndex, OpenRepoError> {
+fn open_repo(path: &Path) -> Result<RepoIndex, OpenIndexError> {
     let file = File::open(path.join("index.json"))
-        .map_err(|e| OpenRepoError::FileError(e))?;
+        .map_err(|e| OpenIndexError::FileError(e))?;
     let index = serde_json::from_reader(file)
-        .map_err(|e| OpenRepoError::JsonError(e))?;
+        .map_err(|e| OpenIndexError::JsonError(e))?;
+    Ok(index)
+}
+
+fn open_package(path: &Path) -> Result<PackageIndex, OpenIndexError> {
+    let file = File::open(path.join("index.json"))
+        .map_err(|e| OpenIndexError::FileError(e))?;
+    let index = serde_json::from_reader(file)
+        .map_err(|e| OpenIndexError::JsonError(e))?;
     Ok(index)
 }
 
@@ -232,6 +240,43 @@ fn repo_index() {
     repo_index_virtuals();
 }
 
+fn package_installer(guid: &str, installer: &str, silent_args: &str, url: &str, size: usize) {
+    let mut pkg = match open_package(&env::current_dir().unwrap()) {
+        Ok(pkg) => pkg,
+        Err(_) => {
+            println!("Package does not exist or is invalid; aborting");
+            return;
+        }
+    };
+
+    let installer_file = File::open(installer).expect("Installer could not be opened.");
+    let meta = installer_file.metadata().unwrap();
+    let installer_size = meta.len() as usize;
+
+    let installer_index = PackageIndexInstaller {
+        url: url.to_owned(),
+        silent_args: silent_args.to_owned(),
+        guid: guid.to_owned(),
+        size: installer_size,
+        installed_size: size,
+        signature: None
+    };
+
+    pkg.installer = Some(installer_index);
+
+    let json = serde_json::to_string_pretty(&pkg).unwrap();
+    
+    println!("\n{}\n", json);
+
+    if !prompt_question("Save index.json", true) {
+        return;
+    }
+
+    let mut file = File::create("index.json").unwrap();
+    file.write_all(json.as_bytes()).unwrap();
+    file.write(&[b'\n']).unwrap();
+}
+
 fn main() {
     let matches = App::new("Báhkat")
         .setting(AppSettings::SubcommandRequiredElseHelp)
@@ -255,10 +300,65 @@ fn main() {
             SubCommand::with_name("init")
                 .about("Initialise a package in the current working directory")
         )
+        .subcommand(
+            // TODO: this currently is hardcoded for Windows only.
+            SubCommand::with_name("installer")
+                .about("Inject installer data into package index")
+                .arg(Arg::with_name("guid")
+                    .value_name("GUID")
+                    .help("The product code that identifies the installer in the registry")
+                    .short("g")
+                    .long("guid")
+                    .takes_value(true)
+                    .required(true)
+                )
+                .arg(Arg::with_name("installer")
+                    .value_name("INSTALLER")
+                    .help("The installer .msi/.exe")
+                    .short("i")
+                    .long("installer")
+                    .takes_value(true)
+                    .required(true)
+                )
+                .arg(Arg::with_name("silent-args")
+                    .value_name("SILENT_ARGS")
+                    .help("Arguments to installer for it to run silently")
+                    .short("s")
+                    .long("silent-args")
+                    .takes_value(true)
+                    .required(true)
+                )
+                .arg(Arg::with_name("url")
+                    .value_name("URL")
+                    .help("The URL where the installer will be downloaded")
+                    .short("u")
+                    .long("url")
+                    .takes_value(true)
+                    .required(true)
+                )
+                .arg(Arg::with_name("installed-size")
+                    .value_name("SIZE")
+                    .help("The size on disk when the package is installed")
+                    .short("z")
+                    .long("size")
+                    .takes_value(true)
+                    .required(true)
+                )
+        )
         .get_matches();
     
     match matches.subcommand() {
         ("init", _) => package_init(),
+        ("installer", Some(matches)) => {
+            let guid = matches.value_of("guid").unwrap();
+            let installer = matches.value_of("installer").unwrap();
+            let silent_args = matches.value_of("silent-args").unwrap();
+            let url = matches.value_of("url").unwrap();
+            let size = matches.value_of("installed-size").unwrap()
+                .parse::<usize>().unwrap();
+
+            package_installer(guid, installer, silent_args, url, size);
+        }
         ("repo", Some(matches)) => {
             match matches.subcommand() {
                 ("init", _) => repo_init(),
