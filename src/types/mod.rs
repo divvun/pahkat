@@ -1,5 +1,8 @@
 use std::collections::HashMap;
 
+pub mod repo;
+pub use repo::*;
+
 #[cfg(target_os = "macos")]
 pub const OS: &str = "macos";
 #[cfg(target_os = "linux")]
@@ -23,6 +26,33 @@ pub struct PackageIndex {
     pub virtual_dependencies: HashMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub installer: Option<PackageIndexInstaller>
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VirtualIndex {
+    pub id: String,
+    pub name: HashMap<String, String>,
+    #[serde(default = "HashMap::new")]
+    pub description: HashMap<String, String>,
+    pub version: String,
+    pub url: String,
+    #[serde(rename = "virtual")]
+    pub virtual_: bool,
+    pub target: VirtualIndexTarget
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VirtualIndexTarget {
+    pub registry_key: Option<VirtualIndexRegistryKey>
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VirtualIndexRegistryKey {
+    pub path: String,
+    pub name: String
 }
 
 #[derive(Debug, Serialize, Deserialize)]
