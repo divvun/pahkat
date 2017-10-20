@@ -1,9 +1,24 @@
 use std::io;
 use std::io::Write;
 use std::collections::HashMap;
+use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
+
+pub fn progress(color: Color, first: &str, rest: &str) -> Result<(), io::Error> {
+    let mut stdout = StandardStream::stdout(ColorChoice::Always);
+    try!(stdout.set_color(ColorSpec::new().set_fg(Some(color)).set_intense(true)));
+    try!(write!(&mut stdout, "{:>12}", first));
+    stdout.reset()?;
+    writeln!(&mut stdout, " {}", rest)?;
+    Ok(())
+}
 
 pub fn prompt_question(prompt: &str, default: bool) -> bool {
-    print!("{}? ({}) ", prompt, if default { "yes" } else { "no" });
+    let mut stdout = StandardStream::stdout(ColorChoice::Always);
+    stdout.set_color(ColorSpec::new().set_fg(Some(Color::Cyan))).unwrap();
+    write!(&mut stdout, "{}: ", prompt).unwrap();
+    stdout.reset().unwrap();
+
+    print!("({}) ", if default { "yes" } else { "no" });
 
     let _ = io::stdout().flush();
     let mut input = String::new();
@@ -31,10 +46,13 @@ pub fn prompt_question(prompt: &str, default: bool) -> bool {
 }
 
 pub fn prompt_line(prompt: &str, default: &str) -> Option<String> {
-    if default == "" {
-        print!("{}: ", prompt);
-    } else {
-        print!("{}: ({}) ", prompt, default);
+    let mut stdout = StandardStream::stdout(ColorChoice::Always);
+    stdout.set_color(ColorSpec::new().set_fg(Some(Color::Cyan))).unwrap();
+    write!(&mut stdout, "{}: ", prompt).unwrap();
+    stdout.reset().unwrap();
+    
+    if default != "" {
+        print!("({}) ", default);
     }
     
     let _ = io::stdout().flush();

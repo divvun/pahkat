@@ -4,6 +4,9 @@ extern crate serde;
 extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;
+extern crate termcolor;
+
+use termcolor::Color;
 
 use clap::{Arg, App, AppSettings, SubCommand};
 use std::env;
@@ -112,7 +115,7 @@ fn package_init() {
 }
 
 fn repo_index_virtuals() {
-    println!("Generating virtuals/index.json…");
+    progress(Color::Green, "Generating", "virtuals/index.json…");
 
     let pkg_path = env::current_dir().unwrap().join("virtuals");
     let mut map = HashMap::new();
@@ -131,7 +134,8 @@ fn repo_index_virtuals() {
                 let file = File::open(path.join("index.json")).unwrap();
                 let pkg_index: VirtualIndex = serde_json::from_reader(file)
                     .expect(path.join("index.json").to_str().unwrap());
-                println!("Inserting {}/{}…", &pkg_index.id, &pkg_index.version);
+                let msg = format!("{}/{}…", &pkg_index.id, &pkg_index.version);
+                progress(Color::Yellow, "Inserting", &msg);
                 pkg_index
             })
             .collect();
@@ -144,14 +148,14 @@ fn repo_index_virtuals() {
 
     let json = serde_json::to_string_pretty(&map).unwrap();
 
-    println!("Writing virtuals/index.json…");
+    progress(Color::Green, "Writing", "virtuals/index.json…");
     let mut file = File::create(&pkg_path.join("index.json")).unwrap();
     file.write_all(json.as_bytes()).unwrap();
     file.write(&[b'\n']).unwrap();
 }
 
 fn repo_index_packages() {
-    println!("Generating packages/index.json…");
+    progress(Color::Green, "Generating", "packages/index.json…");
 
     let pkg_path = env::current_dir().unwrap().join("packages");
     let pkgs: Vec<PackageIndex> = fs::read_dir(&pkg_path)
@@ -166,7 +170,9 @@ fn repo_index_packages() {
             let file = File::open(path.join("index.json")).unwrap();
             let pkg_index: PackageIndex = serde_json::from_reader(file)
                 .expect(path.join("index.json").to_str().unwrap());
-            println!("Inserting {}…", &pkg_index.id);
+            
+            let msg = format!("{}…", &pkg_index.id);
+            progress(Color::Yellow, "Inserting", &msg);
             pkg_index
         })
         .collect();
@@ -178,7 +184,7 @@ fn repo_index_packages() {
 
     let json = serde_json::to_string_pretty(&map).unwrap();
 
-    println!("Writing packages/index.json…");
+    progress(Color::Green, "Writing", "packages/index.json…");
     let mut file = File::create(&pkg_path.join("index.json")).unwrap();
     file.write_all(json.as_bytes()).unwrap();
     file.write(&[b'\n']).unwrap();
@@ -207,7 +213,7 @@ fn open_package(path: &Path) -> Result<PackageIndex, OpenIndexError> {
 
 fn repo_init() {
     if open_repo(&env::current_dir().unwrap()).is_ok() {
-        println!("Repo already exists; aborting.");
+        progress(Color::Red, "Error", "Repo already exists; aborting.");
         return;
     }
 
@@ -232,7 +238,7 @@ fn repo_init() {
 
 fn repo_index() {
     if open_repo(&env::current_dir().unwrap()).is_err() {
-        println!("Repo does not exist or is invalid; aborting.");
+        progress(Color::Red, "Error", "Repo does not exist or is invalid; aborting.");
         return;
     }
     
@@ -244,7 +250,7 @@ fn package_installer(guid: &str, installer: &str, silent_args: &str, url: &str, 
     let mut pkg = match open_package(&env::current_dir().unwrap()) {
         Ok(pkg) => pkg,
         Err(_) => {
-            println!("Package does not exist or is invalid; aborting");
+            progress(Color::Red, "Error", "Package does not exist or is invalid; aborting");
             return;
         }
     };
