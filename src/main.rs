@@ -246,7 +246,7 @@ fn repo_index() {
     repo_index_virtuals();
 }
 
-fn package_installer(guid: &str, installer: &str, silent_args: &str, url: &str, size: usize) {
+fn package_installer(product_code: &str, installer: &str, silent_args: &str, url: &str, size: usize) {
     let mut pkg = match open_package(&env::current_dir().unwrap()) {
         Ok(pkg) => pkg,
         Err(_) => {
@@ -262,7 +262,7 @@ fn package_installer(guid: &str, installer: &str, silent_args: &str, url: &str, 
     let installer_index = PackageIndexInstaller {
         url: url.to_owned(),
         silent_args: silent_args.to_owned(),
-        guid: guid.to_owned(),
+        product_code: product_code.to_owned(),
         size: installer_size,
         installed_size: size,
         signature: None
@@ -310,11 +310,11 @@ fn main() {
             // TODO: this currently is hardcoded for Windows only.
             SubCommand::with_name("installer")
                 .about("Inject installer data into package index")
-                .arg(Arg::with_name("guid")
-                    .value_name("GUID")
+                .arg(Arg::with_name("product-code")
+                    .value_name("PRODUCT_CODE")
                     .help("The product code that identifies the installer in the registry")
-                    .short("g")
-                    .long("guid")
+                    .short("c")
+                    .long("code")
                     .takes_value(true)
                     .required(true)
                 )
@@ -356,14 +356,14 @@ fn main() {
     match matches.subcommand() {
         ("init", _) => package_init(),
         ("installer", Some(matches)) => {
-            let guid = matches.value_of("guid").unwrap();
+            let product_code = matches.value_of("product-code").unwrap();
             let installer = matches.value_of("installer").unwrap();
             let silent_args = matches.value_of("silent-args").unwrap();
             let url = matches.value_of("url").unwrap();
             let size = matches.value_of("installed-size").unwrap()
                 .parse::<usize>().unwrap();
 
-            package_installer(guid, installer, silent_args, url, size);
+            package_installer(product_code, installer, silent_args, url, size);
         }
         ("repo", Some(matches)) => {
             match matches.subcommand() {

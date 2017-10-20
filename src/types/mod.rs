@@ -60,7 +60,7 @@ pub struct VirtualIndexRegistryKey {
 pub struct PackageIndexInstaller {
     pub url: String,
     pub silent_args: String,
-    pub guid: String,
+    pub product_code: String,
     pub size: usize,
     pub installed_size: usize,
     pub signature: Option<PackageIndexInstallerSignature>
