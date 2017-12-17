@@ -5,7 +5,9 @@ use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 pub fn progress(color: Color, first: &str, rest: &str) -> Result<(), io::Error> {
     let mut stdout = StandardStream::stdout(ColorChoice::Always);
-    try!(stdout.set_color(ColorSpec::new().set_fg(Some(color)).set_intense(true)));
+    try!(stdout.set_color(ColorSpec::new().set_fg(Some(color))
+        .set_intense(true)
+        .set_bold(true)));
     try!(write!(&mut stdout, "{:>12}", first));
     stdout.reset()?;
     writeln!(&mut stdout, " {}", rest)?;
@@ -36,8 +38,7 @@ pub fn prompt_question(prompt: &str, default: bool) -> bool {
     match io::stdin().read_line(&mut input) {
         Ok(n) => {
             match n {
-                0 => false,
-                1 => default,
+                0..1 => default,
                 _ => parse(input.trim())
             }
         }
@@ -61,8 +62,7 @@ pub fn prompt_line(prompt: &str, default: &str) -> Option<String> {
     match io::stdin().read_line(&mut input) {
         Ok(n) => {
             match n {
-                0 => None,
-                1 => Some(default.to_owned()),
+                0..1 => Some(default.to_owned()),
                 _ => Some(input.trim().to_owned())
             }
         }

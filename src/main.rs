@@ -115,7 +115,7 @@ fn package_init() {
 }
 
 fn repo_index_virtuals() {
-    progress(Color::Green, "Generating", "virtuals/index.json…");
+    progress(Color::Green, "Generating", "virtuals index");
 
     let pkg_path = env::current_dir().unwrap().join("virtuals");
     let mut map = HashMap::new();
@@ -134,7 +134,7 @@ fn repo_index_virtuals() {
                 let file = File::open(path.join("index.json")).unwrap();
                 let pkg_index: VirtualIndex = serde_json::from_reader(file)
                     .expect(path.join("index.json").to_str().unwrap());
-                let msg = format!("{}/{}…", &pkg_index.id, &pkg_index.version);
+                let msg = format!("{} {}", &pkg_index.id, &pkg_index.version);
                 progress(Color::Yellow, "Inserting", &msg);
                 pkg_index
             })
@@ -148,14 +148,14 @@ fn repo_index_virtuals() {
 
     let json = serde_json::to_string_pretty(&map).unwrap();
 
-    progress(Color::Green, "Writing", "virtuals/index.json…");
+    progress(Color::Green, "Writing", "virtuals index");
     let mut file = File::create(&pkg_path.join("index.json")).unwrap();
     file.write_all(json.as_bytes()).unwrap();
     file.write(&[b'\n']).unwrap();
 }
 
 fn repo_index_packages() {
-    progress(Color::Green, "Generating", "packages/index.json…");
+    progress(Color::Green, "Generating", "packages index");
 
     let pkg_path = env::current_dir().unwrap().join("packages");
     let pkgs: Vec<PackageIndex> = fs::read_dir(&pkg_path)
@@ -171,7 +171,7 @@ fn repo_index_packages() {
             let pkg_index: PackageIndex = serde_json::from_reader(file)
                 .expect(path.join("index.json").to_str().unwrap());
             
-            let msg = format!("{}…", &pkg_index.id);
+            let msg = format!("{} {}", &pkg_index.id, &pkg_index.version);
             progress(Color::Yellow, "Inserting", &msg);
             pkg_index
         })
@@ -184,7 +184,7 @@ fn repo_index_packages() {
 
     let json = serde_json::to_string_pretty(&map).unwrap();
 
-    progress(Color::Green, "Writing", "packages/index.json…");
+    progress(Color::Green, "Writing", "packages index");
     let mut file = File::create(&pkg_path.join("index.json")).unwrap();
     file.write_all(json.as_bytes()).unwrap();
     file.write(&[b'\n']).unwrap();
