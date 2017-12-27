@@ -93,6 +93,8 @@ fn request_repo_data() -> RepoIndex {
         .collect();
 
     RepoIndex {
+        _type: "https://bahkat.org/Repository".to_owned(),
+        agent: Some(RepoAgent::default()),
         base: base,
         name: name,
         description: description,
@@ -115,7 +117,7 @@ fn package_init() {
 }
 
 fn repo_index_virtuals() {
-    progress(Color::Green, "Generating", "virtuals index");
+    progress(Color::Green, "Generating", "virtuals index").unwrap();
 
     let pkg_path = env::current_dir().unwrap().join("virtuals");
     let mut map = HashMap::new();
@@ -135,7 +137,7 @@ fn repo_index_virtuals() {
                 let pkg_index: VirtualIndex = serde_json::from_reader(file)
                     .expect(path.join("index.json").to_str().unwrap());
                 let msg = format!("{} {}", &pkg_index.id, &pkg_index.version);
-                progress(Color::Yellow, "Inserting", &msg);
+                progress(Color::Yellow, "Inserting", &msg).unwrap();
                 pkg_index
             })
             .collect();
@@ -148,14 +150,14 @@ fn repo_index_virtuals() {
 
     let json = serde_json::to_string_pretty(&map).unwrap();
 
-    progress(Color::Green, "Writing", "virtuals index");
+    progress(Color::Green, "Writing", "virtuals index").unwrap();
     let mut file = File::create(&pkg_path.join("index.json")).unwrap();
     file.write_all(json.as_bytes()).unwrap();
     file.write(&[b'\n']).unwrap();
 }
 
 fn repo_index_packages() {
-    progress(Color::Green, "Generating", "packages index");
+    progress(Color::Green, "Generating", "packages index").unwrap();
 
     let pkg_path = env::current_dir().unwrap().join("packages");
     let pkgs: Vec<PackageIndex> = fs::read_dir(&pkg_path)
@@ -172,7 +174,7 @@ fn repo_index_packages() {
                 .expect(path.join("index.json").to_str().unwrap());
             
             let msg = format!("{} {}", &pkg_index.id, &pkg_index.version);
-            progress(Color::Yellow, "Inserting", &msg);
+            progress(Color::Yellow, "Inserting", &msg).unwrap();
             pkg_index
         })
         .collect();
@@ -184,7 +186,7 @@ fn repo_index_packages() {
 
     let json = serde_json::to_string_pretty(&map).unwrap();
 
-    progress(Color::Green, "Writing", "packages index");
+    progress(Color::Green, "Writing", "packages index").unwrap();
     let mut file = File::create(&pkg_path.join("index.json")).unwrap();
     file.write_all(json.as_bytes()).unwrap();
     file.write(&[b'\n']).unwrap();
@@ -213,7 +215,7 @@ fn open_package(path: &Path) -> Result<PackageIndex, OpenIndexError> {
 
 fn repo_init() {
     if open_repo(&env::current_dir().unwrap()).is_ok() {
-        progress(Color::Red, "Error", "Repo already exists; aborting.");
+        progress(Color::Red, "Error", "Repo already exists; aborting.").unwrap();
         return;
     }
 
@@ -236,21 +238,41 @@ fn repo_init() {
     repo_index();
 }
 
+fn repo_index_meta() {
+    progress(Color::Green, "Generating", "repository index").unwrap();
+
+    let repo_path = env::current_dir().unwrap();
+    let file = File::open(repo_path.join("index.json")).unwrap();
+    let mut repo_index: RepoIndex = serde_json::from_reader(file)
+        .expect(repo_path.join("index.json").to_str().unwrap());
+
+    repo_index.agent = Some(RepoAgent::default());
+    let json = serde_json::to_string_pretty(&repo_index).unwrap();
+
+    progress(Color::Green, "Writing", "repository index").unwrap();
+    let mut file = File::create(&repo_path.join("index.json")).unwrap();
+    file.write_all(json.as_bytes()).unwrap();
+    file.write(&[b'\n']).unwrap();
+}
+
 fn repo_index() {
     if open_repo(&env::current_dir().unwrap()).is_err() {
-        progress(Color::Red, "Error", "Repo does not exist or is invalid; aborting.");
+        progress(Color::Red, "Error", "Repo does not exist or is invalid; aborting.").unwrap();
         return;
     }
     
+    repo_index_meta();
     repo_index_packages();
     repo_index_virtuals();
 }
 
-fn package_installer(product_code: &str, installer: &str, silent_args: &str, url: &str, size: usize) {
+fn package_installer(product_code: &str, installer: &str, type_: Option<&str>,
+        args: Option<&str>, uninst_args: Option<&str>, url: &str, size: usize, 
+        requires_reboot: bool, requires_uninst_reboot: bool) {
     let mut pkg = match open_package(&env::current_dir().unwrap()) {
         Ok(pkg) => pkg,
         Err(_) => {
-            progress(Color::Red, "Error", "Package does not exist or is invalid; aborting");
+            progress(Color::Red, "Error", "Package does not exist or is invalid; aborting").unwrap();
             return;
         }
     };
@@ -261,8 +283,12 @@ fn package_installer(product_code: &str, installer: &str, silent_args: &str, url
 
     let installer_index = PackageIndexInstaller {
         url: url.to_owned(),
-        silent_args: silent_args.to_owned(),
+        type_: type_.map(|x| x.to_owned()),
+        args: args.map(|x| x.to_owned()),
+        uninstall_args: uninst_args.map(|x| x.to_owned()),
         product_code: product_code.to_owned(),
+        requires_reboot: requires_reboot,
+        requires_uninstall_reboot: requires_uninst_reboot,
         size: installer_size,
         installed_size: size,
         signature: None
@@ -326,13 +352,26 @@ fn main() {
                     .takes_value(true)
                     .required(true)
                 )
-                .arg(Arg::with_name("silent-args")
-                    .value_name("SILENT_ARGS")
+                .arg(Arg::with_name("type")
+                    .value_name("TYPE")
+                    .help("Type of installer to autoconfigure silent install and uninstall (supported: msi, inno)")
+                    .short("t")
+                    .long("type")
+                    .takes_value(true)
+                )
+                .arg(Arg::with_name("args")
+                    .value_name("ARGS")
                     .help("Arguments to installer for it to run silently")
                     .short("s")
                     .long("silent-args")
                     .takes_value(true)
-                    .required(true)
+                )
+                .arg(Arg::with_name("uninst-args")
+                    .value_name("ARGS")
+                    .help("Arguments to uninstaller for it to run silently")
+                    .short("S")
+                    .long("silent-uninst-args")
+                    .takes_value(true)
                 )
                 .arg(Arg::with_name("url")
                     .value_name("URL")
@@ -350,6 +389,16 @@ fn main() {
                     .takes_value(true)
                     .required(true)
                 )
+                .arg(Arg::with_name("requires-reboot")
+                    .help("Installer requires reboot after installation")
+                    .short("r")
+                    .long("reboot")
+                )
+                .arg(Arg::with_name("requires-uninst-reboot")
+                    .help("Uninstaller requires reboot after installation")
+                    .short("R")
+                    .long("uninst-reboot")
+                )
         )
         .get_matches();
     
@@ -357,13 +406,18 @@ fn main() {
         ("init", _) => package_init(),
         ("installer", Some(matches)) => {
             let product_code = matches.value_of("product-code").unwrap();
+            let type_ = matches.value_of("type");
             let installer = matches.value_of("installer").unwrap();
-            let silent_args = matches.value_of("silent-args").unwrap();
+            let args = matches.value_of("args");
+            let uninstall_args = matches.value_of("uninst-args");
             let url = matches.value_of("url").unwrap();
             let size = matches.value_of("installed-size").unwrap()
                 .parse::<usize>().unwrap();
+            let requires_reboot = matches.is_present("requires-reboot");
+            let requires_uninst_reboot = matches.is_present("requires-uninst-reboot");
 
-            package_installer(product_code, installer, silent_args, url, size);
+            package_installer(product_code, installer, type_, args, uninstall_args, url, 
+                size, requires_reboot, requires_uninst_reboot);
         }
         ("repo", Some(matches)) => {
             match matches.subcommand() {

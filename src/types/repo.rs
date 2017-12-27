@@ -10,11 +10,32 @@ pub type RepoVirtualsIndex = HashMap<String, Vec<String>>;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RepoIndex {
+    #[serde(rename = "@type")]
+    pub _type: String,
+    pub agent: Option<RepoAgent>,
     pub base: String,
     pub name: HashMap<String, String>,
     pub description: HashMap<String, String>,
     pub primary_filter: String,
     pub channels: Vec<String>
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RepoAgent {
+    name: String,
+    version: String,
+    url: Option<String>
+}
+
+impl Default for RepoAgent {
+    fn default() -> Self {
+        RepoAgent {
+            name: "bahkat".to_string(),
+            version: crate_version!().to_owned(),
+            url: Some("https://github.com/divvun/bahkat".to_owned())
+        }
+    }
 }
 
 pub struct RepoIndexContext {

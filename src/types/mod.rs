@@ -59,8 +59,15 @@ pub struct VirtualIndexRegistryKey {
 #[serde(rename_all = "camelCase")]
 pub struct PackageIndexInstaller {
     pub url: String,
-    pub silent_args: String,
+    #[serde(rename = "type")]
+    pub type_: Option<String>,
+    pub args: Option<String>,
+    pub uninstall_args: Option<String>,
     pub product_code: String,
+    #[serde(default)]
+    pub requires_reboot: bool,
+    #[serde(default)]
+    pub requires_uninstall_reboot: bool,
     pub size: usize,
     pub installed_size: usize,
     pub signature: Option<PackageIndexInstallerSignature>
