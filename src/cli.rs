@@ -3,6 +3,11 @@ use std::io::Write;
 use std::collections::HashMap;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
+#[cfg(target_os = "windows")]
+pub const INPUT_DEFAULT_LEN: usize = 2;
+#[cfg(not(target_os = "windows"))] 
+pub const INPUT_DEFAULT_LEN: usize = 1;
+
 pub fn progress(color: Color, first: &str, rest: &str) -> Result<(), io::Error> {
     let mut stdout = StandardStream::stdout(ColorChoice::Always);
     try!(stdout.set_color(ColorSpec::new().set_fg(Some(color))
@@ -38,8 +43,8 @@ pub fn prompt_question(prompt: &str, default: bool) -> bool {
     match io::stdin().read_line(&mut input) {
         Ok(n) => {
             match n {
-                0 => default,
-                1 => default,
+                0 => false,
+                INPUT_DEFAULT_LEN => default,
                 _ => parse(input.trim())
             }
         }
@@ -63,8 +68,8 @@ pub fn prompt_line(prompt: &str, default: &str) -> Option<String> {
     match io::stdin().read_line(&mut input) {
         Ok(n) => {
             match n {
-                0 => Some(default.to_owned()),
-                1 => Some(default.to_owned()),
+                0 => None,
+                INPUT_DEFAULT_LEN => Some(default.to_owned()),
                 _ => Some(input.trim().to_owned())
             }
         }
