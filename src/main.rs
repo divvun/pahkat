@@ -5,6 +5,7 @@ extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;
 extern crate termcolor;
+extern crate pathdiff;
 
 use termcolor::Color;
 
@@ -181,17 +182,37 @@ fn generate_repo_index_packages() -> PackagesIndex {
         .map(|x| {
             x.unwrap().path()
         })
-        .filter(|path| {
-            path.is_dir() && path.join("index.json").exists()
-        })
-        .map(|path| {
-            let file = File::open(path.join("index.json")).unwrap();
-            let pkg_index: PackageIndex = serde_json::from_reader(file)
-                .expect(path.join("index.json").to_str().unwrap());
+        .filter_map(|path| {
+            if !path.is_dir() || !path.join("index.json").exists() {
+                if path.ends_with("index.json") {
+                    return None;
+                }
+
+                let relpath = pathdiff::diff_paths(&*path, &env::current_dir().unwrap()).unwrap();
+                progress(Color::Magenta, "Warning", &format!("{:?} is not a directory; skipping", &relpath)).unwrap();
+                return None;
+            }
+
+            let index_path = path.join("index.json");
+            let file = File::open(&index_path).unwrap();
+            let pkg_index: PackageIndex = match serde_json::from_reader(file) {
+                Ok(x) => x,
+                Err(err) => {
+                    let relpath = pathdiff::diff_paths(&*index_path, &env::current_dir().unwrap()).unwrap();
+                    progress(Color::Red, "Error", &format!("Error parsing path {:?}:", &relpath)).unwrap();
+                    progress(Color::Red, "Error", &format!("{}", err)).unwrap();
+                    return None;
+                }
+            };
+
+            if pkg_index.installer.is_none() {
+                progress(Color::Magenta, "Warning", &format!("{} {} has no installer; skipping", &pkg_index.id, &pkg_index.version)).unwrap();
+                return None;
+            }   
             
             let msg = format!("{} {}", &pkg_index.id, &pkg_index.version);
             progress(Color::Yellow, "Inserting", &msg).unwrap();
-            pkg_index
+            Some(pkg_index)
         })
         .collect();
     
@@ -247,8 +268,20 @@ fn open_package(path: &Path) -> Result<PackageIndex, OpenIndexError> {
 }
 
 fn repo_init() {
-    if open_repo(&env::current_dir().unwrap()).is_ok() {
+    let cur_dir = &env::current_dir().unwrap();
+
+    if open_repo(&cur_dir).is_ok() {
         progress(Color::Red, "Error", "Repo already exists; aborting.").unwrap();
+        return;
+    }
+
+    if cur_dir.join("packages").exists() {
+        progress(Color::Red, "Error", "A file or directory named 'packages' already exists; aborting.").unwrap();
+        return;
+    }
+
+    if cur_dir.join("virtuals").exists() {
+        progress(Color::Red, "Error", "A file or directory named 'virtuals' already exists; aborting.").unwrap();
         return;
     }
 
@@ -311,7 +344,7 @@ fn repo_index() {
     write_repo_index_virtuals(&virtuals_index);
 }
 
-fn package_installer(product_code: &str, installer: &str, type_: Option<&str>,
+fn package_installer(force_yes: bool, product_code: &str, installer: &str, type_: Option<&str>,
         args: Option<&str>, uninst_args: Option<&str>, url: &str, size: usize, 
         requires_reboot: bool, requires_uninst_reboot: bool) {
     let mut pkg = match open_package(&env::current_dir().unwrap()) {
@@ -345,10 +378,12 @@ fn package_installer(product_code: &str, installer: &str, type_: Option<&str>,
 
     let json = serde_json::to_string_pretty(&pkg).unwrap();
     
-    println!("\n{}\n", json);
+    if !force_yes {
+        println!("\n{}\n", json);
 
-    if !prompt_question("Save index.json", true) {
-        return;
+        if !prompt_question("Save index.json", true) {
+            return;
+        }
     }
 
     let mut file = File::create("index.json").unwrap();
@@ -446,6 +481,11 @@ fn main() {
                     .short("R")
                     .long("uninst-reboot")
                 )
+                .arg(Arg::with_name("skip-confirmation")
+                    .help("Skip confirmation step")
+                    .short("y")
+                    .long("yes")
+                )
         )
         .get_matches();
     
@@ -462,8 +502,9 @@ fn main() {
                 .parse::<usize>().unwrap();
             let requires_reboot = matches.is_present("requires-reboot");
             let requires_uninst_reboot = matches.is_present("requires-uninst-reboot");
+            let skip_confirm = matches.is_present("skip-confirmation");
 
-            package_installer(product_code, installer, type_, args, uninstall_args, url, 
+            package_installer(skip_confirm, product_code, installer, type_, args, uninstall_args, url, 
                 size, requires_reboot, requires_uninst_reboot);
         }
         ("repo", Some(matches)) => {
