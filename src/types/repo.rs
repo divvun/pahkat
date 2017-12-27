@@ -11,7 +11,7 @@ pub type RepoVirtualsIndex = HashMap<String, Vec<String>>;
 #[serde(rename_all = "camelCase")]
 pub struct RepoIndex {
     #[serde(rename = "@type")]
-    pub _type: String,
+    pub _type: Option<String>,
     pub agent: Option<RepoAgent>,
     pub base: String,
     pub name: HashMap<String, String>,

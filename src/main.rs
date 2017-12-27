@@ -15,12 +15,19 @@ use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
+use std::fmt;
 
 mod cli;
 mod types;
 
 use cli::*;
 use types::*;
+
+macro_rules! ld_type {
+    ($e:expr) => {
+        Some(format!("https://bahkat.org/{}", $e).to_owned())
+    };
+}
 
 fn cur_dir() -> String {
     env::current_dir().unwrap()
@@ -59,6 +66,7 @@ fn request_package_data() -> PackageIndex {
     let os = parse_os_list(&os_vec);
 
     PackageIndex {
+        _type: ld_type!("Package"),
         id: package_id,
         name: name,
         description: description,
@@ -93,7 +101,7 @@ fn request_repo_data() -> RepoIndex {
         .collect();
 
     RepoIndex {
-        _type: "https://bahkat.org/Repository".to_owned(),
+        _type: ld_type!("Repository"),
         agent: Some(RepoAgent::default()),
         base: base,
         name: name,
@@ -116,7 +124,17 @@ fn package_init() {
     }
 }
 
-fn repo_index_virtuals() {
+fn write_repo_index_virtuals(index: &VirtualsIndex) {
+    let json = serde_json::to_string_pretty(&index).unwrap();
+    let pkg_path = env::current_dir().unwrap().join("virtuals");
+
+    progress(Color::Green, "Writing", "virtuals index").unwrap();
+    let mut file = File::create(&pkg_path.join("index.json")).unwrap();
+    file.write_all(json.as_bytes()).unwrap();
+    file.write(&[b'\n']).unwrap();
+}
+
+fn generate_repo_index_virtuals() -> VirtualsIndex {
     progress(Color::Green, "Generating", "virtuals index").unwrap();
 
     let pkg_path = env::current_dir().unwrap().join("virtuals");
@@ -148,15 +166,13 @@ fn repo_index_virtuals() {
         }
     }
 
-    let json = serde_json::to_string_pretty(&map).unwrap();
-
-    progress(Color::Green, "Writing", "virtuals index").unwrap();
-    let mut file = File::create(&pkg_path.join("index.json")).unwrap();
-    file.write_all(json.as_bytes()).unwrap();
-    file.write(&[b'\n']).unwrap();
+    VirtualsIndex {
+        _type: ld_type!("Virtuals"),
+        virtuals: map
+    }
 }
 
-fn repo_index_packages() {
+fn generate_repo_index_packages() -> PackagesIndex {
     progress(Color::Green, "Generating", "packages index").unwrap();
 
     let pkg_path = env::current_dir().unwrap().join("packages");
@@ -184,7 +200,15 @@ fn repo_index_packages() {
         map.insert(pkg.id.to_owned(), pkg);
     }
 
-    let json = serde_json::to_string_pretty(&map).unwrap();
+    PackagesIndex {
+        _type: ld_type!("Packages"),
+        packages: map
+    }
+}
+
+fn write_repo_index_packages(index: &PackagesIndex) {
+    let pkg_path = env::current_dir().unwrap().join("packages");
+    let json = serde_json::to_string_pretty(&index).unwrap();
 
     progress(Color::Green, "Writing", "packages index").unwrap();
     let mut file = File::create(&pkg_path.join("index.json")).unwrap();
@@ -195,6 +219,15 @@ fn repo_index_packages() {
 enum OpenIndexError {
     FileError(std::io::Error),
     JsonError(serde_json::Error)
+}
+
+impl fmt::Display for OpenIndexError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            OpenIndexError::FileError(ref x) => write!(f, "{}", x),
+            OpenIndexError::JsonError(ref x) => write!(f, "{}", x)
+        }
+    }
 }
 
 fn open_repo(path: &Path) -> Result<RepoIndex, OpenIndexError> {
@@ -238,7 +271,7 @@ fn repo_init() {
     repo_index();
 }
 
-fn repo_index_meta() {
+fn generate_repo_index_meta() -> RepoIndex {
     progress(Color::Green, "Generating", "repository index").unwrap();
 
     let repo_path = env::current_dir().unwrap();
@@ -246,7 +279,14 @@ fn repo_index_meta() {
     let mut repo_index: RepoIndex = serde_json::from_reader(file)
         .expect(repo_path.join("index.json").to_str().unwrap());
 
+    repo_index._type = ld_type!("Repository");
     repo_index.agent = Some(RepoAgent::default());
+
+    repo_index
+}
+
+fn write_repo_index_meta(repo_index: &RepoIndex) {
+    let repo_path = env::current_dir().unwrap();
     let json = serde_json::to_string_pretty(&repo_index).unwrap();
 
     progress(Color::Green, "Writing", "repository index").unwrap();
@@ -256,14 +296,19 @@ fn repo_index_meta() {
 }
 
 fn repo_index() {
-    if open_repo(&env::current_dir().unwrap()).is_err() {
+    if let Err(err) = open_repo(&env::current_dir().unwrap()) {
+        progress(Color::Red, "Error", &format!("{}", err)).unwrap();
         progress(Color::Red, "Error", "Repo does not exist or is invalid; aborting.").unwrap();
         return;
     }
     
-    repo_index_meta();
-    repo_index_packages();
-    repo_index_virtuals();
+    let repo_index = generate_repo_index_meta();
+    let package_index = generate_repo_index_packages();
+    let virtuals_index = generate_repo_index_virtuals();
+
+    write_repo_index_meta(&repo_index);
+    write_repo_index_packages(&package_index);
+    write_repo_index_virtuals(&virtuals_index);
 }
 
 fn package_installer(product_code: &str, installer: &str, type_: Option<&str>,
@@ -271,7 +316,8 @@ fn package_installer(product_code: &str, installer: &str, type_: Option<&str>,
         requires_reboot: bool, requires_uninst_reboot: bool) {
     let mut pkg = match open_package(&env::current_dir().unwrap()) {
         Ok(pkg) => pkg,
-        Err(_) => {
+        Err(err) => {
+            progress(Color::Red, "Error", &format!("{}", err)).unwrap();
             progress(Color::Red, "Error", "Package does not exist or is invalid; aborting").unwrap();
             return;
         }
@@ -282,8 +328,9 @@ fn package_installer(product_code: &str, installer: &str, type_: Option<&str>,
     let installer_size = meta.len() as usize;
 
     let installer_index = PackageIndexInstaller {
+        _type: ld_type!("WindowsInstaller"),
         url: url.to_owned(),
-        type_: type_.map(|x| x.to_owned()),
+        installer_type: type_.map(|x| x.to_owned()),
         args: args.map(|x| x.to_owned()),
         uninstall_args: uninst_args.map(|x| x.to_owned()),
         product_code: product_code.to_owned(),

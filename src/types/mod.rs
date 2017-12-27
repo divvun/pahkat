@@ -13,6 +13,8 @@ pub const OS: &str = "windows";
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PackageIndex {
+    #[serde(rename = "@type")]
+    pub _type: Option<String>,
     pub id: String,
     pub name: HashMap<String, String>,
     pub description: HashMap<String, String>,
@@ -28,9 +30,21 @@ pub struct PackageIndex {
     pub installer: Option<PackageIndexInstaller>
 }
 
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackagesIndex {
+    #[serde(rename = "@type")]
+    pub _type: Option<String>,
+    #[serde(default = "HashMap::new")]
+    pub packages: HashMap<String, PackageIndex>
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VirtualIndex {
+    #[serde(rename = "@type")]
+    pub _type: Option<String>,
     pub id: String,
     pub name: HashMap<String, String>,
     #[serde(default = "HashMap::new")]
@@ -40,6 +54,15 @@ pub struct VirtualIndex {
     #[serde(rename = "virtual")]
     pub virtual_: bool,
     pub target: VirtualIndexTarget
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VirtualsIndex {
+   #[serde(rename = "@type")]
+    pub _type: Option<String>,
+    #[serde(default = "HashMap::new")]
+    pub virtuals: HashMap<String, Vec<String>>
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -58,9 +81,11 @@ pub struct VirtualIndexRegistryKey {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PackageIndexInstaller {
+    #[serde(rename = "@type")]
+    pub _type: Option<String>,
     pub url: String,
     #[serde(rename = "type")]
-    pub type_: Option<String>,
+    pub installer_type: Option<String>,
     pub args: Option<String>,
     pub uninstall_args: Option<String>,
     pub product_code: String,
