@@ -38,7 +38,8 @@ pub fn prompt_question(prompt: &str, default: bool) -> bool {
     match io::stdin().read_line(&mut input) {
         Ok(n) => {
             match n {
-                0..1 => default,
+                0 => default,
+                1 => default,
                 _ => parse(input.trim())
             }
         }
@@ -62,7 +63,8 @@ pub fn prompt_line(prompt: &str, default: &str) -> Option<String> {
     match io::stdin().read_line(&mut input) {
         Ok(n) => {
             match n {
-                0..1 => Some(default.to_owned()),
+                0 => Some(default.to_owned()),
+                1 => Some(default.to_owned()),
                 _ => Some(input.trim().to_owned())
             }
         }
