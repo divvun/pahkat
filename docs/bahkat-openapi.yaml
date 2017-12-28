@@ -1,0 +1,289 @@
+openapi: 3.0.1
+info:
+  title: Báhkat API
+  description: The last package manager.
+  version: 0.1.0
+servers: []
+security: []
+paths:
+  /index.json:
+    get:
+      summary: Repository Index
+      description: Metadata about the entire repository and default settings.
+      responses:
+        200:
+          description: a repository index
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Repository"
+  /packages/index.json:
+    get:
+      summary: Packages Index
+      description: Full index of all packages in a repository.
+      responses:
+        200:
+          description: a packages index
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Packages"
+  /virtuals/index.json:
+    get:
+      summary: Virtuals Index
+      description: Reference index of all virtuals in a repository.
+      responses:
+        200:
+          description: a virtuals index
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Virtuals"
+  /virtuals/{packageId}/index.json:
+    get:
+      summary: Virtual package index
+      description: >
+        A virtual package references a dependency that is not 
+        necessarily controllable within the context of a package manager.
+
+        Examples include a system driver being present, or a proprietary piece of 
+        software such as Microsoft Office for which one of your packages is dependant.
+      responses:
+        200:
+          description: a virtual index
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Virtual"
+components:
+  schemas:
+    Repository:
+      type: object
+      required:
+        - base
+        - name
+        - description
+        - primaryFilter
+        - channels
+      properties:
+        "@type":
+          type: string
+          enum: ["https://bahkat.org/Repository"]
+        agent:
+          $ref: "#/components/schemas/RepositoryAgent"
+        base:
+          type: string
+          format: uri
+        name:
+          type: object
+          format: bcp47-tag
+          additionalProperties:
+            type: string
+        description:
+          type: object
+          format: bcp47-tag
+          additionalProperties:
+            type: string
+        primaryFilter:
+          type: string
+          enum: [category, language]
+        channels:
+          type: array
+          items:
+            type: string
+            enum: [stable, beta, alpha, nightly]
+            minItems: 1
+            uniqueItems: true
+    RepositoryAgent:
+      type: object
+      required:
+        - name
+        - version
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        url:
+          type: string
+          format: uri
+    Packages:
+      type: object
+      required:
+        - packages
+      properties:
+        "@type":
+          type: string
+          enum: ["https://bahkat.org/Packages"]
+        packages:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Package"
+    Package:
+      type: object
+      required:
+        - id
+        - name
+        - description
+        - version
+        - category
+        - languages
+        - os
+        - dependencies
+        - virtualDependencies
+        - installer
+      properties:
+        "@type":
+          type: string
+          enum: ["https://bahkat.org/Package"]
+        id:
+          type: string
+        name:
+          type: object
+          format: bcp47-tag
+          additionalProperties:
+            type: string
+        description:
+          type: object
+          format: bcp47-tag
+          additionalProperties:
+            type: string
+        version:
+          type: string
+          format: version
+        category:
+          type: string
+        languages:
+          type: array
+          items:
+            type: string
+            format: bcp47-tag
+        platform:
+          type: object
+          description: Standard OS names are "windows", "macos", "linux", "android", "ios".
+          additionalProperties:
+            type: string
+            format: version-pattern
+            # TODO: define pattern (like >=, etc) Maybe use NPM style? Or Rust?
+        dependencies:
+          type: object
+          additionalProperties:
+            type: string
+            format: version-pattern
+        virtualDependencies:
+          type: object
+          additionalProperties:
+            type: string
+            format: version-pattern
+        installer:
+          oneOf:
+            - $ref: "#/components/schemas/WindowsInstaller"
+    WindowsInstaller:
+      type: object
+      required:
+        - url
+        - productCode
+        - size
+        - installedSize
+      properties:
+        "@type":
+          type: string
+          enum: ["https://bahkat.org/WindowsInstaller"]
+        url:
+          type: string
+          format: uri
+        type:
+          type: string
+          enum: [msi, inno, nsis]
+        args:
+          type: string
+        uninstallArgs:
+          type: string
+        productCode:
+          type: string
+        requiresReboot:
+          type: boolean
+          default: false
+        requiresUninstallReboot:
+          type: boolean
+          default: false
+        size:
+          type: integer
+          format: uint64
+        installedSize:
+          type: integer
+          format: uint64
+        # TODO: signature
+    Virtuals:
+      type: object
+      required:
+        - virtuals
+      properties:
+        "@type":
+          type: string
+          enum: ["https://bahkat.org/Virtuals"]
+        virtuals:
+          type: object
+          additionalProperties:
+            type: string
+            format: version
+    Virtual:
+      type: object
+      required:
+        - virtual
+        - id
+        - name
+        - description
+        - version
+        - url
+        - target
+      properties:
+        "@type":
+          type: string
+          enum: ["https://bahkat.org/Virtual"]
+        virtual:
+          type: boolean
+          default: true
+        id:
+          type: string
+        name:
+          type: object
+          format: bcp47-tag
+          additionalProperties:
+            type: string
+        description:
+          type: object
+          format: bcp47-tag
+          additionalProperties:
+            type: string
+        version:
+          type: string
+          format: version
+        url:
+          type: string
+          format: uri
+        target:
+          $ref: "#/components/schemas/VirtualTarget"
+    VirtualTarget:
+      type: object
+      required:
+        - registryKey
+      properties:
+        registryKey:
+          $ref: "#/components/schemas/RegistryKey"
+    RegistryKey:
+      type: object
+      required:
+        - path
+      properties:
+        path:
+          type: string
+        name:
+          type: string
+        value:
+          type: string
+          format: registry-kind
+        valueKind:
+          type: string
+          # TODO: this enum
+          enum: [string, dword, qword, etc]
