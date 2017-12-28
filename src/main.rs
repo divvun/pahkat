@@ -58,13 +58,13 @@ fn request_package_data() -> PackageIndex {
         .map(|x| x.trim().to_owned())
         .collect();
 
-    println!("Supported OSes: windows, macos, linux, ios, android");
-    println!("Specify OS support like \"windows\" or with version guards \"windows >= 8.1\".");
-    let os_vec: Vec<String> = prompt_line("Operating systems (comma-separated)", OS).unwrap()
+    println!("Supported platforms: android, ios, linux, macos, windows");
+    println!("Specify platform support like \"windows\" or with version guards \"windows >= 8.1\".");
+    let platform_vec: Vec<String> = prompt_line("Platforms (comma-separated)", OS).unwrap()
         .split(",")
         .map(|x| x.trim().to_owned())
         .collect();
-    let os = parse_os_list(&os_vec);
+    let platform = parse_platform_list(&platform_vec);
 
     PackageIndex {
         _type: ld_type!("Package"),
@@ -74,7 +74,7 @@ fn request_package_data() -> PackageIndex {
         version: version,
         category: category,
         languages: languages,
-        os: os,
+        platform: platform,
         dependencies: Default::default(),
         virtual_dependencies: Default::default(),
         installer: None

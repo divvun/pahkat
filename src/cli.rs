@@ -77,7 +77,7 @@ pub fn prompt_line(prompt: &str, default: &str) -> Option<String> {
     }
 }
 
-pub fn parse_os_list(vec: &[String]) -> HashMap<String, String> {
+pub fn parse_platform_list(vec: &[String]) -> HashMap<String, String> {
     let mut map: HashMap<String, String> = HashMap::new();
 
     for item in vec {

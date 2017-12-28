@@ -21,7 +21,7 @@ pub struct PackageIndex {
     pub version: String,
     pub category: String,
     pub languages: Vec<String>,
-    pub os: HashMap<String, String>,
+    pub platform: HashMap<String, String>,
     #[serde(default = "HashMap::new")]
     pub dependencies: HashMap<String, String>,
     #[serde(default = "HashMap::new")]
