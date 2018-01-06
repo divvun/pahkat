@@ -16,7 +16,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Repository"
+                $ref: "#/components/schemas/RepositoryMeta"
   /packages/index.json:
     get:
       summary: Packages Index
@@ -57,7 +57,7 @@ paths:
                 $ref: "#/components/schemas/Virtual"
 components:
   schemas:
-    Repository:
+    RepositoryMeta:
       type: object
       required:
         - base
