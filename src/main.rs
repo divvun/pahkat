@@ -38,7 +38,7 @@ fn cur_dir() -> String {
         .to_string()
 }
 
-fn request_package_data() -> PackageIndex {
+fn request_package_data() -> Package {
     let package_id = prompt_line("Package identifier", &cur_dir().to_lowercase()).unwrap();
     
     let en_name = prompt_line("Name", "").unwrap();
@@ -66,7 +66,7 @@ fn request_package_data() -> PackageIndex {
         .collect();
     let platform = parse_platform_list(&platform_vec);
 
-    PackageIndex {
+    Package {
         _type: ld_type!("Package"),
         id: package_id,
         name: name,
@@ -81,7 +81,7 @@ fn request_package_data() -> PackageIndex {
     }
 }
 
-fn request_repo_data() -> RepoIndex {
+fn request_repo_data() -> Repository {
     let base = prompt_line("Base URL", "").unwrap();
     
     let en_name = prompt_line("Name", &cur_dir()).unwrap();
@@ -101,9 +101,9 @@ fn request_repo_data() -> RepoIndex {
         .map(|x| x.trim().to_owned())
         .collect();
 
-    RepoIndex {
+    Repository {
         _type: ld_type!("Repository"),
-        agent: Some(RepoAgent::default()),
+        agent: Some(RepositoryAgent::default()),
         base: base,
         name: name,
         description: description,
@@ -125,7 +125,7 @@ fn package_init() {
     }
 }
 
-fn write_repo_index_virtuals(index: &VirtualsIndex) {
+fn write_repo_index_virtuals(index: &Virtuals) {
     let json = serde_json::to_string_pretty(&index).unwrap();
     let pkg_path = env::current_dir().unwrap().join("virtuals");
 
@@ -135,7 +135,7 @@ fn write_repo_index_virtuals(index: &VirtualsIndex) {
     file.write(&[b'\n']).unwrap();
 }
 
-fn generate_repo_index_virtuals() -> VirtualsIndex {
+fn generate_repo_index_virtuals() -> Virtuals {
     progress(Color::Green, "Generating", "virtuals index").unwrap();
 
     let pkg_path = env::current_dir().unwrap().join("virtuals");
@@ -148,12 +148,12 @@ fn generate_repo_index_virtuals() -> VirtualsIndex {
             continue;
         }
 
-        let indexes: Vec<VirtualIndex> = fs::read_dir(&path).unwrap()
+        let indexes: Vec<Virtual> = fs::read_dir(&path).unwrap()
             .map(|x| x.unwrap().path())
             .filter(|path| path.is_dir() && path.join("index.json").exists())
             .map(|path| {
                 let file = File::open(path.join("index.json")).unwrap();
-                let pkg_index: VirtualIndex = serde_json::from_reader(file)
+                let pkg_index: Virtual = serde_json::from_reader(file)
                     .expect(path.join("index.json").to_str().unwrap());
                 let msg = format!("{} {}", &pkg_index.id, &pkg_index.version);
                 progress(Color::Yellow, "Inserting", &msg).unwrap();
@@ -167,17 +167,17 @@ fn generate_repo_index_virtuals() -> VirtualsIndex {
         }
     }
 
-    VirtualsIndex {
+    Virtuals {
         _type: ld_type!("Virtuals"),
         virtuals: map
     }
 }
 
-fn generate_repo_index_packages() -> PackagesIndex {
+fn generate_repo_index_packages() -> Packages {
     progress(Color::Green, "Generating", "packages index").unwrap();
 
     let pkg_path = env::current_dir().unwrap().join("packages");
-    let pkgs: Vec<PackageIndex> = fs::read_dir(&pkg_path)
+    let pkgs: Vec<Package> = fs::read_dir(&pkg_path)
         .unwrap()
         .map(|x| {
             x.unwrap().path()
@@ -195,7 +195,7 @@ fn generate_repo_index_packages() -> PackagesIndex {
 
             let index_path = path.join("index.json");
             let file = File::open(&index_path).unwrap();
-            let pkg_index: PackageIndex = match serde_json::from_reader(file) {
+            let pkg_index: Package = match serde_json::from_reader(file) {
                 Ok(x) => x,
                 Err(err) => {
                     let relpath = pathdiff::diff_paths(&*index_path, &env::current_dir().unwrap()).unwrap();
@@ -221,13 +221,13 @@ fn generate_repo_index_packages() -> PackagesIndex {
         map.insert(pkg.id.to_owned(), pkg);
     }
 
-    PackagesIndex {
+    Packages {
         _type: ld_type!("Packages"),
         packages: map
     }
 }
 
-fn write_repo_index_packages(index: &PackagesIndex) {
+fn write_repo_index_packages(index: &Packages) {
     let pkg_path = env::current_dir().unwrap().join("packages");
     let json = serde_json::to_string_pretty(&index).unwrap();
 
@@ -251,7 +251,7 @@ impl fmt::Display for OpenIndexError {
     }
 }
 
-fn open_repo(path: &Path) -> Result<RepoIndex, OpenIndexError> {
+fn open_repo(path: &Path) -> Result<Repository, OpenIndexError> {
     let file = File::open(path.join("index.json"))
         .map_err(|e| OpenIndexError::FileError(e))?;
     let index = serde_json::from_reader(file)
@@ -259,7 +259,7 @@ fn open_repo(path: &Path) -> Result<RepoIndex, OpenIndexError> {
     Ok(index)
 }
 
-fn open_package(path: &Path) -> Result<PackageIndex, OpenIndexError> {
+fn open_package(path: &Path) -> Result<Package, OpenIndexError> {
     let file = File::open(path.join("index.json"))
         .map_err(|e| OpenIndexError::FileError(e))?;
     let index = serde_json::from_reader(file)
@@ -304,21 +304,21 @@ fn repo_init() {
     repo_index();
 }
 
-fn generate_repo_index_meta() -> RepoIndex {
+fn generate_repo_index_meta() -> Repository {
     progress(Color::Green, "Generating", "repository index").unwrap();
 
     let repo_path = env::current_dir().unwrap();
     let file = File::open(repo_path.join("index.json")).unwrap();
-    let mut repo_index: RepoIndex = serde_json::from_reader(file)
+    let mut repo_index: Repository = serde_json::from_reader(file)
         .expect(repo_path.join("index.json").to_str().unwrap());
 
     repo_index._type = ld_type!("Repository");
-    repo_index.agent = Some(RepoAgent::default());
+    repo_index.agent = Some(RepositoryAgent::default());
 
     repo_index
 }
 
-fn write_repo_index_meta(repo_index: &RepoIndex) {
+fn write_repo_index_meta(repo_index: &Repository) {
     let repo_path = env::current_dir().unwrap();
     let json = serde_json::to_string_pretty(&repo_index).unwrap();
 
@@ -360,7 +360,7 @@ fn package_installer(force_yes: bool, product_code: &str, installer: &str, type_
     let meta = installer_file.metadata().unwrap();
     let installer_size = meta.len() as usize;
 
-    let installer_index = PackageIndexInstaller {
+    let installer_index = WindowsInstaller {
         _type: ld_type!("WindowsInstaller"),
         url: url.to_owned(),
         installer_type: type_.map(|x| x.to_owned()),

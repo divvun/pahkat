@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 pub mod repo;
-pub use repo::*;
+pub use self::repo::*;
 
 #[cfg(target_os = "macos")]
 pub const OS: &str = "macos";
@@ -10,9 +10,12 @@ pub const OS: &str = "linux";
 #[cfg(target_os = "windows")]
 pub const OS: &str = "windows";
 
+pub type PackageMap = HashMap<String, Package>;
+pub type VirtualRefMap = HashMap<String, Vec<String>>; 
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PackageIndex {
+pub struct Package {
     #[serde(rename = "@type")]
     pub _type: Option<String>,
     pub id: String,
@@ -27,22 +30,22 @@ pub struct PackageIndex {
     #[serde(default = "HashMap::new")]
     pub virtual_dependencies: HashMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub installer: Option<PackageIndexInstaller>
+    pub installer: Option<WindowsInstaller>
 }
 
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PackagesIndex {
+pub struct Packages {
     #[serde(rename = "@type")]
     pub _type: Option<String>,
     #[serde(default = "HashMap::new")]
-    pub packages: HashMap<String, PackageIndex>
+    pub packages: PackageMap
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct VirtualIndex {
+pub struct Virtual {
     #[serde(rename = "@type")]
     pub _type: Option<String>,
     pub id: String,
@@ -53,34 +56,34 @@ pub struct VirtualIndex {
     pub url: String,
     #[serde(rename = "virtual")]
     pub virtual_: bool,
-    pub target: VirtualIndexTarget
+    pub target: VirtualTarget
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct VirtualsIndex {
+pub struct Virtuals {
    #[serde(rename = "@type")]
     pub _type: Option<String>,
     #[serde(default = "HashMap::new")]
-    pub virtuals: HashMap<String, Vec<String>>
+    pub virtuals: VirtualRefMap
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct VirtualIndexTarget {
-    pub registry_key: Option<VirtualIndexRegistryKey>
+pub struct VirtualTarget {
+    pub registry_key: Option<RegistryKey>
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct VirtualIndexRegistryKey {
+pub struct RegistryKey {
     pub path: String,
     pub name: String
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PackageIndexInstaller {
+pub struct WindowsInstaller {
     #[serde(rename = "@type")]
     pub _type: Option<String>,
     pub url: String,
@@ -95,12 +98,12 @@ pub struct PackageIndexInstaller {
     pub requires_uninstall_reboot: bool,
     pub size: usize,
     pub installed_size: usize,
-    pub signature: Option<PackageIndexInstallerSignature>
+    pub signature: Option<WindowsInstallerSignature>
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PackageIndexInstallerSignature {
+pub struct WindowsInstallerSignature {
     pub public_key: String,
     pub method: String,
     pub hash_algorithm: String,

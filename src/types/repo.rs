@@ -4,15 +4,12 @@ use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::fs::File;
 
-pub type RepoPackagesIndex = HashMap<String, String>;
-pub type RepoVirtualsIndex = HashMap<String, Vec<String>>; 
-
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RepoIndex {
+pub struct Repository {
     #[serde(rename = "@type")]
     pub _type: Option<String>,
-    pub agent: Option<RepoAgent>,
+    pub agent: Option<RepositoryAgent>,
     pub base: String,
     pub name: HashMap<String, String>,
     pub description: HashMap<String, String>,
@@ -22,58 +19,58 @@ pub struct RepoIndex {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RepoAgent {
+pub struct RepositoryAgent {
     name: String,
     version: String,
     url: Option<String>
 }
 
-impl Default for RepoAgent {
+impl Default for RepositoryAgent {
     fn default() -> Self {
-        RepoAgent {
+        RepositoryAgent {
             name: "bahkat".to_string(),
-            version: crate_version!().to_owned(),
+            version: env!("CARGO_PKG_VERSION").to_owned(),
             url: Some("https://github.com/divvun/bahkat".to_owned())
         }
     }
 }
 
-pub struct RepoIndexContext {
-    pub index: Option<RepoIndex>,
-    pub path: PathBuf
-}
+// pub struct RepositoryContext {
+//     pub index: Option<Repository>,
+//     pub path: PathBuf
+// }
 
-pub struct RepoPackagesIndexContext {
-    pub index: Option<RepoPackagesIndex>,
-    pub path: PathBuf
-}
+// pub struct RepoPackagesContext {
+//     pub index: Option<RepoPackages>,
+//     pub path: PathBuf
+// }
 
-pub struct RepoVirtualsIndexContext {
-    pub index: Option<RepoVirtualsIndex>,
-    pub path: PathBuf
-}
+// pub struct RepoVirtualsContext {
+//     pub index: Option<RepoVirtuals>,
+//     pub path: PathBuf
+// }
 
-impl RepoIndexContext {
-    fn virtuals(&self) -> RepoVirtualsIndexContext {
-        RepoVirtualsIndexContext::new(&self.path.join("virtuals"))
-    }
-}
+// impl RepositoryContext {
+//     fn virtuals(&self) -> RepoVirtualsContext {
+//         RepoVirtualsContext::new(&self.path.join("virtuals"))
+//     }
+// }
 
-fn repo_virtuals_index_from_file(path: &Path) -> Result<RepoVirtualsIndex, Box<Error>> {
-    let file = File::open(path)?;
-    let index = serde_json::from_reader(file)?;
-    Ok(index)
-}
+// fn repo_virtuals_index_from_file(path: &Path) -> Result<RepoVirtuals, Box<Error>> {
+//     let file = File::open(path)?;
+//     let index = serde_json::from_reader(file)?;
+//     Ok(index)
+// }
 
-impl RepoVirtualsIndexContext {
-    fn new(path: &Path) -> RepoVirtualsIndexContext {
-        let index_path = path.join("index.json");
-        // TODO: fail on errors that are not NotExist
-        let index = repo_virtuals_index_from_file(&index_path).ok();
+// impl RepoVirtualsContext {
+//     fn new(path: &Path) -> RepoVirtualsContext {
+//         let index_path = path.join("index.json");
+//         // TODO: fail on errors that are not NotExist
+//         let index = repo_virtuals_index_from_file(&index_path).ok();
 
-        RepoVirtualsIndexContext {
-            index: index,
-            path: path.into()
-        }
-    }
-}
+//         RepoVirtualsContext {
+//             index: index,
+//             path: path.into()
+//         }
+//     }
+// }
