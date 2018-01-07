@@ -1,19 +1,19 @@
 #[macro_use]
 extern crate clap;
-extern crate bahkat;
-extern crate bahkat_client;
+extern crate pahkat;
+extern crate pahkat_client;
 
 use clap::{App, AppSettings, Arg, SubCommand};
-use bahkat::types::*;
-use bahkat_client::*;
+use pahkat::types::*;
+use pahkat_client::*;
 use std::path::Path;
 
 fn main() {
-    let matches = App::new("Báhkat")
+    let matches = App::new("Páhkat")
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .version(crate_version!())
         .author("Brendan Molloy <brendan@bbqsrc.net>")
-        .about("The last package manager. \"Bákhat\" is the nominative plural form for \"packages\" in Northern Sámi.")
+        .about("The last package manager. \"Pákhat\" is the nominative plural form for \"packages\" in Northern Sámi.")
         .subcommand(
             SubCommand::with_name("init")
                 .about("Create prefix.")

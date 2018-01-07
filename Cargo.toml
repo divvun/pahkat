@@ -1,15 +1,15 @@
 [package]
-name = "bahkat-client"
+name = "pahkat-client"
 version = "0.1.0"
 authors = ["Brendan Molloy <brendan@bbqsrc.net>"]
 
 [[bin]]
-name = "bahkatc"
+name = "pahkatc"
 path = "src/main.rs"
 required-features = ["binaries"]
 
 [dependencies]
-bahkat = { git = "https://github.com/bbqsrc/bahkat", branch = "master" }
+pahkat = { git = "https://github.com/bbqsrc/pahkat", branch = "master" }
 rusqlite = "*"
 reqwest = "*"
 serde = "*"

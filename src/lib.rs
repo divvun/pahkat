@@ -1,4 +1,4 @@
-extern crate bahkat;
+extern crate pahkat;
 extern crate rusqlite;
 extern crate reqwest;
 extern crate serde_json;
@@ -11,7 +11,7 @@ extern crate tar;
 extern crate tempdir;
 extern crate url;
 
-use bahkat::types::*;
+use pahkat::types::*;
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::ffi::OsStr;
@@ -307,12 +307,12 @@ impl Prefix {
     }
 
     pub fn create(prefix: &Path, config: StoreConfig) -> Result<Prefix, ()> {
-        let config_path = prefix.join("etc/bahkatc/config.json");
+        let config_path = prefix.join("etc/pahkatc/config.json");
         if config_path.exists() {
             return Err(())
         }
 
-        let db_path = prefix.join("var/bahkatc/packages.sqlite");
+        let db_path = prefix.join("var/pahkatc/packages.sqlite");
         if db_path.exists() {
             return Err(())
         }
@@ -339,12 +339,12 @@ impl Prefix {
     pub fn open(prefix: &Path) -> Result<Prefix, ()> {
         let prefix = prefix.canonicalize().unwrap().to_owned();
 
-        let config_path = prefix.join("etc/bahkatc/config.json");
+        let config_path = prefix.join("etc/pahkatc/config.json");
         if !config_path.exists() {
             return Err(())
         }
 
-        let db_path = prefix.join("var/bahkatc/packages.sqlite");
+        let db_path = prefix.join("var/pahkatc/packages.sqlite");
         if !db_path.exists() {
             return Err(())
         }
@@ -370,7 +370,7 @@ impl TarballPackageStore {
     }
 
     pub fn create_package_cache(&self) -> PathBuf {
-        let path = self.prefix.join("var/bahkatc/cache");
+        let path = self.prefix.join("var/pahkatc/cache");
         create_dir_all(&path).unwrap();
         path
     }
