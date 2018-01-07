@@ -68,7 +68,7 @@ components:
       properties:
         "@type":
           type: string
-          enum: ["https://bahkat.org/Repository"]
+          enum: ["https://pahkat.org/Repository"]
         agent:
           $ref: "#/components/schemas/RepositoryAgent"
         base:
@@ -114,7 +114,7 @@ components:
       properties:
         "@type":
           type: string
-          enum: ["https://bahkat.org/Packages"]
+          enum: ["https://pahkat.org/Packages"]
         packages:
           type: object
           additionalProperties:
@@ -135,7 +135,7 @@ components:
       properties:
         "@type":
           type: string
-          enum: ["https://bahkat.org/Package"]
+          enum: ["https://pahkat.org/Package"]
         id:
           type: string
         name:
@@ -188,7 +188,7 @@ components:
       properties:
         "@type":
           type: string
-          enum: ["https://bahkat.org/TarballInstaller"]
+          enum: ["https://pahkat.org/TarballInstaller"]
         url:
           type: string
           format: uri
@@ -208,7 +208,7 @@ components:
       properties:
         "@type":
           type: string
-          enum: ["https://bahkat.org/WindowsInstaller"]
+          enum: ["https://pahkat.org/WindowsInstaller"]
         url:
           type: string
           format: uri
@@ -241,7 +241,7 @@ components:
       properties:
         "@type":
           type: string
-          enum: ["https://bahkat.org/Virtuals"]
+          enum: ["https://pahkat.org/Virtuals"]
         virtuals:
           type: object
           additionalProperties:
@@ -260,7 +260,7 @@ components:
       properties:
         "@type":
           type: string
-          enum: ["https://bahkat.org/Virtual"]
+          enum: ["https://pahkat.org/Virtual"]
         virtual:
           type: boolean
           default: true

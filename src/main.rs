@@ -26,7 +26,7 @@ use types::*;
 
 macro_rules! ld_type {
     ($e:expr) => {
-        Some(format!("https://bahkat.org/{}", $e).to_owned())
+        Some(format!("https://pahkat.org/{}", $e).to_owned())
     };
 }
 
@@ -430,7 +430,7 @@ fn package_windows_installer(force_yes: bool, product_code: &str, installer: &st
 }
 
 fn main() {
-    let matches = App::new("Báhkat")
+    let matches = App::new("Páhkat")
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .version(crate_version!())
         .author("Brendan Molloy <brendan@bbqsrc.net>")
@@ -441,7 +441,7 @@ fn main() {
             .setting(AppSettings::SubcommandRequiredElseHelp)
             .subcommand(
                 SubCommand::with_name("init")
-                    .about("Initialise a Báhkat repository in the current working directory")
+                    .about("Initialise a Páhkat repository in the current working directory")
             )
             .subcommand(
                 SubCommand::with_name("index")

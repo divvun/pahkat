@@ -1,10 +1,10 @@
 [package]
-name = "bahkat"
-version = "0.3.2"
+name = "pahkat"
+version = "0.4.0"
 authors = ["Brendan Molloy <brendan@bbqsrc.net>"]
 
 [[bin]]
-name = "bahkat"
+name = "pahkat"
 path = "src/main.rs"
 required-features = ["binaries"]
 

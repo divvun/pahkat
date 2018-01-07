@@ -28,9 +28,9 @@ pub struct RepositoryAgent {
 impl Default for RepositoryAgent {
     fn default() -> Self {
         RepositoryAgent {
-            name: "bahkat".to_string(),
+            name: "pahkat".to_string(),
             version: env!("CARGO_PKG_VERSION").to_owned(),
-            url: Some("https://github.com/divvun/bahkat".to_owned())
+            url: Some("https://github.com/divvun/pahkat".to_owned())
         }
     }
 }
