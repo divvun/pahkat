@@ -1,0 +1,26 @@
+[package]
+name = "bahkat-client"
+version = "0.1.0"
+authors = ["Brendan Molloy <brendan@bbqsrc.net>"]
+
+[[bin]]
+name = "bahkatc"
+path = "src/main.rs"
+required-features = ["binaries"]
+
+[dependencies]
+bahkat = { git = "https://github.com/bbqsrc/bahkat", branch = "master" }
+rusqlite = "*"
+reqwest = "*"
+serde = "*"
+serde_json = "*"
+semver = "0.9.0"
+tar = "*"
+xz2 = "*"
+tempdir = "*"
+url = "*"
+clap = { version = "*", optional = true }
+termcolor = { version = "0.3", optional = true }
+
+[features]
+binaries = ["clap", "termcolor"]
