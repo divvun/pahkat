@@ -20,6 +20,7 @@ tar = "*"
 xz2 = "*"
 tempdir = "*"
 url = "*"
+rhai = "0.8.1"
 clap = { version = "*", optional = true }
 termcolor = { version = "0.3", optional = true }
 

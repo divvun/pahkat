@@ -10,14 +10,16 @@ extern crate xz2;
 extern crate tar;
 extern crate tempdir;
 extern crate url;
+extern crate rhai;
 
 use pahkat::types::*;
-use std::io::{BufWriter, Write};
+use std::io::{BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 use std::ffi::OsStr;
 use xz2::read::XzDecoder;
 use std::fs::{remove_file, read_dir, remove_dir, create_dir_all, File};
 use std::cell::RefCell;
+use rhai::RegisterFn;
 
 pub enum PackageStatus {
     NotInstalled,
@@ -180,7 +182,7 @@ fn test_download_repo() {
 #[test]
 fn test_extract_files() {
     let tmpdir = Path::new("/tmp");
-    let conn = rusqlite::Connection::open("./testextract.sqlite").unwrap();
+    let conn = rusqlite::Connection::open_in_memory().unwrap();
 
     let pkgstore = TarballPackageStore::new(conn, tmpdir);
     pkgstore.init_sqlite_database();
@@ -369,8 +371,14 @@ impl TarballPackageStore {
         self.conn.borrow().execute_batch(include_str!("./pkgstore_init.sql"))
     }
 
-    pub fn create_package_cache(&self) -> PathBuf {
+    pub fn create_cache(&self) -> PathBuf {
         let path = self.prefix.join("var/pahkatc/cache");
+        create_dir_all(&path).unwrap();
+        path
+    }
+
+    pub fn create_receipts(&self) -> PathBuf {
+        let path = self.prefix.join("var/pahkatc/receipts");
         create_dir_all(&path).unwrap();
         path
     }
@@ -446,7 +454,30 @@ impl<'a> PackageStore<'a> for TarballPackageStore {
             let mut conn = self.conn.borrow_mut();
             let tx = conn.transaction().unwrap();
             record.save(tx).unwrap();
-        }
+        };
+
+        let receipt = self.create_receipts().join(format!("{}.rhai", &package.id));
+
+        if receipt.exists() {
+            fn rhai_println<T: std::fmt::Display>(x: &mut T) -> () {
+                println!("{}", x)
+            }
+            
+            let mut engine = rhai::Engine::new();
+            let mut scope = rhai::Scope::new();
+            let mut chai_str = String::new();
+            File::open(receipt).unwrap().read_to_string(&mut chai_str).unwrap();
+
+            engine.register_fn("println", rhai_println as fn(x: &mut String)->());
+
+            if let Err(err) = engine.consume_with_scope(&mut scope, &chai_str) {
+                println!("An error occurred initialising receipt: {:?}", err);
+            }
+
+            if let Err(err) = engine.eval_with_scope::<bool>(&mut scope, "install()") {
+                println!("An error occurred running install() in receipt: {:?}", err);
+            }
+        };
 
         Ok(PackageAction::Install(package))
     }
@@ -458,6 +489,29 @@ impl<'a> PackageStore<'a> for TarballPackageStore {
             match PackageRecord::find_by_id(&conn, &package.id) {
                 None => return Err(()),
                 Some(v) => v
+            }
+        };
+
+        let receipt = self.create_receipts().join(format!("{}.rhai", &package.id));
+
+        if receipt.exists() {
+            fn rhai_println<T: std::fmt::Display>(x: &mut T) -> () {
+                println!("{}", x)
+            }
+            
+            let mut engine = rhai::Engine::new();
+            let mut scope = rhai::Scope::new();
+            let mut chai_str = String::new();
+            File::open(receipt).unwrap().read_to_string(&mut chai_str).unwrap();
+
+            engine.register_fn("println", rhai_println as fn(x: &mut String)->());
+
+            if let Err(err) = engine.consume_with_scope(&mut scope, &chai_str) {
+                println!("An error occurred initialising receipt: {:?}", err);
+            }
+
+            if let Err(err) = engine.eval_with_scope::<bool>(&mut scope, "uninstall()") {
+                println!("An error occurred running uninstall() in receipt: {:?}", err);
             }
         };
 

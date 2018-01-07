@@ -120,7 +120,7 @@ fn main() {
 
             match status {
                 PackageStatus::NotInstalled | PackageStatus::RequiresUpdate => {
-                    let pkg_dir = prefix.store().create_package_cache();
+                    let pkg_dir = prefix.store().create_cache();
                     let pkg_path = package.download(&pkg_dir).unwrap();
                     prefix.store().install(package, &pkg_path).unwrap();
                 },
