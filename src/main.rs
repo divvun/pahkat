@@ -344,7 +344,45 @@ fn repo_index() {
     write_repo_index_virtuals(&virtuals_index);
 }
 
-fn package_installer(force_yes: bool, product_code: &str, installer: &str, type_: Option<&str>,
+fn package_tarball_installer(force_yes: bool, tarball: &str, url: &str, size: usize) {
+    let mut pkg = match open_package(&env::current_dir().unwrap()) {
+        Ok(pkg) => pkg,
+        Err(err) => {
+            progress(Color::Red, "Error", &format!("{}", err)).unwrap();
+            progress(Color::Red, "Error", "Package does not exist or is invalid; aborting").unwrap();
+            return;
+        }
+    };
+
+    let installer_file = File::open(tarball).expect("Installer could not be opened.");
+    let meta = installer_file.metadata().unwrap();
+    let installer_size = meta.len() as usize;
+
+    let installer_index = TarballInstaller {
+        _type: ld_type!("TarballInstaller"),
+        url: url.to_owned(),
+        size: installer_size,
+        installed_size: size
+    };
+
+    pkg.installer = Some(Installer::Tarball(installer_index));
+
+    let json = serde_json::to_string_pretty(&pkg).unwrap();
+    
+    if !force_yes {
+        println!("\n{}\n", json);
+
+        if !prompt_question("Save index.json", true) {
+            return;
+        }
+    }
+
+    let mut file = File::create("index.json").unwrap();
+    file.write_all(json.as_bytes()).unwrap();
+    file.write(&[b'\n']).unwrap();
+}
+
+fn package_windows_installer(force_yes: bool, product_code: &str, installer: &str, type_: Option<&str>,
         args: Option<&str>, uninst_args: Option<&str>, url: &str, size: usize, 
         requires_reboot: bool, requires_uninst_reboot: bool) {
     let mut pkg = match open_package(&env::current_dir().unwrap()) {
@@ -374,7 +412,7 @@ fn package_installer(force_yes: bool, product_code: &str, installer: &str, type_
         signature: None
     };
 
-    pkg.installer = Some(installer_index);
+    pkg.installer = Some(Installer::Windows(installer_index));
 
     let json = serde_json::to_string_pretty(&pkg).unwrap();
     
@@ -415,97 +453,144 @@ fn main() {
                 .about("Initialise a package in the current working directory")
         )
         .subcommand(
-            // TODO: this currently is hardcoded for Windows only.
             SubCommand::with_name("installer")
                 .about("Inject installer data into package index")
-                .arg(Arg::with_name("product-code")
-                    .value_name("PRODUCT_CODE")
-                    .help("The product code that identifies the installer in the registry")
-                    .short("c")
-                    .long("code")
-                    .takes_value(true)
-                    .required(true)
-                )
-                .arg(Arg::with_name("installer")
-                    .value_name("INSTALLER")
-                    .help("The installer .msi/.exe")
-                    .short("i")
-                    .long("installer")
-                    .takes_value(true)
-                    .required(true)
-                )
-                .arg(Arg::with_name("type")
-                    .value_name("TYPE")
-                    .help("Type of installer to autoconfigure silent install and uninstall (supported: msi, inno)")
-                    .short("t")
-                    .long("type")
-                    .takes_value(true)
-                )
-                .arg(Arg::with_name("args")
-                    .value_name("ARGS")
-                    .help("Arguments to installer for it to run silently")
-                    .short("s")
-                    .long("silent-args")
-                    .takes_value(true)
-                )
-                .arg(Arg::with_name("uninst-args")
-                    .value_name("ARGS")
-                    .help("Arguments to uninstaller for it to run silently")
-                    .short("S")
-                    .long("silent-uninst-args")
-                    .takes_value(true)
-                )
-                .arg(Arg::with_name("url")
-                    .value_name("URL")
-                    .help("The URL where the installer will be downloaded")
-                    .short("u")
-                    .long("url")
-                    .takes_value(true)
-                    .required(true)
-                )
-                .arg(Arg::with_name("installed-size")
-                    .value_name("SIZE")
-                    .help("The size on disk when the package is installed")
-                    .short("z")
-                    .long("size")
-                    .takes_value(true)
-                    .required(true)
-                )
-                .arg(Arg::with_name("requires-reboot")
-                    .help("Installer requires reboot after installation")
-                    .short("r")
-                    .long("reboot")
-                )
-                .arg(Arg::with_name("requires-uninst-reboot")
-                    .help("Uninstaller requires reboot after installation")
-                    .short("R")
-                    .long("uninst-reboot")
-                )
-                .arg(Arg::with_name("skip-confirmation")
-                    .help("Skip confirmation step")
-                    .short("y")
-                    .long("yes")
-                )
+                .setting(AppSettings::SubcommandRequiredElseHelp)
+                .subcommand(SubCommand::with_name("windows")
+                    .about("Inject Windows installer data into package index")
+                    .arg(Arg::with_name("product-code")
+                        .value_name("PRODUCT_CODE")
+                        .help("The product code that identifies the installer in the registry")
+                        .short("c")
+                        .long("code")
+                        .takes_value(true)
+                        .required(true)
+                    )
+                    .arg(Arg::with_name("installer")
+                        .value_name("INSTALLER")
+                        .help("The installer .msi/.exe")
+                        .short("i")
+                        .long("installer")
+                        .takes_value(true)
+                        .required(true)
+                    )
+                    .arg(Arg::with_name("type")
+                        .value_name("TYPE")
+                        .help("Type of installer to autoconfigure silent install and uninstall (supported: msi, inno)")
+                        .short("t")
+                        .long("type")
+                        .takes_value(true)
+                    )
+                    .arg(Arg::with_name("args")
+                        .value_name("ARGS")
+                        .help("Arguments to installer for it to run silently")
+                        .short("a")
+                        .long("args")
+                        .takes_value(true)
+                    )
+                    .arg(Arg::with_name("uninst-args")
+                        .value_name("ARGS")
+                        .help("Arguments to uninstaller for it to run silently")
+                        .short("A")
+                        .long("uninst-args")
+                        .takes_value(true)
+                    )
+                    .arg(Arg::with_name("requires-reboot")
+                        .help("Installer requires reboot after installation")
+                        .short("r")
+                        .long("reboot")
+                    )
+                    .arg(Arg::with_name("requires-uninst-reboot")
+                        .help("Uninstaller requires reboot after installation")
+                        .short("R")
+                        .long("uninst-reboot")
+                    )
+                    .arg(Arg::with_name("url")
+                        .value_name("URL")
+                        .help("The URL where the installer will be downloaded")
+                        .short("u")
+                        .long("url")
+                        .takes_value(true)
+                        .required(true)
+                    )
+                    .arg(Arg::with_name("installed-size")
+                        .value_name("SIZE")
+                        .help("The size on disk when the package is installed")
+                        .short("s")
+                        .long("size")
+                        .takes_value(true)
+                        .required(true)
+                    )
+                    .arg(Arg::with_name("skip-confirmation")
+                        .help("Skip confirmation step")
+                        .short("y")
+                        .long("yes")
+                    ))
+                .subcommand(SubCommand::with_name("tarball")
+                    .about("Inject tarball install data into package index")
+                    .arg(Arg::with_name("tarball")
+                        .value_name("TARBALL")
+                        .help("The 'installer' tarball (.txz, .tgz, etc)")
+                        .short("i")
+                        .long("tarball")
+                        .takes_value(true)
+                        .required(true)
+                    )
+                    .arg(Arg::with_name("url")
+                        .value_name("URL")
+                        .help("The URL where the installer will be downloaded")
+                        .short("u")
+                        .long("url")
+                        .takes_value(true)
+                        .required(true)
+                    )
+                    .arg(Arg::with_name("installed-size")
+                        .value_name("SIZE")
+                        .help("The size on disk when the package is installed")
+                        .short("s")
+                        .long("size")
+                        .takes_value(true)
+                        .required(true)
+                    )
+                    .arg(Arg::with_name("skip-confirmation")
+                        .help("Skip confirmation step")
+                        .short("y")
+                        .long("yes")
+                    ))
         )
         .get_matches();
     
     match matches.subcommand() {
         ("init", _) => package_init(),
         ("installer", Some(matches)) => {
-            let product_code = matches.value_of("product-code").unwrap();
-            let type_ = matches.value_of("type");
-            let installer = matches.value_of("installer").unwrap();
-            let args = matches.value_of("args");
-            let uninstall_args = matches.value_of("uninst-args");
-            let url = matches.value_of("url").unwrap();
-            let size = matches.value_of("installed-size").unwrap()
-                .parse::<usize>().unwrap();
-            let requires_reboot = matches.is_present("requires-reboot");
-            let requires_uninst_reboot = matches.is_present("requires-uninst-reboot");
-            let skip_confirm = matches.is_present("skip-confirmation");
+            match matches.subcommand() {
+                ("windows", Some(matches)) => {
+                    let product_code = matches.value_of("product-code").unwrap();
+                    let type_ = matches.value_of("type");
+                    let installer = matches.value_of("installer").unwrap();
+                    let args = matches.value_of("args");
+                    let uninstall_args = matches.value_of("uninst-args");
+                    let url = matches.value_of("url").unwrap();
+                    let size = matches.value_of("installed-size").unwrap()
+                        .parse::<usize>().unwrap();
+                    let requires_reboot = matches.is_present("requires-reboot");
+                    let requires_uninst_reboot = matches.is_present("requires-uninst-reboot");
+                    let skip_confirm = matches.is_present("skip-confirmation");
 
-            package_installer(skip_confirm, product_code, installer, type_, args, uninstall_args, url, 
-                size, requires_reboot, requires_uninst_reboot);
+                    package_windows_installer(skip_confirm, product_code, installer, type_, args, uninstall_args, url, 
+                        size, requires_reboot, requires_uninst_reboot);
+                },
+                ("tarball", Some(matches)) => {
+                    let tarball = matches.value_of("tarball").unwrap();
+                    let url = matches.value_of("url").unwrap();
+                    let size = matches.value_of("installed-size").unwrap()
+                        .parse::<usize>().unwrap();
+                    let skip_confirm = matches.is_present("skip-confirmation");
+
+                    package_tarball_installer(skip_confirm, tarball, url, size);
+                },
+                _ => {}
+            }
         }
         ("repo", Some(matches)) => {
             match matches.subcommand() {

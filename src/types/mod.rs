@@ -11,7 +11,14 @@ pub const OS: &str = "linux";
 pub const OS: &str = "windows";
 
 pub type PackageMap = HashMap<String, Package>;
-pub type VirtualRefMap = HashMap<String, Vec<String>>; 
+pub type VirtualRefMap = HashMap<String, Vec<String>>;
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Installer {
+    Windows(WindowsInstaller),
+    Tarball(TarballInstaller)
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -30,9 +37,17 @@ pub struct Package {
     #[serde(default = "HashMap::new")]
     pub virtual_dependencies: HashMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub installer: Option<WindowsInstaller>
+    pub installer: Option<Installer>
 }
 
+impl Package {
+    pub fn installer(&self) -> Option<&Installer> {
+        match &self.installer {
+            &Some(ref v) => Some(&v),
+            &None => None
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -98,12 +113,22 @@ pub struct WindowsInstaller {
     pub requires_uninstall_reboot: bool,
     pub size: usize,
     pub installed_size: usize,
-    pub signature: Option<WindowsInstallerSignature>
+    pub signature: Option<InstallerSignature>
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WindowsInstallerSignature {
+pub struct TarballInstaller {
+    #[serde(rename = "@type")]
+    pub _type: Option<String>,
+    pub url: String,
+    pub size: usize,
+    pub installed_size: usize
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstallerSignature {
     pub public_key: String,
     pub method: String,
     pub hash_algorithm: String,

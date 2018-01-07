@@ -178,6 +178,26 @@ components:
         installer:
           oneOf:
             - $ref: "#/components/schemas/WindowsInstaller"
+            - $ref: "#/components/schemas/TarballInstaller"
+    TarballInstaller:
+      type: object
+      required:
+        - url
+        - size
+        - installedSize
+      properties:
+        "@type":
+          type: string
+          enum: ["https://bahkat.org/TarballInstaller"]
+        url:
+          type: string
+          format: uri
+        size:
+          type: integer
+          format: uint64
+        installedSize:
+          type: integer
+          format: uint64
     WindowsInstaller:
       type: object
       required:
