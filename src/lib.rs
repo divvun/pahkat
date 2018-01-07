@@ -3,6 +3,8 @@ extern crate rusqlite;
 extern crate reqwest;
 extern crate serde_json;
 extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 extern crate semver;
 extern crate xz2;
 extern crate tar;
@@ -10,11 +12,11 @@ extern crate tempdir;
 extern crate url;
 
 use bahkat::types::*;
-use std::io::BufWriter;
+use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::ffi::OsStr;
 use xz2::read::XzDecoder;
-use std::fs::{remove_file, read_dir, remove_dir, File};
+use std::fs::{remove_file, read_dir, remove_dir, create_dir_all, File};
 use std::cell::RefCell;
 
 pub enum PackageStatus {
@@ -28,7 +30,7 @@ pub enum PackageStatusError {
     ParsingVersion
 }
 
-enum PackageAction<'a> {
+pub enum PackageAction<'a> {
     Install(&'a Package),
     Uninstall(&'a Package)
 }
@@ -278,9 +280,86 @@ fn download_repository(url: &str) -> Result<Repository, RepoDownloadError> {
     })
 }
 
-struct TarballPackageStore<'a> {
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoreConfig {
+    pub url: String
+}
+
+pub struct TarballPackageStore<'a> {
     conn: RefCell<rusqlite::Connection>,
     prefix: &'a Path
+}
+
+pub struct Prefix<'a> {
+    prefix: &'a Path,
+    store: TarballPackageStore<'a>,
+    config: StoreConfig
+}
+
+impl<'a> Prefix<'a> {
+    pub fn store(&self) -> &TarballPackageStore<'a> {
+        &self.store
+    }
+
+    pub fn config(&self) -> &StoreConfig {
+        &self.config
+    }
+
+    pub fn create(prefix: &'a Path, config: StoreConfig) -> Result<Prefix<'a>, ()> {
+        let config_path = prefix.join("etc/bahkatc/config.json");
+        if config_path.exists() {
+            return Err(())
+        }
+
+        let db_path = prefix.join("var/bahkatc/packages.sqlite");
+        if db_path.exists() {
+            return Err(())
+        }
+
+        let cfg_str = serde_json::to_string_pretty(&config).unwrap();
+        {
+            create_dir_all(config_path.parent().unwrap()).unwrap();
+            let mut file = File::create(config_path).unwrap();
+            file.write_all(cfg_str.as_bytes()).unwrap();
+        }
+
+        create_dir_all(db_path.parent().unwrap()).unwrap();
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        let store = TarballPackageStore::new(conn, prefix);
+        store.init_sqlite_database().unwrap();
+
+        Ok(Prefix {
+            prefix: prefix,
+            store: store,
+            config: config
+        })
+    }
+
+    pub fn open(prefix: &'a Path) -> Result<Prefix<'a>, ()> {
+        let config_path = prefix.join("etc/bahkatc/config.json");
+        if !config_path.exists() {
+            return Err(())
+        }
+
+        let db_path = prefix.join("var/bahkatc/packages.sqlite");
+        if !db_path.exists() {
+            return Err(())
+        }
+
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+
+        let file = File::open(config_path).unwrap();
+        let config: StoreConfig = serde_json::from_reader(file).unwrap();
+
+        let store = TarballPackageStore::new(conn, prefix);
+
+        Ok(Prefix {
+            prefix: prefix,
+            store: store,
+            config: config
+        })
+    }
 }
 
 impl<'a> TarballPackageStore<'a> {
@@ -288,7 +367,7 @@ impl<'a> TarballPackageStore<'a> {
         self.conn.borrow().execute_batch(include_str!("./pkgstore_init.sql"))
     }
 
-    pub fn new(conn: rusqlite::Connection, prefix: &'a Path) -> TarballPackageStore<'a> {
+    fn new(conn: rusqlite::Connection, prefix: &'a Path) -> TarballPackageStore<'a> {
         TarballPackageStore {
             conn: RefCell::new(conn),
             prefix: prefix
