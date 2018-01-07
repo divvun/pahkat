@@ -46,6 +46,32 @@ fn main() {
         .subcommand(
             SubCommand::with_name("install")
                 .about("Install a package.")
+                .arg(Arg::with_name("prefix")
+                    .value_name("PREFIX")
+                    .help("The prefix for managing repository.")
+                    .short("p")
+                    .long("prefix")
+                    .takes_value(true)
+                    .required(true))
+                .arg(Arg::with_name("package")
+                    .value_name("PKGID")
+                    .help("The package identifier to install")
+                    .required(true))
+        )
+        .subcommand(
+            SubCommand::with_name("uninstall")
+                .about("Uninstall a package.")
+                .arg(Arg::with_name("prefix")
+                    .value_name("PREFIX")
+                    .help("The prefix for managing repository.")
+                    .short("p")
+                    .long("prefix")
+                    .takes_value(true)
+                    .required(true))
+                .arg(Arg::with_name("package")
+                    .value_name("PKGID")
+                    .help("The package identifier to uninstall")
+                    .required(true))
         )
         .get_matches();
 
@@ -71,6 +97,75 @@ fn main() {
                 );
             }
         },
+        ("install", Some(matches)) => {
+            let package_id = matches.value_of("package").unwrap();
+            let prefix = open_prefix(matches.value_of("prefix").unwrap()).unwrap();
+            let repo = Repository::from_url(&prefix.config().url).unwrap();
+
+            let package = match repo.package(&package_id) {
+                Some(v) => v,
+                None => {
+                    println!("No package found with identifier {}.", package_id);
+                    return;
+                }
+            };
+
+            let status = match prefix.store().status(package) {
+                Ok(v) => v,
+                Err(_) => {
+                    println!("An error occurred checking the status of the package.");
+                    return;
+                }
+            };
+
+            match status {
+                PackageStatus::NotInstalled | PackageStatus::RequiresUpdate => {
+                    let pkg_dir = prefix.store().create_package_cache();
+                    let pkg_path = package.download(&pkg_dir).unwrap();
+                    prefix.store().install(package, &pkg_path).unwrap();
+                },
+                _ => {
+                    println!("Nothing to do for identifier {}", package_id);
+                    return;
+                }
+            }
+        },
+        ("uninstall", Some(matches)) => {
+            let package_id = matches.value_of("package").unwrap();
+            let prefix = open_prefix(matches.value_of("prefix").unwrap()).unwrap();
+            let repo = Repository::from_url(&prefix.config().url).unwrap();
+
+            let package = match repo.package(&package_id) {
+                Some(v) => v,
+                None => {
+                    println!("No package found with identifier {}.", package_id);
+                    return;
+                }
+            };
+
+            let status = match prefix.store().status(package) {
+                Ok(v) => v,
+                Err(_) => {
+                    println!("An error occurred checking the status of the package.");
+                    return;
+                }
+            };
+
+            match status {
+                PackageStatus::UpToDate | PackageStatus::RequiresUpdate => {
+                    prefix.store().uninstall(package).unwrap();
+                },
+                _ => {
+                    println!("Nothing to do for identifier {}", package_id);
+                    return;
+                }
+            }
+        },
         _ => {}
     }
+}
+
+fn open_prefix(path: &str) -> Result<Prefix, ()> {
+    let prefix = Prefix::open(Path::new(path)).unwrap();
+    Ok(prefix)
 }

@@ -217,7 +217,7 @@ impl Repository {
     }
 }
 
-trait Download {
+pub trait Download {
     fn download(&self, dir_path: &Path) -> Option<PathBuf>;
 }
 
@@ -286,19 +286,19 @@ pub struct StoreConfig {
     pub url: String
 }
 
-pub struct TarballPackageStore<'a> {
+pub struct TarballPackageStore {
     conn: RefCell<rusqlite::Connection>,
-    prefix: &'a Path
+    prefix: PathBuf
 }
 
-pub struct Prefix<'a> {
-    prefix: &'a Path,
-    store: TarballPackageStore<'a>,
+pub struct Prefix {
+    prefix: PathBuf,
+    store: TarballPackageStore,
     config: StoreConfig
 }
 
-impl<'a> Prefix<'a> {
-    pub fn store(&self) -> &TarballPackageStore<'a> {
+impl Prefix {
+    pub fn store(&self) -> &TarballPackageStore {
         &self.store
     }
 
@@ -306,7 +306,7 @@ impl<'a> Prefix<'a> {
         &self.config
     }
 
-    pub fn create(prefix: &'a Path, config: StoreConfig) -> Result<Prefix<'a>, ()> {
+    pub fn create(prefix: &Path, config: StoreConfig) -> Result<Prefix, ()> {
         let config_path = prefix.join("etc/bahkatc/config.json");
         if config_path.exists() {
             return Err(())
@@ -330,13 +330,15 @@ impl<'a> Prefix<'a> {
         store.init_sqlite_database().unwrap();
 
         Ok(Prefix {
-            prefix: prefix,
+            prefix: prefix.to_owned(),
             store: store,
             config: config
         })
     }
 
-    pub fn open(prefix: &'a Path) -> Result<Prefix<'a>, ()> {
+    pub fn open(prefix: &Path) -> Result<Prefix, ()> {
+        let prefix = prefix.canonicalize().unwrap().to_owned();
+
         let config_path = prefix.join("etc/bahkatc/config.json");
         if !config_path.exists() {
             return Err(())
@@ -352,7 +354,7 @@ impl<'a> Prefix<'a> {
         let file = File::open(config_path).unwrap();
         let config: StoreConfig = serde_json::from_reader(file).unwrap();
 
-        let store = TarballPackageStore::new(conn, prefix);
+        let store = TarballPackageStore::new(conn, &prefix);
 
         Ok(Prefix {
             prefix: prefix,
@@ -362,25 +364,31 @@ impl<'a> Prefix<'a> {
     }
 }
 
-impl<'a> TarballPackageStore<'a> {
+impl TarballPackageStore {
     fn init_sqlite_database(&self) -> rusqlite::Result<()> {
         self.conn.borrow().execute_batch(include_str!("./pkgstore_init.sql"))
     }
 
-    fn new(conn: rusqlite::Connection, prefix: &'a Path) -> TarballPackageStore<'a> {
+    pub fn create_package_cache(&self) -> PathBuf {
+        let path = self.prefix.join("var/bahkatc/cache");
+        create_dir_all(&path).unwrap();
+        path
+    }
+
+    fn new(conn: rusqlite::Connection, prefix: &Path) -> TarballPackageStore {
         TarballPackageStore {
             conn: RefCell::new(conn),
-            prefix: prefix
+            prefix: prefix.to_owned()
         }
     }
 }
 
-impl<'a> PackageStore<'a> for TarballPackageStore<'a> {
+impl<'a> PackageStore<'a> for TarballPackageStore {
     type StatusResult = Result<PackageStatus, PackageStatusError>;
     type InstallResult = Result<PackageAction<'a>, ()>;
     type UninstallResult = Result<PackageAction<'a>, ()>;
 
-    fn install(&self, package: &'a Package, path: &'a Path) -> Self::InstallResult {
+    fn install(&self, package: &'a Package, path: &Path) -> Self::InstallResult {
         let installer = match package.installer() {
             None => return Err(()),
             Some(v) => v
@@ -411,7 +419,7 @@ impl<'a> PackageStore<'a> for TarballPackageStore<'a> {
             let mut entry = entry.unwrap();
             let unpack_res;
             {
-                unpack_res = entry.unpack_in(self.prefix);
+                unpack_res = entry.unpack_in(&self.prefix);
             }
 
             match unpack_res {
@@ -454,6 +462,11 @@ impl<'a> PackageStore<'a> for TarballPackageStore<'a> {
         };
 
         for file in &record.files {
+            let file = match self.prefix.join(file).canonicalize() {
+                Ok(v) => v,
+                Err(_) => continue
+            };
+
             if file.is_dir() {
                 continue;
             }
@@ -464,12 +477,18 @@ impl<'a> PackageStore<'a> for TarballPackageStore<'a> {
         }
 
         for file in &record.files {
+            let file = match self.prefix.join(file).canonicalize() {
+                Ok(v) => v,
+                Err(_) => continue
+            };
+            
             if !file.is_dir() {
                 continue
             }
 
-            if read_dir(file).iter().next().is_none() {
-                remove_dir(file).unwrap();
+            let dir = read_dir(&file).unwrap();
+            if dir.count() == 0 {
+                remove_dir(&file).unwrap();
             }
         }
 
