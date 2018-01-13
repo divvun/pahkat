@@ -23,6 +23,8 @@ pub enum Installer {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Package {
+    #[serde(rename = "@context")]
+    pub _context: Option<String>,
     #[serde(rename = "@type")]
     pub _type: Option<String>,
     pub id: String,
@@ -52,8 +54,13 @@ impl Package {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Packages {
+    #[serde(rename = "@context")]
+    pub _context: Option<String>,
     #[serde(rename = "@type")]
     pub _type: Option<String>,
+    #[serde(rename = "@id")]
+    pub _id: Option<String>,
+    pub base: String,
     #[serde(default = "HashMap::new")]
     pub packages: PackageMap
 }
@@ -61,6 +68,8 @@ pub struct Packages {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Virtual {
+    #[serde(rename = "@context")]
+    pub _context: Option<String>,
     #[serde(rename = "@type")]
     pub _type: Option<String>,
     pub id: String,
@@ -77,8 +86,13 @@ pub struct Virtual {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Virtuals {
-   #[serde(rename = "@type")]
+    #[serde(rename = "@context")]
+    pub _context: Option<String>,
+    #[serde(rename = "@type")]
     pub _type: Option<String>,
+    #[serde(rename = "@id")]
+    pub _id: Option<String>,
+    pub base: String,
     #[serde(default = "HashMap::new")]
     pub virtuals: VirtualRefMap
 }

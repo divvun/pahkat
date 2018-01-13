@@ -6,6 +6,8 @@ extern crate serde_json;
 extern crate serde_derive;
 extern crate termcolor;
 extern crate pathdiff;
+#[macro_use]
+extern crate maplit;
 
 use termcolor::Color;
 
@@ -24,11 +26,22 @@ mod types;
 use cli::*;
 use types::*;
 
-macro_rules! ld_type {
+macro_rules! ld_context {
     ($e:expr) => {
-        Some(format!("https://pahkat.org/{}", $e).to_owned())
+        Some(hashmap! {
+            "@vocab" => LD_CONTEXT.to_owned(),
+            "@base" => $e.to_owned()
+        })
     };
 }
+
+macro_rules! ld_type {
+    ($e:expr) => {
+        Some(format!("{}", $e).to_owned())
+    };
+}
+
+const LD_CONTEXT: &'static str = "https://pahkat.org/";
 
 fn cur_dir() -> String {
     env::current_dir().unwrap()
@@ -67,6 +80,7 @@ fn request_package_data() -> Package {
     let platform = parse_platform_list(&platform_vec);
 
     Package {
+        _context: Some(LD_CONTEXT.to_owned()),
         _type: ld_type!("Package"),
         id: package_id,
         name: name,
@@ -82,9 +96,16 @@ fn request_package_data() -> Package {
 }
 
 fn request_repo_data() -> RepositoryMeta {
-    let base = prompt_line("Base URL", "").unwrap();
+    let base = {
+        let mut base = prompt_line("Base URL", "").unwrap();
+        if !base.ends_with("/") {
+            format!("{}/", base)
+        } else {
+            base
+        }
+    };
     
-    let en_name = prompt_line("Name", &cur_dir()).unwrap();
+    let en_name = prompt_line("Name", "Repository").unwrap();
     let mut name = HashMap::new();
     name.insert("en".to_owned(), en_name);
 
@@ -102,6 +123,7 @@ fn request_repo_data() -> RepositoryMeta {
         .collect();
 
     RepositoryMeta {
+        _context: Some(LD_CONTEXT.to_owned()),
         _type: ld_type!("Repository"),
         agent: Some(RepositoryAgent::default()),
         base: base,
@@ -113,6 +135,18 @@ fn request_repo_data() -> RepositoryMeta {
 }
 
 fn package_init() {
+    let cur_dir = &env::current_dir().unwrap();
+
+    if open_repo(&cur_dir).is_ok() {
+        progress(Color::Red, "Error", "Cannot generate package within repository; aborting.").unwrap();
+        return;
+    }
+
+    if cur_dir.join("index.json").exists() {
+        progress(Color::Red, "Error", "A file or directory named 'index.json' already exists; aborting.").unwrap();
+        return;
+    }
+
     let pkg_data = request_package_data();
     let json = serde_json::to_string_pretty(&pkg_data).unwrap();
     
@@ -135,7 +169,7 @@ fn write_repo_index_virtuals(index: &Virtuals) {
     file.write(&[b'\n']).unwrap();
 }
 
-fn generate_repo_index_virtuals() -> Virtuals {
+fn generate_repo_index_virtuals(repo: &RepositoryMeta) -> Virtuals {
     progress(Color::Green, "Generating", "virtuals index").unwrap();
 
     let pkg_path = env::current_dir().unwrap().join("virtuals");
@@ -168,12 +202,15 @@ fn generate_repo_index_virtuals() -> Virtuals {
     }
 
     Virtuals {
+        _context: Some(LD_CONTEXT.to_owned()),
         _type: ld_type!("Virtuals"),
+        _id: Some("".to_owned()),
+        base: format!("{}virtuals/", &repo.base),
         virtuals: map
     }
 }
 
-fn generate_repo_index_packages() -> Packages {
+fn generate_repo_index_packages(repo: &RepositoryMeta) -> Packages {
     progress(Color::Green, "Generating", "packages index").unwrap();
 
     let pkg_path = env::current_dir().unwrap().join("packages");
@@ -222,7 +259,10 @@ fn generate_repo_index_packages() -> Packages {
     }
 
     Packages {
+        _context: Some(LD_CONTEXT.to_owned()),
         _type: ld_type!("Packages"),
+        _id: Some("".to_owned()),
+        base: format!("{}packages/", &repo.base),
         packages: map
     }
 }
@@ -336,8 +376,8 @@ fn repo_index() {
     }
     
     let repo_index = generate_repo_index_meta();
-    let package_index = generate_repo_index_packages();
-    let virtuals_index = generate_repo_index_virtuals();
+    let package_index = generate_repo_index_packages(&repo_index);
+    let virtuals_index = generate_repo_index_virtuals(&repo_index);
 
     write_repo_index_meta(&repo_index);
     write_repo_index_packages(&package_index);

@@ -1,6 +1,6 @@
 openapi: 3.0.1
 info:
-  title: Báhkat API
+  title: Páhkat API
   description: The last package manager.
   version: 0.1.0
 servers: []
@@ -68,7 +68,7 @@ components:
       properties:
         "@type":
           type: string
-          enum: ["https://pahkat.org/Repository"]
+          enum: ["Repository"]
         agent:
           $ref: "#/components/schemas/RepositoryAgent"
         base:
@@ -114,7 +114,7 @@ components:
       properties:
         "@type":
           type: string
-          enum: ["https://pahkat.org/Packages"]
+          enum: ["Packages"]
         packages:
           type: object
           additionalProperties:
@@ -135,7 +135,7 @@ components:
       properties:
         "@type":
           type: string
-          enum: ["https://pahkat.org/Package"]
+          enum: ["Package"]
         id:
           type: string
         name:
@@ -208,7 +208,7 @@ components:
       properties:
         "@type":
           type: string
-          enum: ["https://pahkat.org/WindowsInstaller"]
+          enum: ["WindowsInstaller"]
         url:
           type: string
           format: uri
@@ -241,7 +241,7 @@ components:
       properties:
         "@type":
           type: string
-          enum: ["https://pahkat.org/Virtuals"]
+          enum: ["Virtuals"]
         virtuals:
           type: object
           additionalProperties:
@@ -260,7 +260,7 @@ components:
       properties:
         "@type":
           type: string
-          enum: ["https://pahkat.org/Virtual"]
+          enum: ["Virtual"]
         virtual:
           type: boolean
           default: true

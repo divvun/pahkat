@@ -1,6 +1,6 @@
 [package]
 name = "pahkat"
-version = "0.4.0"
+version = "0.5.0"
 authors = ["Brendan Molloy <brendan@bbqsrc.net>"]
 
 [[bin]]
@@ -15,6 +15,7 @@ pathdiff = { version = "0.1", optional = true }
 serde = "*"
 serde_derive = "*"
 serde_json = "*"
+maplit = "1.0.1"
 
 [features]
 binaries = ["clap", "termcolor", "pathdiff"]
