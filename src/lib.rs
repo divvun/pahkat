@@ -11,6 +11,8 @@ extern crate tar;
 extern crate tempdir;
 extern crate url;
 extern crate rhai;
+#[cfg(windows)]
+extern crate winreg;
 
 use pahkat::types::*;
 use std::io::{BufWriter, Read, Write};
@@ -21,6 +23,9 @@ use std::fs::{remove_file, read_dir, remove_dir, create_dir_all, File};
 use std::cell::RefCell;
 use rhai::RegisterFn;
 
+#[cfg(windows)]
+mod windows;
+
 pub enum PackageStatus {
     NotInstalled,
     UpToDate,
@@ -29,6 +34,7 @@ pub enum PackageStatus {
 
 pub enum PackageStatusError {
     NoInstaller,
+    WrongInstallerType,
     ParsingVersion
 }
 
