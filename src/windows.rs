@@ -5,13 +5,14 @@ use std::path::Path;
 use winreg::RegKey;
 use winreg::enums::*;
 use semver;
+use std::io;
 
 mod Keys {
-    const UninstallPath: &'static str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall";
-    const DisplayVersion: &'static str = "DisplayVersion";
-    const SkipVersion: &'static str = "SkipVersion";
-    const QuietUninstallString: &'static str = "QuietUninstallString";
-    const UninstallString: &'static str = "UninstallString";
+    pub const UninstallPath: &'static str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall";
+    pub const DisplayVersion: &'static str = "DisplayVersion";
+    pub const SkipVersion: &'static str = "SkipVersion";
+    pub const QuietUninstallString: &'static str = "QuietUninstallString";
+    pub const UninstallString: &'static str = "UninstallString";
 }
 
 struct WindowsPackageStore {
@@ -64,12 +65,10 @@ public PackageInstallStatus InstallStatus(Package package)
 */
 
 enum WindowsInstallError {
-    Win32Error(std::io::Error)
+    Win32Error(io::Error)
 }
 
 impl<'a> PackageStore<'a> for WindowsPackageStore {
-    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-
     type StatusResult = Result<PackageStatus, PackageStatusError>;
     type InstallResult = Result<PackageAction<'a>, ()>;
     type UninstallResult = Result<PackageAction<'a>, ()>;
@@ -78,8 +77,8 @@ impl<'a> PackageStore<'a> for WindowsPackageStore {
         let installer = match package.installer() {
             None => return Err(PackageStatusError::NoInstaller),
             Some(v) => match v {
-                Installer::Tarball(_) => return Err(PackageStatusError::WrongInstallerType),
-                Installer::Windows(v) => v
+                &Installer::Tarball(_) => return Err(PackageStatusError::WrongInstallerType),
+                &Installer::Windows(ref v) => v
             }
         };
 
@@ -90,20 +89,20 @@ impl<'a> PackageStore<'a> for WindowsPackageStore {
             Ok(v) => v
         };
 
-        let disp_version: String = match key.get_value(Keys::DisplayVersion) {
+        let disp_version: String = match inst_key.get_value(Keys::DisplayVersion) {
             Err(_) => return Err(PackageStatusError::ParsingVersion),
             Ok(v) => v
-        }
+        };
 
-        let disp_semver = match semver::Version::parse(&display_version) {
+        let disp_semver = match semver::Version::parse(&disp_version) {
             Err(_) => return Err(PackageStatusError::ParsingVersion),
             Ok(v) => v
-        }
+        };
 
         let pkg_semver = match semver::Version::parse(&package.version) {
             Err(_) => return Err(PackageStatusError::ParsingVersion),
             Ok(v) => v
-        }
+        };
 
         unimplemented!()
     }
