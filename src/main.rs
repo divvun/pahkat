@@ -95,7 +95,7 @@ fn request_package_data() -> Package {
     }
 }
 
-fn request_repo_data() -> RepositoryMeta {
+fn request_repo_data() -> Repository {
     let base = {
         let mut base = prompt_line("Base URL", "").unwrap();
         if !base.ends_with("/") {
@@ -122,7 +122,7 @@ fn request_repo_data() -> RepositoryMeta {
         .map(|x| x.trim().to_owned())
         .collect();
 
-    RepositoryMeta {
+    Repository {
         _context: Some(LD_CONTEXT.to_owned()),
         _type: ld_type!("Repository"),
         agent: Some(RepositoryAgent::default()),
@@ -169,7 +169,7 @@ fn write_repo_index_virtuals(index: &Virtuals) {
     file.write(&[b'\n']).unwrap();
 }
 
-fn generate_repo_index_virtuals(repo: &RepositoryMeta) -> Virtuals {
+fn generate_repo_index_virtuals(repo: &Repository) -> Virtuals {
     progress(Color::Green, "Generating", "virtuals index").unwrap();
 
     let pkg_path = env::current_dir().unwrap().join("virtuals");
@@ -210,7 +210,7 @@ fn generate_repo_index_virtuals(repo: &RepositoryMeta) -> Virtuals {
     }
 }
 
-fn generate_repo_index_packages(repo: &RepositoryMeta) -> Packages {
+fn generate_repo_index_packages(repo: &Repository) -> Packages {
     progress(Color::Green, "Generating", "packages index").unwrap();
 
     let pkg_path = env::current_dir().unwrap().join("packages");
@@ -291,7 +291,7 @@ impl fmt::Display for OpenIndexError {
     }
 }
 
-fn open_repo(path: &Path) -> Result<RepositoryMeta, OpenIndexError> {
+fn open_repo(path: &Path) -> Result<Repository, OpenIndexError> {
     let file = File::open(path.join("index.json"))
         .map_err(|e| OpenIndexError::FileError(e))?;
     let index = serde_json::from_reader(file)
@@ -344,12 +344,12 @@ fn repo_init() {
     repo_index();
 }
 
-fn generate_repo_index_meta() -> RepositoryMeta {
+fn generate_repo_index_meta() -> Repository {
     progress(Color::Green, "Generating", "repository index").unwrap();
 
     let repo_path = env::current_dir().unwrap();
     let file = File::open(repo_path.join("index.json")).unwrap();
-    let mut repo_index: RepositoryMeta = serde_json::from_reader(file)
+    let mut repo_index: Repository = serde_json::from_reader(file)
         .expect(repo_path.join("index.json").to_str().unwrap());
 
     repo_index._type = ld_type!("Repository");
@@ -358,7 +358,7 @@ fn generate_repo_index_meta() -> RepositoryMeta {
     repo_index
 }
 
-fn write_repo_index_meta(repo_index: &RepositoryMeta) {
+fn write_repo_index_meta(repo_index: &Repository) {
     let repo_path = env::current_dir().unwrap();
     let json = serde_json::to_string_pretty(&repo_index).unwrap();
 

@@ -1,0 +1,16 @@
+{
+  "name": "merge",
+  "version": "0.1.0",
+  "description": "",
+  "main": "merge-openapi-jsonld.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Brendan Molloy <brendan@bbqsrc.net> (https://brendan.so/)",
+  "license": "ISC",
+  "dependencies": {
+    "json-ref-lite": "^1.1.0",
+    "jsonld": "^0.4.12",
+    "yamljs": "^0.3.0"
+  }
+}

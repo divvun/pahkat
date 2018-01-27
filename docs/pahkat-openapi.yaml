@@ -8,6 +8,7 @@ security: []
 paths:
   /index.json:
     get:
+      operationId: repositoryIndex
       summary: Repository Index
       description: Metadata about the entire repository and default settings.
       responses:
@@ -16,9 +17,10 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RepositoryMeta"
+                $ref: "#/components/schemas/Repository"
   /packages/index.json:
     get:
+      operationId: packagesIndex
       summary: Packages Index
       description: Full index of all packages in a repository.
       responses:
@@ -30,6 +32,7 @@ paths:
                 $ref: "#/components/schemas/Packages"
   /virtuals/index.json:
     get:
+      operationId: virtualsIndex
       summary: Virtuals Index
       description: Reference index of all virtuals in a repository.
       responses:
@@ -41,6 +44,7 @@ paths:
                 $ref: "#/components/schemas/Virtuals"
   /virtuals/{packageId}/index.json:
     get:
+      operationId: virtual
       summary: Virtual package index
       description: >
         A virtual package references a dependency that is not 
@@ -56,8 +60,45 @@ paths:
               schema:
                 $ref: "#/components/schemas/Virtual"
 components:
+  x-formats:
+    bcp47-tag:
+      description: >
+        Tags from the BCP 47 RFC used to identify a language and relevant metadata.
+
+        Examples of BCP 47 tags include: en-US, nb, es-417, sr-Cyrl, smj, smn-FI.
+  examples:
+    package:
+      summary: An example Package object
+      value: |-
+        {
+          "@context": "https://pahkat.org/"
+          "@type": "Package",
+          "id": "test-pkg",
+          "name": {
+            "en": "Test Package"
+          },
+          "description": {
+            "en": "A test package"
+          },
+          "version": "1.0.0",
+          "category": "test",
+          "languages": [
+            "zxx"
+          ],
+          "platform": {
+            "macos": ">= 10.10"
+          },
+          "dependencies": {},
+          "virtualDependencies": {},
+          "installer": {
+            "@type": "https://pahkat.org/TarballInstaller",
+            "url": "http://localhost:8000/data/test-pkg/dist/test-pkg_1.0.0.txz",
+            "size": 4096,
+            "installedSize": 1024
+          }
+        }
   schemas:
-    RepositoryMeta:
+    Repository:
       type: object
       required:
         - base
@@ -121,6 +162,9 @@ components:
             $ref: "#/components/schemas/Package"
     Package:
       type: object
+      description: The definition of the components of an installable package.
+      example: 
+        $ref: "#/components/examples/package"
       required:
         - id
         - name
@@ -128,7 +172,7 @@ components:
         - version
         - category
         - languages
-        - os
+        - platform
         - dependencies
         - virtualDependencies
         - installer
@@ -188,7 +232,7 @@ components:
       properties:
         "@type":
           type: string
-          enum: ["https://pahkat.org/TarballInstaller"]
+          enum: ["TarballInstaller"]
         url:
           type: string
           format: uri
@@ -303,7 +347,10 @@ components:
         value:
           type: string
           format: registry-kind
+          description: The value is parsed based on how the `valueKind` property is set. If it is not set, defaults to a string.
         valueKind:
           type: string
+          description: This field corresponds to the .NET RegistryKind enum, and affects how the `value` property is parsed.
           # TODO: this enum
           enum: [string, dword, qword, etc]
+          default: string

@@ -6,7 +6,7 @@ use std::fs::File;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RepositoryMeta {
+pub struct Repository {
     #[serde(rename = "@context")]
     pub _context: Option<String>,
     #[serde(rename = "@type")]

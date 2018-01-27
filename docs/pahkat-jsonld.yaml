@@ -27,7 +27,7 @@ RepositoryAgent:
       @language: en
     version: pf:version
     url: @id
-Repository:
+RepositoryMeta:
   @context:
     base: @id
     agent:
@@ -63,9 +63,14 @@ TarballInstaller:
       @id: pf:size
     installedSize:
       @id: pf:installedSize
+Virtual: {}
+VirtualTarget: {}
+RegistryKey: {}
 Virtuals:
   @context:
     base: @base
     packages:
       @id: pf:virtuals
       @container: @id
+WindowsInstaller:
+  @context: {}
