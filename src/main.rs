@@ -6,8 +6,6 @@ extern crate serde_json;
 extern crate serde_derive;
 extern crate termcolor;
 extern crate pathdiff;
-#[macro_use]
-extern crate maplit;
 
 use termcolor::Color;
 
@@ -26,15 +24,6 @@ mod types;
 use cli::*;
 use types::*;
 
-macro_rules! ld_context {
-    ($e:expr) => {
-        Some(hashmap! {
-            "@vocab" => LD_CONTEXT.to_owned(),
-            "@base" => $e.to_owned()
-        })
-    };
-}
-
 macro_rules! ld_type {
     ($e:expr) => {
         Some(format!("{}", $e).to_owned())
@@ -43,16 +32,17 @@ macro_rules! ld_type {
 
 const LD_CONTEXT: &'static str = "https://pahkat.org/";
 
-fn cur_dir() -> String {
-    env::current_dir().unwrap()
-        .components().last().unwrap()
-        .as_os_str()
+fn default_pkg_id() -> String {
+    let d = &env::current_dir().unwrap();
+    let c = d.components().last().unwrap();
+    c.as_os_str()
         .to_string_lossy()
         .to_string()
+        .to_lowercase()
 }
 
 fn request_package_data() -> Package {
-    let package_id = prompt_line("Package identifier", &cur_dir().to_lowercase()).unwrap();
+    let package_id = prompt_line("Package identifier", &default_pkg_id()).unwrap();
     
     let en_name = prompt_line("Name", "").unwrap();
     let mut name = HashMap::new();
@@ -134,9 +124,7 @@ fn request_repo_data() -> Repository {
     }
 }
 
-fn package_init() {
-    let cur_dir = &env::current_dir().unwrap();
-
+fn package_init(cur_dir: &Path) {
     if open_repo(&cur_dir).is_ok() {
         progress(Color::Red, "Error", "Cannot generate package within repository; aborting.").unwrap();
         return;
@@ -307,9 +295,7 @@ fn open_package(path: &Path) -> Result<Package, OpenIndexError> {
     Ok(index)
 }
 
-fn repo_init() {
-    let cur_dir = &env::current_dir().unwrap();
-
+fn repo_init(cur_dir: &Path) {
     if open_repo(&cur_dir).is_ok() {
         progress(Color::Red, "Error", "Repo already exists; aborting.").unwrap();
         return;
@@ -341,7 +327,7 @@ fn repo_init() {
     fs::create_dir("packages").unwrap();
     fs::create_dir("virtuals").unwrap();
 
-    repo_index();
+    repo_index(&cur_dir);
 }
 
 fn generate_repo_index_meta() -> Repository {
@@ -368,8 +354,8 @@ fn write_repo_index_meta(repo_index: &Repository) {
     file.write(&[b'\n']).unwrap();
 }
 
-fn repo_index() {
-    if let Err(err) = open_repo(&env::current_dir().unwrap()) {
+fn repo_index(cur_dir: &Path) {
+    if let Err(err) = open_repo(&cur_dir) {
         progress(Color::Red, "Error", &format!("{}", err)).unwrap();
         progress(Color::Red, "Error", "Repo does not exist or is invalid; aborting.").unwrap();
         return;
@@ -384,8 +370,8 @@ fn repo_index() {
     write_repo_index_virtuals(&virtuals_index);
 }
 
-fn package_tarball_installer(force_yes: bool, tarball: &str, url: &str, size: usize) {
-    let mut pkg = match open_package(&env::current_dir().unwrap()) {
+fn package_tarball_installer(file_path: &Path, force_yes: bool, tarball: &str, url: &str, size: usize) {
+    let mut pkg = match open_package(&file_path) {
         Ok(pkg) => pkg,
         Err(err) => {
             progress(Color::Red, "Error", &format!("{}", err)).unwrap();
@@ -422,10 +408,10 @@ fn package_tarball_installer(force_yes: bool, tarball: &str, url: &str, size: us
     file.write(&[b'\n']).unwrap();
 }
 
-fn package_windows_installer(force_yes: bool, product_code: &str, installer: &str, type_: Option<&str>,
+fn package_windows_installer(file_path: &Path, force_yes: bool, product_code: &str, installer: &str, type_: Option<&str>,
         args: Option<&str>, uninst_args: Option<&str>, url: &str, size: usize, 
         requires_reboot: bool, requires_uninst_reboot: bool) {
-    let mut pkg = match open_package(&env::current_dir().unwrap()) {
+    let mut pkg = match open_package(&file_path) {
         Ok(pkg) => pkg,
         Err(err) => {
             progress(Color::Red, "Error", &format!("{}", err)).unwrap();
@@ -479,6 +465,13 @@ fn main() {
             SubCommand::with_name("repo")
             .about("Repository-related subcommands")
             .setting(AppSettings::SubcommandRequiredElseHelp)
+            .arg(Arg::with_name("path")
+                .value_name("PATH")
+                .help("The repository root directory (default: current working directory)")
+                .short("p")
+                .long("path")
+                .takes_value(true)
+            )
             .subcommand(
                 SubCommand::with_name("init")
                     .about("Initialise a Páhkat repository in the current working directory")
@@ -490,12 +483,26 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("init")
-                .about("Initialise a package in the current working directory")
+            .about("Initialise a package in the current working directory")
+            .arg(Arg::with_name("path")
+                .value_name("PATH")
+                .help("The repository root directory (default: current working directory)")
+                .short("p")
+                .long("path")
+                .takes_value(true)
+            )
         )
         .subcommand(
             SubCommand::with_name("installer")
                 .about("Inject installer data into package index")
                 .setting(AppSettings::SubcommandRequiredElseHelp)
+                .arg(Arg::with_name("path")
+                    .value_name("PATH")
+                    .help("The package index root directory (default: current working directory)")
+                    .short("p")
+                    .long("path")
+                    .takes_value(true)
+                )
                 .subcommand(SubCommand::with_name("windows")
                     .about("Inject Windows installer data into package index")
                     .arg(Arg::with_name("product-code")
@@ -601,8 +608,17 @@ fn main() {
         .get_matches();
     
     match matches.subcommand() {
-        ("init", _) => package_init(),
+        ("init", Some(matches)) => {
+            let current_dir = &env::current_dir().unwrap();
+            let path: &Path = matches.value_of("path")
+                .map_or(&current_dir, |v| Path::new(v));
+            package_init(&path)
+        },
         ("installer", Some(matches)) => {
+            let current_dir = &env::current_dir().unwrap();
+            let path: &Path = matches.value_of("path")
+                .map_or(&current_dir, |v| Path::new(v));
+
             match matches.subcommand() {
                 ("windows", Some(matches)) => {
                     let product_code = matches.value_of("product-code").unwrap();
@@ -617,7 +633,7 @@ fn main() {
                     let requires_uninst_reboot = matches.is_present("requires-uninst-reboot");
                     let skip_confirm = matches.is_present("skip-confirmation");
 
-                    package_windows_installer(skip_confirm, product_code, installer, type_, args, uninstall_args, url, 
+                    package_windows_installer(path, skip_confirm, product_code, installer, type_, args, uninstall_args, url, 
                         size, requires_reboot, requires_uninst_reboot);
                 },
                 ("tarball", Some(matches)) => {
@@ -627,15 +643,19 @@ fn main() {
                         .parse::<usize>().unwrap();
                     let skip_confirm = matches.is_present("skip-confirmation");
 
-                    package_tarball_installer(skip_confirm, tarball, url, size);
+                    package_tarball_installer(path, skip_confirm, tarball, url, size);
                 },
                 _ => {}
             }
         }
         ("repo", Some(matches)) => {
+            let current_dir = &env::current_dir().unwrap();
+            let path: &Path = matches.value_of("path")
+                .map_or(&current_dir, |v| Path::new(v));
+
             match matches.subcommand() {
-                ("init", _) => repo_init(),
-                ("index", _) => repo_index(),
+                ("init", _) => repo_init(&path),
+                ("index", _) => repo_index(&path),
                 _ => {}
             }
         }
