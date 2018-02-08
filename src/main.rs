@@ -32,17 +32,16 @@ macro_rules! ld_type {
 
 const LD_CONTEXT: &'static str = "https://pahkat.org/";
 
-fn default_pkg_id() -> String {
-    let d = &env::current_dir().unwrap();
-    let c = d.components().last().unwrap();
+fn default_pkg_id(path: &Path) -> String {
+    let c = path.components().last().unwrap();
     c.as_os_str()
         .to_string_lossy()
         .to_string()
         .to_lowercase()
 }
 
-fn request_package_data() -> Package {
-    let package_id = prompt_line("Package identifier", &default_pkg_id()).unwrap();
+fn request_package_data(cur_dir: &Path) -> Package {
+    let package_id = prompt_line("Package identifier", &default_pkg_id(cur_dir)).unwrap();
     
     let en_name = prompt_line("Name", "").unwrap();
     let mut name = HashMap::new();
@@ -87,7 +86,7 @@ fn request_package_data() -> Package {
 
 fn request_repo_data() -> Repository {
     let base = {
-        let mut base = prompt_line("Base URL", "").unwrap();
+        let base = prompt_line("Base URL", "").unwrap();
         if !base.ends_with("/") {
             format!("{}/", base)
         } else {
@@ -124,32 +123,32 @@ fn request_repo_data() -> Repository {
     }
 }
 
-fn package_init(cur_dir: &Path) {
-    if open_repo(&cur_dir).is_ok() {
+fn package_init(output_dir: &Path) {
+    if open_repo(&output_dir).is_ok() {
         progress(Color::Red, "Error", "Cannot generate package within repository; aborting.").unwrap();
         return;
     }
 
-    if cur_dir.join("index.json").exists() {
+    if output_dir.join("index.json").exists() {
         progress(Color::Red, "Error", "A file or directory named 'index.json' already exists; aborting.").unwrap();
         return;
     }
 
-    let pkg_data = request_package_data();
+    let pkg_data = request_package_data(output_dir);
     let json = serde_json::to_string_pretty(&pkg_data).unwrap();
     
     println!("\n{}\n", json);
 
     if prompt_question("Save index.json", true) {
-        let mut file = File::create("index.json").unwrap();
+        let mut file = File::create(output_dir.join("index.json")).unwrap();
         file.write_all(json.as_bytes()).unwrap();
         file.write(&[b'\n']).unwrap();
     }
 }
 
-fn write_repo_index_virtuals(index: &Virtuals) {
+fn write_repo_index_virtuals(cur_dir: &Path, index: &Virtuals) {
     let json = serde_json::to_string_pretty(&index).unwrap();
-    let pkg_path = env::current_dir().unwrap().join("virtuals");
+    let pkg_path = cur_dir.join("virtuals");
 
     progress(Color::Green, "Writing", "virtuals index").unwrap();
     let mut file = File::create(&pkg_path.join("index.json")).unwrap();
@@ -157,10 +156,10 @@ fn write_repo_index_virtuals(index: &Virtuals) {
     file.write(&[b'\n']).unwrap();
 }
 
-fn generate_repo_index_virtuals(repo: &Repository) -> Virtuals {
+fn generate_repo_index_virtuals(cur_dir: &Path, repo: &Repository) -> Virtuals {
     progress(Color::Green, "Generating", "virtuals index").unwrap();
 
-    let pkg_path = env::current_dir().unwrap().join("virtuals");
+    let pkg_path = cur_dir.join("virtuals");
     let mut map = HashMap::new();
 
     for x in fs::read_dir(&pkg_path).unwrap() {
@@ -198,10 +197,10 @@ fn generate_repo_index_virtuals(repo: &Repository) -> Virtuals {
     }
 }
 
-fn generate_repo_index_packages(repo: &Repository) -> Packages {
+fn generate_repo_index_packages(cur_dir: &Path, repo: &Repository) -> Packages {
     progress(Color::Green, "Generating", "packages index").unwrap();
 
-    let pkg_path = env::current_dir().unwrap().join("packages");
+    let pkg_path = cur_dir.join("packages");
     let pkgs: Vec<Package> = fs::read_dir(&pkg_path)
         .unwrap()
         .map(|x| {
@@ -213,7 +212,7 @@ fn generate_repo_index_packages(repo: &Repository) -> Packages {
                     return None;
                 }
 
-                let relpath = pathdiff::diff_paths(&*path, &env::current_dir().unwrap()).unwrap();
+                let relpath = pathdiff::diff_paths(&*path, cur_dir).unwrap();
                 progress(Color::Magenta, "Warning", &format!("{:?} is not a directory; skipping", &relpath)).unwrap();
                 return None;
             }
@@ -223,7 +222,7 @@ fn generate_repo_index_packages(repo: &Repository) -> Packages {
             let pkg_index: Package = match serde_json::from_reader(file) {
                 Ok(x) => x,
                 Err(err) => {
-                    let relpath = pathdiff::diff_paths(&*index_path, &env::current_dir().unwrap()).unwrap();
+                    let relpath = pathdiff::diff_paths(&*index_path, cur_dir).unwrap();
                     progress(Color::Red, "Error", &format!("Error parsing path {:?}:", &relpath)).unwrap();
                     progress(Color::Red, "Error", &format!("{}", err)).unwrap();
                     return None;
@@ -255,8 +254,8 @@ fn generate_repo_index_packages(repo: &Repository) -> Packages {
     }
 }
 
-fn write_repo_index_packages(index: &Packages) {
-    let pkg_path = env::current_dir().unwrap().join("packages");
+fn write_repo_index_packages(cur_dir: &Path, index: &Packages) {
+    let pkg_path = cur_dir.join("packages");
     let json = serde_json::to_string_pretty(&index).unwrap();
 
     progress(Color::Green, "Writing", "packages index").unwrap();
@@ -320,20 +319,19 @@ fn repo_init(cur_dir: &Path) {
         return;
     }
 
-    let mut file = File::create("index.json").unwrap();
+    let mut file = File::create(cur_dir.join("index.json")).unwrap();
     file.write_all(json.as_bytes()).unwrap();
     file.write(&[b'\n']).unwrap();
 
-    fs::create_dir("packages").unwrap();
-    fs::create_dir("virtuals").unwrap();
+    fs::create_dir(cur_dir.join("packages")).unwrap();
+    fs::create_dir(cur_dir.join("virtuals")).unwrap();
 
     repo_index(&cur_dir);
 }
 
-fn generate_repo_index_meta() -> Repository {
+fn generate_repo_index_meta(repo_path: &Path) -> Repository {
     progress(Color::Green, "Generating", "repository index").unwrap();
 
-    let repo_path = env::current_dir().unwrap();
     let file = File::open(repo_path.join("index.json")).unwrap();
     let mut repo_index: Repository = serde_json::from_reader(file)
         .expect(repo_path.join("index.json").to_str().unwrap());
@@ -344,8 +342,8 @@ fn generate_repo_index_meta() -> Repository {
     repo_index
 }
 
-fn write_repo_index_meta(repo_index: &Repository) {
-    let repo_path = env::current_dir().unwrap();
+fn write_repo_index_meta(cur_dir: &Path, repo_index: &Repository) {
+    let repo_path = cur_dir;
     let json = serde_json::to_string_pretty(&repo_index).unwrap();
 
     progress(Color::Green, "Writing", "repository index").unwrap();
@@ -361,13 +359,21 @@ fn repo_index(cur_dir: &Path) {
         return;
     }
     
-    let repo_index = generate_repo_index_meta();
-    let package_index = generate_repo_index_packages(&repo_index);
-    let virtuals_index = generate_repo_index_virtuals(&repo_index);
+    if !cur_dir.join("packages").exists() {
+        fs::create_dir(cur_dir.join("packages")).unwrap();
+    }
 
-    write_repo_index_meta(&repo_index);
-    write_repo_index_packages(&package_index);
-    write_repo_index_virtuals(&virtuals_index);
+    if !cur_dir.join("virtuals").exists() {
+        fs::create_dir(cur_dir.join("virtuals")).unwrap();
+    }
+    
+    let repo_index = generate_repo_index_meta(&cur_dir);
+    let package_index = generate_repo_index_packages(&cur_dir, &repo_index);
+    let virtuals_index = generate_repo_index_virtuals(&cur_dir, &repo_index);
+
+    write_repo_index_meta(&cur_dir, &repo_index);
+    write_repo_index_packages(&cur_dir, &package_index);
+    write_repo_index_virtuals(&cur_dir, &virtuals_index);
 }
 
 fn package_tarball_installer(file_path: &Path, force_yes: bool, tarball: &str, url: &str, size: usize) {
@@ -403,7 +409,7 @@ fn package_tarball_installer(file_path: &Path, force_yes: bool, tarball: &str, u
         }
     }
 
-    let mut file = File::create("index.json").unwrap();
+    let mut file = File::create(file_path.join("index.json")).unwrap();
     file.write_all(json.as_bytes()).unwrap();
     file.write(&[b'\n']).unwrap();
 }
@@ -450,7 +456,7 @@ fn package_windows_installer(file_path: &Path, force_yes: bool, product_code: &s
         }
     }
 
-    let mut file = File::create("index.json").unwrap();
+    let mut file = File::create(file_path.join("index.json")).unwrap();
     file.write_all(json.as_bytes()).unwrap();
     file.write(&[b'\n']).unwrap();
 }
@@ -460,7 +466,7 @@ fn main() {
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .version(crate_version!())
         .author("Brendan Molloy <brendan@bbqsrc.net>")
-        .about("The last package manager. \"Bákhat\" is the nominative plural form for \"packages\" in Northern Sámi.")
+        .about("The last package manager. \"Pákhat\" is the nominative plural form for \"packages\" in Northern Sámi.")
         .subcommand(
             SubCommand::with_name("repo")
             .about("Repository-related subcommands")
@@ -483,12 +489,12 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("init")
-            .about("Initialise a package in the current working directory")
-            .arg(Arg::with_name("path")
-                .value_name("PATH")
-                .help("The repository root directory (default: current working directory)")
-                .short("p")
-                .long("path")
+            .about("Initialise a package to the specified directory")
+            .arg(Arg::with_name("output")
+                .value_name("OUTPUT")
+                .help("The installer index output directory (default: current working directory)")
+                .short("o")
+                .long("output")
                 .takes_value(true)
             )
         )
@@ -610,9 +616,9 @@ fn main() {
     match matches.subcommand() {
         ("init", Some(matches)) => {
             let current_dir = &env::current_dir().unwrap();
-            let path: &Path = matches.value_of("path")
+            let output: &Path = matches.value_of("output")
                 .map_or(&current_dir, |v| Path::new(v));
-            package_init(&path)
+            package_init(&output)
         },
         ("installer", Some(matches)) => {
             let current_dir = &env::current_dir().unwrap();
