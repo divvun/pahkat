@@ -46,6 +46,10 @@ impl Package {
     }
 }
 
+trait Downloadable {
+    fn url(&self) -> String;
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Packages {
@@ -112,6 +116,17 @@ pub enum Installer {
     Tarball(TarballInstaller),
     MacOSPackage(MacOSPackageInstaller),
     MacOSBundle(MacOSBundleInstaller)
+}
+
+impl Downloadable for Installer {
+    fn url(&self) -> String {
+        match *self {
+            Installer::Windows(ref v) => v.url.to_owned(),
+            Installer::Tarball(ref v) => v.url.to_owned(),
+            Installer::MacOSPackage(ref v) => v.url.to_owned(),
+            Installer::MacOSBundle(ref v) => v.url.to_owned()
+        }
+    }
 }
 
 /// This type is for .bundle files which include an Info.plist for versioning purposes
