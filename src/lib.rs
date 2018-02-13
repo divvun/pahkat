@@ -1,6 +1,7 @@
 extern crate pahkat;
 extern crate rusqlite;
 extern crate reqwest;
+#[macro_use]
 extern crate serde_json;
 extern crate serde;
 #[macro_use]
@@ -13,8 +14,19 @@ extern crate url;
 extern crate rhai;
 #[cfg(windows)]
 extern crate winreg;
+#[cfg(feature = "ipc")]
+extern crate jsonrpc_core;
+#[cfg(feature = "ipc")]
+extern crate jsonrpc_pubsub;
+#[macro_use]
+#[cfg(feature = "ipc")]
+extern crate jsonrpc_macros;
+#[cfg(feature = "ipc")]
+extern crate jsonrpc_tcp_server;
 
 use pahkat::types::*;
+use pahkat::types::{Repository as RepositoryMeta};
+use pahkat::types::Downloadable;
 use std::io::{BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 use std::ffi::OsStr;
@@ -25,6 +37,10 @@ use rhai::RegisterFn;
 
 #[cfg(windows)]
 mod windows;
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(feature = "ipc")]
+pub mod ipc;
 
 pub enum PackageStatus {
     NotInstalled,
@@ -231,14 +247,14 @@ pub trait Download {
 
 impl Download for Package {
     fn download(&self, dir_path: &Path) -> Option<PathBuf> {
-        let url_str = match self.installer() {
-            Some(&Installer::Windows(ref installer)) => &installer.url,
-            Some(&Installer::Tarball(ref installer)) => &installer.url,
+        let installer = match self.installer() {
+            Some(v) => v,
             None => return None
         };
+        let url_str = installer.url();
 
         let url = url::Url::parse(&url_str).unwrap();
-        let mut res = reqwest::get(url_str).unwrap();
+        let mut res = reqwest::get(&url_str).unwrap();
         let tmppath = dir_path.join(&url.path_segments().unwrap().last().unwrap()).to_path_buf();
         let file = File::create(&tmppath).unwrap();
         
@@ -257,7 +273,7 @@ pub enum RepoDownloadError {
     JsonError(serde_json::Error)
 }
 
-fn download_repository(url: &str) -> Result<Repository, RepoDownloadError> {
+pub fn download_repository(url: &str) -> Result<Repository, RepoDownloadError> {
     let client = reqwest::Client::new();
 
     let mut meta_res = client.get(&format!("{}/index.json", url)).send()
@@ -409,8 +425,8 @@ impl<'a> PackageStore<'a> for TarballPackageStore {
         };
 
         let tarball = match installer {
-            &Installer::Windows(_) => return Err(()),
-            &Installer::Tarball(ref v) => v
+            &Installer::Tarball(ref v) => v,
+            _ => return Err(())
         };
 
         let ext = match path.extension().and_then(OsStr::to_str) {

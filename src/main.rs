@@ -15,6 +15,9 @@ fn main() {
         .author("Brendan Molloy <brendan@bbqsrc.net>")
         .about("The last package manager. \"Pákhat\" is the nominative plural form for \"packages\" in Northern Sámi.")
         .subcommand(
+            SubCommand::with_name("ipc").setting(AppSettings::Hidden)
+        )
+        .subcommand(
             SubCommand::with_name("init")
                 .about("Create prefix.")
                 .arg(Arg::with_name("prefix")
@@ -76,6 +79,10 @@ fn main() {
         .get_matches();
 
     match matches.subcommand() {
+        #[cfg(feature="ipc")]
+        ("ipc", _) => {
+            ipc::start();
+        },
         ("init", Some(matches)) => {
             let prefix = matches.value_of("prefix").unwrap();
             let url = matches.value_of("url").unwrap();

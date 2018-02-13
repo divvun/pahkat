@@ -9,7 +9,7 @@ path = "src/main.rs"
 required-features = ["binaries"]
 
 [dependencies]
-pahkat = { git = "https://github.com/bbqsrc/pahkat", branch = "master" }
+pahkat = { git = "https://github.com/divvun/pahkat", branch = "feature/macos" }
 rusqlite = "*"
 reqwest = "*"
 serde = "*"
@@ -24,6 +24,11 @@ rhai = "0.8.1"
 winreg = { git = "https://github.com/bbqsrc/winreg-rs", branch = "master" }
 clap = { version = "*", optional = true }
 termcolor = { version = "0.3", optional = true }
+jsonrpc-core = { version = "*", optional = true }
+jsonrpc-macros = { version = "*", optional = true }
+jsonrpc-pubsub = { version = "*", optional = true }
+jsonrpc-tcp-server = { version = "*", optional = true }
 
 [features]
+ipc = ["jsonrpc-core", "jsonrpc-macros", "jsonrpc-pubsub", "jsonrpc-tcp-server"]
 binaries = ["clap", "termcolor"]
