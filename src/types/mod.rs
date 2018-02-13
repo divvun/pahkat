@@ -46,7 +46,7 @@ impl Package {
     }
 }
 
-trait Downloadable {
+pub trait Downloadable {
     fn url(&self) -> String;
 }
 
