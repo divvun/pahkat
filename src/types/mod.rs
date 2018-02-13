@@ -16,13 +16,6 @@ pub type PackageMap = HashMap<String, Package>;
 pub type VirtualRefMap = HashMap<String, Vec<String>>;
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum Installer {
-    Windows(WindowsInstaller),
-    Tarball(TarballInstaller)
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Package {
     #[serde(rename = "@context")]
@@ -110,6 +103,47 @@ pub struct VirtualTarget {
 pub struct RegistryKey {
     pub path: String,
     pub name: String
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Installer {
+    Windows(WindowsInstaller),
+    Tarball(TarballInstaller),
+    MacOSPackage(MacOSPackageInstaller),
+    MacOSBundle(MacOSBundleInstaller)
+}
+
+/// This type is for .bundle files which include an Info.plist for versioning purposes
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MacOSBundleInstaller {
+    #[serde(rename = "@type")]
+    pub _type: Option<String>,
+    pub url: String,
+    pub install_path: String,
+    #[serde(default)]
+    pub requires_reboot: bool,
+    #[serde(default)]
+    pub requires_uninstall_reboot: bool,
+    pub size: usize,
+    pub installed_size: usize,
+    pub signature: Option<InstallerSignature>
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MacOSPackageInstaller {
+    #[serde(rename = "@type")]
+    pub _type: Option<String>,
+    pub url: String,
+    #[serde(default)]
+    pub requires_reboot: bool,
+    #[serde(default)]
+    pub requires_uninstall_reboot: bool,
+    pub size: usize,
+    pub installed_size: usize,
+    pub signature: Option<InstallerSignature>
 }
 
 #[derive(Debug, Serialize, Deserialize)]
