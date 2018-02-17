@@ -3,9 +3,12 @@ name = "pahkat-client"
 version = "0.1.0"
 authors = ["Brendan Molloy <brendan@bbqsrc.net>"]
 
+# [lib]
+# crate-type = ["staticlib"]
+
 [[bin]]
 name = "pahkatc"
-path = "src/main.rs"
+path = "src/bin/pahkatc.rs"
 required-features = ["binaries"]
 
 [dependencies]
@@ -21,9 +24,20 @@ xz2 = "*"
 tempdir = "*"
 url = "*"
 rhai = "0.8.1"
+libc = "*"
+
+# Windows-specific
 winreg = { git = "https://github.com/bbqsrc/winreg-rs", branch = "master" }
+
+# MacOS-specific
+[target.'cfg(target_os="macos")'.dependencies]
+plist = { version = "0.2" }
+
+# Binaries feature
 clap = { version = "*", optional = true }
 termcolor = { version = "0.3", optional = true }
+
+# IPC feature
 jsonrpc-core = { version = "*", optional = true }
 jsonrpc-macros = { version = "*", optional = true }
 jsonrpc-pubsub = { version = "*", optional = true }

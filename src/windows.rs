@@ -1,6 +1,6 @@
 #![cfg(windows)]
 
-use {Package, PackageAction, PackageStore, PackageStatus, PackageStatusError, Installer};
+use {Package, PackageStore, PackageStatus, PackageStatusError, Installer};
 use std::path::Path;
 use winreg::RegKey;
 use winreg::enums::*;
@@ -70,8 +70,8 @@ enum WindowsInstallError {
 
 impl<'a> PackageStore<'a> for WindowsPackageStore {
     type StatusResult = Result<PackageStatus, PackageStatusError>;
-    type InstallResult = Result<PackageAction<'a>, ()>;
-    type UninstallResult = Result<PackageAction<'a>, ()>;
+    type InstallResult = Result<(), ()>;
+    type UninstallResult = Result<(), ()>;
 
     fn status(&self, package: &'a Package) -> Self::StatusResult {
         let installer = match package.installer() {
