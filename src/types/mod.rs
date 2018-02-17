@@ -126,7 +126,7 @@ impl Downloadable for Installer {
         match *self {
             Installer::Windows(ref v) => v.url.to_owned(),
             Installer::MacOS(ref v) => v.url.to_owned(),
-            Installer::Tarball(ref v) => v.url.to_owned(),
+            // Installer::Tarball(ref v) => v.url.to_owned(),
             // Installer::MacOSBundle(ref v) => v.url.to_owned()
         }
     }
