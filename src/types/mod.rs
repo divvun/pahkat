@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeSet};
+use std::cmp::*;
+use std;
 
 pub mod repo;
 pub use self::repo::*;
@@ -115,7 +117,7 @@ pub enum Installer {
     Windows(WindowsInstaller),
     Tarball(TarballInstaller),
     MacOSPackage(MacOSPackageInstaller),
-    MacOSBundle(MacOSBundleInstaller)
+    // MacOSBundle(MacOSBundleInstaller)
 }
 
 impl Downloadable for Installer {
@@ -124,26 +126,72 @@ impl Downloadable for Installer {
             Installer::Windows(ref v) => v.url.to_owned(),
             Installer::Tarball(ref v) => v.url.to_owned(),
             Installer::MacOSPackage(ref v) => v.url.to_owned(),
-            Installer::MacOSBundle(ref v) => v.url.to_owned()
+            // Installer::MacOSBundle(ref v) => v.url.to_owned()
         }
     }
 }
 
+// #[derive(Default, Debug, Serialize, Deserialize)]
+// #[serde(rename_all = "camelCase")]
+// pub struct MacOSBundleInstallPath {
+//     pub user: Option<String>,
+//     pub system: Option<String>
+// }
+
 /// This type is for .bundle files which include an Info.plist for versioning purposes
-#[derive(Debug, Serialize, Deserialize)]
+// #[derive(Debug, Serialize, Deserialize)]
+// #[serde(rename_all = "camelCase")]
+// pub struct MacOSBundleInstaller {
+//     #[serde(rename = "@type")]
+//     pub _type: Option<String>,
+//     pub url: String,
+//     #[serde(default)]
+//     pub install_path: MacOSBundleInstallPath,
+//     #[serde(default)]
+//     pub requires_reboot: bool,
+//     #[serde(default)]
+//     pub requires_uninstall_reboot: bool,
+//     pub size: usize,
+//     pub installed_size: usize,
+//     pub signature: Option<InstallerSignature>
+// }
+
+#[derive(Debug, Clone, Copy, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MacOSBundleInstaller {
-    #[serde(rename = "@type")]
-    pub _type: Option<String>,
-    pub url: String,
-    pub install_path: String,
-    #[serde(default)]
-    pub requires_reboot: bool,
-    #[serde(default)]
-    pub requires_uninstall_reboot: bool,
-    pub size: usize,
-    pub installed_size: usize,
-    pub signature: Option<InstallerSignature>
+pub enum MacOSInstallTarget {
+    System,
+    User
+}
+
+impl std::fmt::Display for MacOSInstallTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", match *self {
+            MacOSInstallTarget::System => "system",
+            MacOSInstallTarget::User => "user"
+        })
+    }
+}
+
+impl PartialEq for MacOSInstallTarget {
+    fn eq(&self, other: &MacOSInstallTarget) -> bool {
+        self == other
+    }
+}
+
+impl PartialOrd for MacOSInstallTarget {
+    fn partial_cmp(&self, other: &MacOSInstallTarget) -> Option<Ordering> {
+        Some(self.cmp(&other))
+    }
+}
+
+
+impl Ord for MacOSInstallTarget {
+    fn cmp(&self, other: &MacOSInstallTarget) -> Ordering {
+        if self == other {
+            return Ordering::Equal;
+        }
+        self.to_string().cmp(&other.to_string())
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -152,6 +200,9 @@ pub struct MacOSPackageInstaller {
     #[serde(rename = "@type")]
     pub _type: Option<String>,
     pub url: String,
+    pub pkg_id: String,
+    #[serde(default)]
+    pub targets: BTreeSet<MacOSInstallTarget>,
     #[serde(default)]
     pub requires_reboot: bool,
     #[serde(default)]

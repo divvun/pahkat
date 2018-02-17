@@ -22,7 +22,7 @@ pub fn progress(color: Color, first: &str, rest: &str) -> Result<(), io::Error> 
 pub fn prompt_question(prompt: &str, default: bool) -> bool {
     let mut stdout = StandardStream::stdout(ColorChoice::Always);
     stdout.set_color(ColorSpec::new().set_fg(Some(Color::Cyan))).unwrap();
-    write!(&mut stdout, "{}: ", prompt).unwrap();
+    write!(&mut stdout, "{}? ", prompt).unwrap();
     stdout.reset().unwrap();
 
     print!("({}) ", if default { "yes" } else { "no" });
