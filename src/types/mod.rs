@@ -117,7 +117,7 @@ pub struct RegistryKey {
 pub enum Installer {
     Windows(WindowsInstaller),
     MacOS(MacOSInstaller),
-    Tarball(TarballInstaller),
+    // Tarball(TarballInstaller),
     // MacOSBundle(MacOSBundleInstaller)
 }
 
