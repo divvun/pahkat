@@ -418,6 +418,67 @@ fn package_tarball_installer(file_path: &Path, force_yes: bool, tarball: &str, u
     file.write(&[b'\n']).unwrap();
 }
 
+fn package_macos_installer(file_path: &Path, force_yes: bool, installer: &str, targets: Vec<&str>, pkg_id: &str,
+        url: &str, size: usize, requires_reboot: bool, requires_uninst_reboot: bool) {
+    let mut pkg = match open_package(&file_path) {
+        Ok(pkg) => pkg,
+        Err(err) => {
+            progress(Color::Red, "Error", &format!("{}", err)).unwrap();
+            progress(Color::Red, "Error", "Package does not exist or is invalid; aborting").unwrap();
+            return;
+        }
+    };
+
+    let installer_file = File::open(installer).expect("Installer could not be opened.");
+    let meta = installer_file.metadata().unwrap();
+    let installer_size = meta.len() as usize;
+
+    let target_results: Vec<Result<MacOSInstallTarget, &str>> = targets.iter()
+        .map(|x| x.parse::<MacOSInstallTarget>().map_err(|_| *x))
+        .collect();
+
+    let target_errors: Vec<&str> = target_results.iter().filter(|x| x.is_err()).map(|x| x.err().unwrap()).collect();
+
+    if target_errors.len() > 0 {
+        progress(Color::Red, "Error", &format!("Invalid targets supplied: {}", &target_errors.join(", "))).unwrap();
+        return;
+    }
+
+    let targets: std::collections::BTreeSet<MacOSInstallTarget> = target_results.iter()
+        .filter(|x| x.is_ok())
+        .map(|x| x.unwrap())
+        .collect();
+
+    let installer_index = MacOSInstaller {
+        _type: ld_type!("MacOSInstaller"),
+        url: url.to_owned(),
+        pkg_id: pkg_id.to_owned(),
+        targets: targets,
+        requires_reboot: requires_reboot,
+        requires_uninstall_reboot: requires_uninst_reboot,
+        size: installer_size,
+        installed_size: size,
+        signature: None
+    };
+
+    pkg.installer = Some(Installer::MacOSPackage(installer_index));
+
+    let json = serde_json::to_string_pretty(&pkg).unwrap();
+    
+    if !force_yes {
+        println!("\n{}\n", json);
+
+        if !prompt_question("Save index.json", true) {
+            return;
+        }
+    }
+
+    // TODO Check dir exists
+    let mut file = File::create(file_path.join("index.json")).unwrap();
+    file.write_all(json.as_bytes()).unwrap();
+    file.write(&[b'\n']).unwrap();
+}
+
 fn package_windows_installer(file_path: &Path, force_yes: bool, product_code: &str, installer: &str, type_: Option<&str>,
         args: Option<&str>, uninst_args: Option<&str>, url: &str, size: usize, 
         requires_reboot: bool, requires_uninst_reboot: bool) {
@@ -513,22 +574,29 @@ fn main() {
                     .long("path")
                     .takes_value(true)
                 )
-                .subcommand(SubCommand::with_name("macos-bundle")
-                    .about("Inject macOS bundle installer data into package index")
-                    .about("Inject tarball install data into package index")
-                    .arg(Arg::with_name("tarball")
-                        .value_name("TARBALL")
-                        .help("The bundle tarball (.txz)")
+                .subcommand(SubCommand::with_name("macos")
+                    .about("Inject macOS .pkg installer data into package index")
+                    .arg(Arg::with_name("package")
+                        .value_name("PKG")
+                        .help("The package file (.pkg)")
                         .short("i")
-                        .long("tarball")
+                        .long("package")
                         .takes_value(true)
                         .required(true)
                     )
-                    .arg(Arg::with_name("install-path")
-                        .value_name("INSTALL_PATH")
-                        .help("The target path to install bundle to (including bundle name)")
+                    .arg(Arg::with_name("pkg-id")
+                        .value_name("PKGID")
+                        .help("The bundle identifier for the installed package (eg, com.example.package)")
+                        .short("c")
+                        .long("pkgid")
+                        .takes_value(true)
+                        .required(true)
+                    )
+                    .arg(Arg::with_name("targets")
+                        .value_name("TARGETS")
+                        .help("The supported targets for installation, comma-delimited (options: system, user)")
                         .short("o")
-                        .long("install-path")
+                        .long("targets")
                         .takes_value(true)
                         .required(true)
                     )
@@ -544,7 +612,7 @@ fn main() {
                     )
                     .arg(Arg::with_name("url")
                         .value_name("URL")
-                        .help("The URL where the installer will be downloaded")
+                        .help("The URL where the installer will be downloaded from")
                         .short("u")
                         .long("url")
                         .takes_value(true)
@@ -614,7 +682,7 @@ fn main() {
                     )
                     .arg(Arg::with_name("url")
                         .value_name("URL")
-                        .help("The URL where the installer will be downloaded")
+                        .help("The URL where the installer will be downloaded from")
                         .short("u")
                         .long("url")
                         .takes_value(true)
@@ -645,7 +713,7 @@ fn main() {
                     )
                     .arg(Arg::with_name("url")
                         .value_name("URL")
-                        .help("The URL where the installer will be downloaded")
+                        .help("The URL where the installer will be downloaded from")
                         .short("u")
                         .long("url")
                         .takes_value(true)
@@ -680,6 +748,20 @@ fn main() {
                 .map_or(&current_dir, |v| Path::new(v));
 
             match matches.subcommand() {
+                ("macos", Some(matches)) => {
+                    let installer = matches.value_of("package").unwrap();
+                    let targets: Vec<&str> = matches.value_of("targets").unwrap().split(",").collect();
+                    let pkg_id = matches.value_of("pkg-id").unwrap();
+                    let url = matches.value_of("url").unwrap();
+                    let size = matches.value_of("installed-size").unwrap()
+                        .parse::<usize>().unwrap();
+                    let requires_reboot = matches.is_present("requires-reboot");
+                    let requires_uninst_reboot = matches.is_present("requires-uninst-reboot");
+                    let skip_confirm = matches.is_present("skip-confirmation");
+
+                    package_macos_installer(path, skip_confirm, installer, targets, pkg_id, url, size, requires_reboot, 
+                        requires_uninst_reboot);
+                },
                 ("windows", Some(matches)) => {
                     let product_code = matches.value_of("product-code").unwrap();
                     let type_ = matches.value_of("type");

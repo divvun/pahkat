@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use std::collections::{HashMap, BTreeSet};
+use std::str::FromStr;
 use std::cmp::*;
 use std;
 
@@ -115,8 +116,8 @@ pub struct RegistryKey {
 #[serde(untagged)]
 pub enum Installer {
     Windows(WindowsInstaller),
+    MacOS(MacOSInstaller),
     Tarball(TarballInstaller),
-    MacOSPackage(MacOSPackageInstaller),
     // MacOSBundle(MacOSBundleInstaller)
 }
 
@@ -163,6 +164,33 @@ pub enum MacOSInstallTarget {
     User
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct ParseMacOSInstallTargetError;
+
+impl std::error::Error for ParseMacOSInstallTargetError {
+    fn description(&self) -> &str {
+        "Invalid value passed"
+    }
+}
+impl std::fmt::Display for ParseMacOSInstallTargetError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        use std::error::Error;
+        write!(f, "{}", self.description())
+    }
+}
+
+impl FromStr for MacOSInstallTarget {
+    type Err = ParseMacOSInstallTargetError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "system" => Ok(MacOSInstallTarget::System),
+            "user" => Ok(MacOSInstallTarget::User),
+            _ => Err(ParseMacOSInstallTargetError {})
+        }
+    }
+}
+
 impl std::fmt::Display for MacOSInstallTarget {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", match *self {
@@ -174,7 +202,11 @@ impl std::fmt::Display for MacOSInstallTarget {
 
 impl PartialEq for MacOSInstallTarget {
     fn eq(&self, other: &MacOSInstallTarget) -> bool {
-        self == other
+        match (*self, *other) {
+            (MacOSInstallTarget::System, MacOSInstallTarget::System) => true,
+            (MacOSInstallTarget::User, MacOSInstallTarget::User) => true,
+            _ => false
+        }
     }
 }
 
@@ -184,19 +216,20 @@ impl PartialOrd for MacOSInstallTarget {
     }
 }
 
-
 impl Ord for MacOSInstallTarget {
     fn cmp(&self, other: &MacOSInstallTarget) -> Ordering {
-        if self == other {
-            return Ordering::Equal;
+        match (*self, *other) {
+            (MacOSInstallTarget::System, MacOSInstallTarget::System) => Ordering::Equal,
+            (MacOSInstallTarget::User, MacOSInstallTarget::User) => Ordering::Equal,
+            (MacOSInstallTarget::System, MacOSInstallTarget::User) => Ordering::Less,
+            (MacOSInstallTarget::User, MacOSInstallTarget::System) => Ordering::Greater
         }
-        self.to_string().cmp(&other.to_string())
     }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MacOSPackageInstaller {
+pub struct MacOSInstaller {
     #[serde(rename = "@type")]
     pub _type: Option<String>,
     pub url: String,
