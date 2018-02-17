@@ -117,7 +117,7 @@ pub struct RegistryKey {
 pub enum Installer {
     Windows(WindowsInstaller),
     MacOS(MacOSInstaller),
-    // Tarball(TarballInstaller),
+    Tarball(TarballInstaller),
     // MacOSBundle(MacOSBundleInstaller)
 }
 
@@ -126,7 +126,7 @@ impl Downloadable for Installer {
         match *self {
             Installer::Windows(ref v) => v.url.to_owned(),
             Installer::MacOS(ref v) => v.url.to_owned(),
-            // Installer::Tarball(ref v) => v.url.to_owned(),
+            Installer::Tarball(ref v) => v.url.to_owned(),
             // Installer::MacOSBundle(ref v) => v.url.to_owned()
         }
     }

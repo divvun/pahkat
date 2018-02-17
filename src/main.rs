@@ -381,8 +381,6 @@ fn repo_index(cur_dir: &Path) {
 }
 
 fn package_tarball_installer(file_path: &Path, force_yes: bool, tarball: &str, url: &str, size: usize) {
-    unimplemented!();
-    
     let mut pkg = match open_package(&file_path) {
         Ok(pkg) => pkg,
         Err(err) => {
@@ -403,7 +401,7 @@ fn package_tarball_installer(file_path: &Path, force_yes: bool, tarball: &str, u
         installed_size: size
     };
 
-    // pkg.installer = Some(Installer::Tarball(installer_index));
+    pkg.installer = Some(Installer::Tarball(installer_index));
 
     let json = serde_json::to_string_pretty(&pkg).unwrap();
     
