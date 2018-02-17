@@ -461,7 +461,7 @@ fn package_macos_installer(file_path: &Path, force_yes: bool, installer: &str, t
         signature: None
     };
 
-    pkg.installer = Some(Installer::MacOSPackage(installer_index));
+    pkg.installer = Some(Installer::MacOS(installer_index));
 
     let json = serde_json::to_string_pretty(&pkg).unwrap();
     
