@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Repository {
     #[serde(rename = "@context")]
@@ -15,7 +15,7 @@ pub struct Repository {
     pub channels: Vec<String>
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RepositoryAgent {
     #[serde(rename = "@type")]

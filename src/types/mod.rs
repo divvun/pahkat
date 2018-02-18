@@ -18,7 +18,7 @@ pub const OS: &str = "windows";
 pub type PackageMap = HashMap<String, Package>;
 pub type VirtualRefMap = HashMap<String, Vec<String>>;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Package {
     #[serde(rename = "@context")]
@@ -53,7 +53,7 @@ pub trait Downloadable {
     fn url(&self) -> String;
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Packages {
     #[serde(rename = "@context")]
@@ -67,7 +67,7 @@ pub struct Packages {
     pub packages: PackageMap
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Virtual {
     #[serde(rename = "@context")]
@@ -85,7 +85,7 @@ pub struct Virtual {
     pub target: VirtualTarget
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Virtuals {
     #[serde(rename = "@context")]
@@ -99,20 +99,20 @@ pub struct Virtuals {
     pub virtuals: VirtualRefMap
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VirtualTarget {
     pub registry_key: Option<RegistryKey>
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RegistryKey {
     pub path: String,
     pub name: String
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Installer {
     Windows(WindowsInstaller),
@@ -227,7 +227,7 @@ impl Ord for MacOSInstallTarget {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MacOSInstaller {
     #[serde(rename = "@type")]
@@ -245,7 +245,7 @@ pub struct MacOSInstaller {
     pub signature: Option<InstallerSignature>
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WindowsInstaller {
     #[serde(rename = "@type")]
@@ -265,7 +265,7 @@ pub struct WindowsInstaller {
     pub signature: Option<InstallerSignature>
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TarballInstaller {
     #[serde(rename = "@type")]
@@ -275,7 +275,7 @@ pub struct TarballInstaller {
     pub installed_size: usize
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstallerSignature {
     pub public_key: String,
