@@ -10,15 +10,13 @@ use std::fmt::Display;
 use std::str::FromStr;
 use std::process::Command;
 use std::collections::BTreeMap;
+use ::{Repository};
 
 use serde::de::{self, Deserialize, Deserializer};
 use plist::serde::{deserialize as deserialize_plist};
 
 use ::*;
 
-pub struct MacOSPackageStore<'a> {
-    cache_path: &'a Path
-}
 
 fn from_str<'de, T, D>(deserializer: D) -> Result<T, D::Error>
     where T: FromStr,
@@ -52,131 +50,105 @@ fn test_bundle_plist() {
 pub enum MacOSInstallError {
     NoInstaller,
     WrongInstallerType,
-    InvalidFileType
+    InvalidFileType,
+    PackageNotInCache
 }
 
 #[derive(Debug, Clone, Copy)]
 pub enum MacOSUninstallError {
     NoInstaller,
-    WrongInstallerType,
+    WrongInstallerType
+}
+
+pub struct MacOSPackageStore<'a> {
+    repo: &'a Repository,
+    config: &'a StoreConfig
 }
 
 impl<'a> MacOSPackageStore<'a> {
-    fn new(cache_path: &'a Path) -> MacOSPackageStore<'a> {
-        MacOSPackageStore { cache_path: cache_path }
+    pub fn new(repo: &'a Repository, config: &'a StoreConfig) -> MacOSPackageStore<'a> {
+        MacOSPackageStore { repo: repo, config: config }
     }
 
-    // fn install_package(&self, package: &'a Package, installer: &'a MacOSPackageInstaller) -> Result<(), MacOSInstallError> {
-    //     if !installer.url.ends_with(".txz") {
-    //         return Err(MacOSInstallError::InvalidFileType);
-    //     }
+    // TODO: review if there is a better place to put this function...
+    pub fn download_path(&self, _package: &Package) -> PathBuf {
+        return Path::new(&self.config.cache_dir).join(self.repo.hash_id())
+    }
 
-        
-    //     unimplemented!()
-    // }
-
-    // fn uninstall_package(&self, package: &'a Package, installer: &'a MacOSPackageInstaller) -> Result<(), MacOSUninstallError> {
-    //     unimplemented!()
-    // }
-
-    // fn status_package(&self, package: &'a Package, installer: &'a MacOSPackageInstaller) -> Result<PackageStatus, PackageStatusError> {
-    //     unimplemented!()
-    // }
-
-    // fn install_bundle(&self, package: &'a Package, installer: &'a MacOSBundleInstaller) -> Result<(), MacOSInstallError> {
-    //     if !installer.url.ends_with(".txz") {
-    //         return Err(MacOSInstallError::InvalidFileType);
-    //     }
-
-    //     // Untar into a temporary directory
-
-    //     // Find target.bundle
-
-    //     // Install into expected directory
-
-    //     unimplemented!()
-    // }
-
-    // fn uninstall_bundle(&self, package: &'a Package, installer: &'a MacOSBundleInstaller) -> Result<(), MacOSUninstallError> {
-    //     // Find targetted bundle
-
-    //     unimplemented!()
-    // }
-
-    // fn status_bundle(&self, package: &'a Package, installer: &'a MacOSBundleInstaller) -> Result<PackageStatus, PackageStatusError> {
-    //     if !installer.install_path.starts_with("/") && !installer.install_path.starts_with("~") {
-    //         return Err(PackageStatusError::InvalidInstallPath)
-    //     }
-
-    //     let path = Path::new(&installer.install_path);
-
-    //     if path.exists() {
-    //         let plist_path = path.join("Contents/Info.plist");
-    //         let file = File::open(&plist_path)
-    //             .map_err(|_| PackageStatusError::InvalidMetadata)?;
-    //         let plist: BundlePlistInfo = deserialize_plist(file)
-    //             .map_err(|_| PackageStatusError::InvalidMetadata)?;
-
-    //         let short_version = match plist.short_version {
-    //             Some(v) => v,
-    //             None => return Err(PackageStatusError::ParsingVersion)
-    //         };
-
-    //         let installed_version = match semver::Version::parse(&short_version) {
-    //             Err(_) => return Err(PackageStatusError::ParsingVersion),
-    //             Ok(v) => v
-    //         };
-
-    //         let candidate_version = match semver::Version::parse(&package.version) {
-    //             Err(_) => return Err(PackageStatusError::ParsingVersion),
-    //             Ok(v) => v
-    //         };
-
-    //         if candidate_version > installed_version {
-    //             Ok(PackageStatus::RequiresUpdate)
-    //         } else {
-    //             Ok(PackageStatus::UpToDate)
-    //         }
-    //     } else {
-    //         return Ok(PackageStatus::NotInstalled)
-    //     }
-    // }
-
-    pub fn install(&self, package: &'a Package, target: Option<MacOSInstallTarget>) -> Result<(), MacOSInstallError> {
+    pub fn install(&self, package: &'a Package, target: MacOSInstallTarget) -> Result<PackageStatus, MacOSInstallError> {
         let installer = match package.installer() {
             None => return Err(MacOSInstallError::NoInstaller),
             Some(v) => v
         };
 
-        match *installer {
-            Installer::MacOSPackage(ref v) => v,
+        let installer = match *installer {
+            Installer::MacOS(ref v) => v,
             _ => return Err(MacOSInstallError::WrongInstallerType)
         };
 
-        unimplemented!()
+        let url = url::Url::parse(&installer.url).unwrap();
+        let filename = url.path_segments().unwrap().last().unwrap();
+        let pkg_path = self.download_path(&package).join(filename);
+
+        if !pkg_path.exists() {
+            return Err(MacOSInstallError::PackageNotInCache)
+        }
+        
+        install_macos_package(&pkg_path, target).unwrap();
+
+        Ok(self.status_impl(installer, package, target).unwrap())
     }
 
-    pub fn uninstall(&self, package: &'a Package, target: Option<MacOSInstallTarget>) -> Result<(), MacOSUninstallError> {
+    pub fn uninstall(&self, package: &'a Package, target: MacOSInstallTarget) -> Result<PackageStatus, MacOSUninstallError> {
         let installer = match package.installer() {
             None => return Err(MacOSUninstallError::NoInstaller),
             Some(v) => v
         };
 
-        match *installer {
-            Installer::MacOSPackage(ref v) => v,
+        let installer = match installer {
+            &Installer::MacOS(ref v) => v,
             _ => return Err(MacOSUninstallError::WrongInstallerType)
-        }
+        };
+
+        uninstall_macos_package(&installer.pkg_id, target).unwrap();
+
+        Ok(self.status_impl(installer, package, target).unwrap())
     }
 
-    pub fn status(&self, package: &'a Package, target: Option<MacOSInstallTarget>) -> Result<PackageStatus, PackageStatusError> {
+    pub fn status(&self, package: &'a Package, target: MacOSInstallTarget) -> Result<PackageStatus, PackageStatusError> {
         let installer = match package.installer() {
             None => return Err(PackageStatusError::NoInstaller),
             Some(v) => v
         };
 
-        match *installer {
-            Installer::MacOSPackage(ref v) => v,
+        let installer = match installer {
+            &Installer::MacOS(ref v) => v,
             _ => return Err(PackageStatusError::WrongInstallerType)
+        };
+
+        self.status_impl(installer, package, target)
+    }
+
+    fn status_impl(&self, installer: &MacOSInstaller, package: &'a Package, target: MacOSInstallTarget) -> Result<PackageStatus, PackageStatusError> {
+        let pkg_info = match get_package_info(&installer.pkg_id, target) {
+            Some(v) => v,
+            None => return Ok(PackageStatus::NotInstalled)
+        };
+
+        let installed_version = match semver::Version::parse(&pkg_info.pkg_version) {
+            Err(_) => return Err(PackageStatusError::ParsingVersion),
+            Ok(v) => v
+        };
+
+        let candidate_version = match semver::Version::parse(&package.version) {
+            Err(_) => return Err(PackageStatusError::ParsingVersion),
+            Ok(v) => v
+        };
+
+        if candidate_version > installed_version {
+            Ok(PackageStatus::RequiresUpdate)
+        } else {
+            Ok(PackageStatus::UpToDate)
         }
     }
 }
@@ -371,10 +343,9 @@ fn forget_pkg_id(bundle_id: &str, target: MacOSInstallTarget) -> Result<(), ()> 
     Ok(())
 }
 
-#[test]
-fn end_to_end() {
-    println!("{}", "A");
-    install_macos_package(&Path::new("/Users/brendan/git/kbdgen/outputs/sme/North_Sami_Keyboard_1.0.1.unsigned.pkg"), MacOSInstallTarget::User).unwrap();
-    println!("{}", "B");
-    uninstall_macos_package("no.uit.giella.keyboardlayout.sme", MacOSInstallTarget::User).unwrap()
-}
+// #[test]
+// fn end_to_end() {
+//     let store = MacOSPackageStore::new(Path::new("/tmp"));
+//     install_macos_package(&Path::new("/Users/brendan/git/kbdgen/outputs/sme/North_Sami_Keyboard_1.0.1.unsigned.pkg"), MacOSInstallTarget::User).unwrap();
+//     uninstall_macos_package("no.uit.giella.keyboardlayout.sme", MacOSInstallTarget::User).unwrap()
+// }

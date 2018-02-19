@@ -25,6 +25,7 @@ tempdir = "*"
 url = "*"
 rhai = "0.8.1"
 libc = "*"
+rust-crypto = "^0.2"
 
 # Windows-specific
 winreg = { git = "https://github.com/bbqsrc/winreg-rs", branch = "master" }

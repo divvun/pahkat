@@ -8,7 +8,7 @@ use xz2::read::XzDecoder;
 use std::fs::{remove_file, read_dir, remove_dir, create_dir_all, File};
 use std::cell::RefCell;
 use rhai::RegisterFn;
-use ::{Repository, PackageStatusError, PackageStatus};
+use ::{Repository, PackageStatusError, PackageStatus, StoreConfig};
 use rusqlite;
 use serde_json;
 use semver;
@@ -226,12 +226,6 @@ impl TarballPackageStore {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StoreConfig {
-    pub url: String
-}
-
 pub struct Prefix {
     prefix: PathBuf,
     store: TarballPackageStore,
@@ -247,7 +241,17 @@ impl Prefix {
         &self.config
     }
 
-    pub fn create(prefix: &Path, config: StoreConfig) -> Result<Prefix, ()> {
+    pub fn create(prefix: &Path, url: &str) -> Result<Prefix, ()> {
+        let cache_dir = prefix.join("var/pahkatc/cache");
+        let config = StoreConfig {
+            url: url.to_owned(),
+            cache_dir: cache_dir.to_str().unwrap().to_owned()
+        };
+
+        if !cache_dir.exists() {
+            create_dir_all(cache_dir).unwrap()
+        }
+
         let config_path = prefix.join("etc/pahkatc/config.json");
         if config_path.exists() {
             return Err(())
