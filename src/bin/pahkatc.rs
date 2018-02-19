@@ -34,6 +34,12 @@ fn main() {
                         .long("url")
                         .takes_value(true)
                         .required(true))
+                    .arg(Arg::with_name("cache-dir")
+                        .value_name("CACHE")
+                        .short("c")
+                        .long("cache-dir")
+                        .takes_value(true)
+                        .required(true))
             )
             .subcommand(
                 SubCommand::with_name("list")
