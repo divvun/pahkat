@@ -47,7 +47,7 @@ pub mod macos;
 pub mod ipc;
 pub mod tarball;
 
-pub mod exports;
+// pub mod exports;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -189,7 +189,7 @@ impl<W: Write, F> ProgressWriter<W, F>
 {
     fn new(writer: W, max_count: usize, callback: F) -> ProgressWriter<W, F> {
         (callback)(0, max_count);
-        
+
         ProgressWriter {
             writer: writer,
             callback: callback,
