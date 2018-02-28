@@ -1,7 +1,6 @@
 extern crate pahkat;
 extern crate rusqlite;
 extern crate reqwest;
-#[macro_use]
 extern crate serde_json;
 extern crate serde;
 #[macro_use]
@@ -34,9 +33,9 @@ use crypto::sha2::Sha256;
 use pahkat::types::*;
 use pahkat::types::{Repository as RepositoryMeta};
 use pahkat::types::Downloadable;
-use std::io::{self, BufWriter, Read, Write};
+use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
-use std::fs::{remove_file, read_dir, remove_dir, create_dir_all, File};
+use std::fs::{create_dir_all, File};
 use std::fmt;
 
 #[cfg(windows)]

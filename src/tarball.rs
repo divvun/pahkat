@@ -1,14 +1,12 @@
 use pahkat::types::*;
-use pahkat::types::{Repository as RepositoryMeta};
-use pahkat::types::Downloadable;
-use std::io::{self, BufWriter, Read, Write};
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::ffi::OsStr;
 use xz2::read::XzDecoder;
 use std::fs::{remove_file, read_dir, remove_dir, create_dir_all, File};
 use std::cell::RefCell;
 use rhai::RegisterFn;
-use ::{Repository, PackageStatusError, PackageStatus, StoreConfig};
+use ::{PackageStatusError, PackageStatus, StoreConfig};
 use rusqlite;
 use serde_json;
 use semver;
@@ -51,7 +49,7 @@ impl TarballPackageStore {
             Some(v) => v
         };
 
-        let tarball = match installer {
+        let _tarball = match installer {
             &Installer::Tarball(ref v) => v,
             _ => return Err(())
         };
@@ -226,6 +224,7 @@ impl TarballPackageStore {
     }
 }
 
+#[allow(dead_code)]
 pub struct Prefix {
     prefix: PathBuf,
     store: TarballPackageStore,

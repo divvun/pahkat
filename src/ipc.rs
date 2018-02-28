@@ -166,6 +166,7 @@ impl Rpc for RpcImpl {
 		// TODO make init check
 		let config = StoreConfig::load_default().unwrap();
 		let store = MacOSPackageStore::new(&repo, &config);
+		
 		store.uninstall(&package, target).map_err(|e| {
 			Error {
 				code: ErrorCode::InvalidParams,

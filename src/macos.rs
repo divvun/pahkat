@@ -1,11 +1,6 @@
 use pahkat::types::*;
-use std::io::{BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
-use std::ffi::OsStr;
-use xz2::read::XzDecoder;
-use std::fs::{remove_file, read_dir, remove_dir, create_dir_all, File};
-use std::cell::RefCell;
-use rhai::RegisterFn;
+use std::fs::{remove_file, remove_dir};
 use std::fmt::Display;
 use std::str::FromStr;
 use std::process::Command;
@@ -153,24 +148,24 @@ impl<'a> MacOSPackageStore<'a> {
     }
 }
 
-fn get_installed_packages(target: MacOSInstallTarget) -> Result<Vec<String>, io::Error> {
-    use std::io::Cursor;
-    use std::env;
+// fn get_installed_packages(target: MacOSInstallTarget) -> Result<Vec<String>, io::Error> {
+//     use std::io::Cursor;
+//     use std::env;
 
-    let home_dir = env::home_dir().expect("Always find home directory");
+//     let home_dir = env::home_dir().expect("Always find home directory");
     
-    let mut args = vec!["--pkgs-plist"];
-    if let MacOSInstallTarget::User = target {
-        args.push("--volume");
-        args.push(&home_dir.to_str().unwrap());
-    }
+//     let mut args = vec!["--pkgs-plist"];
+//     if let MacOSInstallTarget::User = target {
+//         args.push("--volume");
+//         args.push(&home_dir.to_str().unwrap());
+//     }
 
-    let output = Command::new("pkgutil").args(&args).output()?;
-    let plist_data = String::from_utf8(output.stdout).expect("plist should always be valid UTF-8");
-    let cursor = Cursor::new(plist_data);
-    let plist: Vec<String> = deserialize_plist(cursor).expect("plist should always be valid");
-    return Ok(plist);
-}
+//     let output = Command::new("pkgutil").args(&args).output()?;
+//     let plist_data = String::from_utf8(output.stdout).expect("plist should always be valid UTF-8");
+//     let cursor = Cursor::new(plist_data);
+//     let plist: Vec<String> = deserialize_plist(cursor).expect("plist should always be valid");
+//     return Ok(plist);
+// }
 
 #[derive(Debug, Deserialize)]
 struct MacOSPackageExportPath {
@@ -235,18 +230,6 @@ fn get_package_info(bundle_id: &str, target: MacOSInstallTarget) -> Option<MacOS
     return Some(plist);
 }
 
-// #[test]
-fn test_get_pkgs() {
-    println!("{:?}", get_installed_packages(MacOSInstallTarget::User))
-}
-
-// #[test]
-fn test_get_pkg_info() {
-    let pkg_info = get_package_info("com.oracle.jre", MacOSInstallTarget::System).unwrap();
-    // println!("{:?}", &pkg_info);
-    println!("{:?}", &pkg_info.paths());
-}
-
 #[derive(Debug)]
 enum ProcessError {
     Io(io::Error),
@@ -278,9 +261,6 @@ fn install_macos_package(pkg_path: &Path, target: MacOSInstallTarget) -> Result<
 }
 
 fn uninstall_macos_package(bundle_id: &str, target: MacOSInstallTarget) -> Result<(), ()> {
-    use std::fs;
-    use std::env;
-    
     let package_info = get_package_info(bundle_id, target).unwrap();
 
     let mut errors = vec![];
@@ -293,7 +273,7 @@ fn uninstall_macos_package(bundle_id: &str, target: MacOSInstallTarget) -> Resul
         }
 
         println!("Deleting: {:?}", &path);
-        fs::remove_file(path).unwrap();
+        remove_file(path).unwrap();
     }
 
     // Ensure children are deleted first
@@ -305,7 +285,7 @@ fn uninstall_macos_package(bundle_id: &str, target: MacOSInstallTarget) -> Resul
 
     for dir in directories {
         println!("Deleting: {:?}", &dir);
-        match fs::remove_dir(dir) {
+        match remove_dir(dir) {
             Err(e) => errors.push(e),
             Ok(_) => {}
         }
@@ -342,10 +322,3 @@ fn forget_pkg_id(bundle_id: &str, target: MacOSInstallTarget) -> Result<(), ()> 
     }
     Ok(())
 }
-
-// #[test]
-// fn end_to_end() {
-//     let store = MacOSPackageStore::new(Path::new("/tmp"));
-//     install_macos_package(&Path::new("/Users/brendan/git/kbdgen/outputs/sme/North_Sami_Keyboard_1.0.1.unsigned.pkg"), MacOSInstallTarget::User).unwrap();
-//     uninstall_macos_package("no.uit.giella.keyboardlayout.sme", MacOSInstallTarget::User).unwrap()
-// }
