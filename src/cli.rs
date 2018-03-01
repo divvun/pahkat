@@ -1,6 +1,6 @@
 use std::io;
 use std::io::Write;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 #[cfg(target_os = "windows")]
@@ -77,8 +77,8 @@ pub fn prompt_line(prompt: &str, default: &str) -> Option<String> {
     }
 }
 
-pub fn parse_platform_list(vec: &[String]) -> HashMap<String, String> {
-    let mut map: HashMap<String, String> = HashMap::new();
+pub fn parse_platform_list(vec: &[String]) -> BTreeMap<String, String> {
+    let mut map: BTreeMap<String, String> = BTreeMap::new();
 
     for item in vec {
         let chunks: Vec<&str> = item.splitn(2, " ").collect();

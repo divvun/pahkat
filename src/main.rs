@@ -11,7 +11,7 @@ use termcolor::Color;
 
 use clap::{Arg, App, AppSettings, SubCommand};
 use std::env;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
@@ -44,11 +44,11 @@ fn request_package_data(cur_dir: &Path) -> Package {
     let package_id = prompt_line("Package identifier", &default_pkg_id(cur_dir)).unwrap();
     
     let en_name = prompt_line("Name", "").unwrap();
-    let mut name = HashMap::new();
+    let mut name = BTreeMap::new();
     name.insert("en".to_owned(), en_name);
 
     let en_description = prompt_line("Description", "").unwrap();
-    let mut description = HashMap::new();
+    let mut description = BTreeMap::new();
     description.insert("en".to_owned(), en_description);
 
     let version = prompt_line("Version", "0.1.0").unwrap();
@@ -95,11 +95,11 @@ fn request_repo_data() -> Repository {
     };
     
     let en_name = prompt_line("Name", "Repository").unwrap();
-    let mut name = HashMap::new();
+    let mut name = BTreeMap::new();
     name.insert("en".to_owned(), en_name);
 
     let en_description = prompt_line("Description", "").unwrap();
-    let mut description = HashMap::new();
+    let mut description = BTreeMap::new();
     description.insert("en".to_owned(), en_description);
 
     println!("Supported filters: category, language");
@@ -110,6 +110,9 @@ fn request_repo_data() -> Repository {
         .split(",")
         .map(|x| x.trim().to_owned())
         .collect();
+    
+    let mut categories = BTreeMap::new();
+    categories.insert("en".to_owned(), BTreeMap::new());
 
     Repository {
         _context: Some(LD_CONTEXT.to_owned()),
@@ -119,7 +122,8 @@ fn request_repo_data() -> Repository {
         name: name,
         description: description,
         primary_filter: primary_filter,
-        channels: channels
+        channels: channels,
+        categories: categories
     }
 }
 
@@ -160,7 +164,7 @@ fn generate_repo_index_virtuals(cur_dir: &Path, repo: &Repository) -> Virtuals {
     progress(Color::Green, "Generating", "virtuals index").unwrap();
 
     let pkg_path = cur_dir.join("virtuals");
-    let mut map = HashMap::new();
+    let mut map = BTreeMap::new();
 
     for x in fs::read_dir(&pkg_path).unwrap() {
         let path = x.unwrap().path();
@@ -240,7 +244,7 @@ fn generate_repo_index_packages(cur_dir: &Path, repo: &Repository) -> Packages {
         })
         .collect();
     
-    let mut map = HashMap::new();
+    let mut map = BTreeMap::new();
     for pkg in pkgs.into_iter() {
         map.insert(pkg.id.to_owned(), pkg);
     }

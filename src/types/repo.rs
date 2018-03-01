@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -9,10 +9,11 @@ pub struct Repository {
     pub _type: Option<String>,
     pub agent: Option<RepositoryAgent>,
     pub base: String,
-    pub name: HashMap<String, String>,
-    pub description: HashMap<String, String>,
+    pub name: BTreeMap<String, String>,
+    pub description: BTreeMap<String, String>,
     pub primary_filter: String,
-    pub channels: Vec<String>
+    pub channels: Vec<String>,
+    pub categories: BTreeMap<String, BTreeMap<String, String>>
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

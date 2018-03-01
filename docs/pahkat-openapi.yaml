@@ -229,6 +229,7 @@ components:
         installer:
           oneOf:
             - $ref: "#/components/schemas/WindowsInstaller"
+            - $ref: "#/components/schemas/MacOSInstaller"
             - $ref: "#/components/schemas/TarballInstaller"
           discriminator: "@type"
     TarballInstaller:
@@ -257,6 +258,8 @@ components:
         - productCode
         - size
         - installedSize
+        - requiresReboot
+        - requiresUninstallReboot
       properties:
         "@type":
           type: string
@@ -286,6 +289,42 @@ components:
           type: integer
           format: uint64
         # TODO: signature
+    MacOSInstaller:
+      type: object
+      required:
+        - url
+        - pkgId
+        - targets
+        - size
+        - installedSize
+        - requiresReboot
+        - requiresUninstallReboot
+      properties:
+        "@type":
+          type: string
+          enum: ["MacOSInstaller"]
+        url:
+          type: string
+          format: uri
+        pkgId:
+          type: string
+        targets:
+          type: array
+          items:
+            type: string
+            enum: [system, user]
+        requiresReboot:
+          type: boolean
+          default: false
+        requiresUninstallReboot:
+          type: boolean
+          default: false
+        size:
+          type: integer
+          format: uint64
+        installedSize:
+          type: integer
+          format: uint64
     Virtuals:
       type: object
       required:

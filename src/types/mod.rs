@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::collections::{HashMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 use std::cmp::*;
 use std;
@@ -15,8 +15,8 @@ pub const OS: &str = "linux";
 #[cfg(target_os = "windows")]
 pub const OS: &str = "windows";
 
-pub type PackageMap = HashMap<String, Package>;
-pub type VirtualRefMap = HashMap<String, Vec<String>>;
+pub type PackageMap = BTreeMap<String, Package>;
+pub type VirtualRefMap = BTreeMap<String, Vec<String>>;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -26,16 +26,16 @@ pub struct Package {
     #[serde(rename = "@type")]
     pub _type: Option<String>,
     pub id: String,
-    pub name: HashMap<String, String>,
-    pub description: HashMap<String, String>,
+    pub name: BTreeMap<String, String>,
+    pub description: BTreeMap<String, String>,
     pub version: String,
     pub category: String,
     pub languages: Vec<String>,
-    pub platform: HashMap<String, String>,
-    #[serde(default = "HashMap::new")]
-    pub dependencies: HashMap<String, String>,
-    #[serde(default = "HashMap::new")]
-    pub virtual_dependencies: HashMap<String, String>,
+    pub platform: BTreeMap<String, String>,
+    #[serde(default = "BTreeMap::new")]
+    pub dependencies: BTreeMap<String, String>,
+    #[serde(default = "BTreeMap::new")]
+    pub virtual_dependencies: BTreeMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub installer: Option<Installer>
 }
@@ -63,7 +63,7 @@ pub struct Packages {
     #[serde(rename = "@id")]
     pub _id: Option<String>,
     pub base: String,
-    #[serde(default = "HashMap::new")]
+    #[serde(default = "BTreeMap::new")]
     pub packages: PackageMap
 }
 
@@ -75,9 +75,9 @@ pub struct Virtual {
     #[serde(rename = "@type")]
     pub _type: Option<String>,
     pub id: String,
-    pub name: HashMap<String, String>,
-    #[serde(default = "HashMap::new")]
-    pub description: HashMap<String, String>,
+    pub name: BTreeMap<String, String>,
+    #[serde(default = "BTreeMap::new")]
+    pub description: BTreeMap<String, String>,
     pub version: String,
     pub url: String,
     #[serde(rename = "virtual")]
@@ -95,7 +95,7 @@ pub struct Virtuals {
     #[serde(rename = "@id")]
     pub _id: Option<String>,
     pub base: String,
-    #[serde(default = "HashMap::new")]
+    #[serde(default = "BTreeMap::new")]
     pub virtuals: VirtualRefMap
 }
 
