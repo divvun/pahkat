@@ -5,18 +5,17 @@ use std::thread;
 use std::sync::{atomic, Arc, RwLock};
 use std::collections::{BTreeMap, HashMap};
 
-use jsonrpc_core::{Params, Metadata, Error, ErrorCode, Result};
-use jsonrpc_core::types::Value;
-use jsonrpc_core::futures::{Future, Poll, Async, Stream, future};
+use jsonrpc_core::{Metadata, Error, ErrorCode, Result};
+use jsonrpc_core::futures::{Future, Stream, future};
 use jsonrpc_core::futures::sync::mpsc;
 use jsonrpc_pubsub::{Session, PubSubMetadata, PubSubHandler, SubscriptionId};
 
 use jsonrpc_macros::pubsub;
 use pahkat::types::*;
 use ::macos::*;
-use ::{Repository, StoreConfig, PackageStatus, PackageStatusError, Download};
+use ::{Repository, StoreConfig, PackageStatus, Download};
 use std::fs::create_dir_all;
-use std::io::{BufRead, Read};
+use std::io::{BufRead};
 use std;
 
 #[derive(Clone, Default)]
@@ -46,9 +45,6 @@ pub struct PackageStatusResponse {
 build_rpc_trait! {
 	pub trait Rpc {
 		type Metadata;
-
-		#[rpc(name = "set_repositories")]
-		fn set_repositories(&self, Vec<RepoConfig>) -> Result<bool>;
 
 		#[rpc(name = "repository")]
 		fn repository(&self, String, String) -> Result<Repository>;
@@ -118,22 +114,10 @@ fn parse_package(repo: &Repository, package_id: &str) -> Result<Package> {
 	}
 }
 
-impl RpcImpl {
-	fn save(&self) {
-		// TODO
-	}
-}
-
 impl Rpc for RpcImpl {
 	type Metadata = Meta;
 
-	fn set_repositories(&self, repos: Vec<RepoConfig>) -> Result<bool> {
-		*self.repo_configs.write().unwrap() = repos;
-		self.save();
-		return Ok(true)
-	}
-
-	fn repository(&self, url: String, channel: String) -> Result<Repository> {
+	fn repository(&self, url: String, _channel: String) -> Result<Repository> {
 		let repo = Repository::from_url(&url).unwrap();
 		let mut repo_map = self.repo.write().unwrap();
 		repo_map.insert(url, repo.clone());
@@ -214,9 +198,18 @@ impl Rpc for RpcImpl {
 		let config = StoreConfig::load_default().unwrap();
 		let store = MacOSPackageStore::new(&repo, &config);
 		store.install(&package, target).map_err(|e| {
+			let msg = match e {
+				MacOSInstallError::InstallerFailure(error) => {
+					match error {
+						ProcessError::Unknown(output) => String::from_utf8_lossy(&output.stderr).to_string(),
+						_ => format!("{:?}", &error)
+					}
+				}
+				_ => format!("{:?}", &e)
+			};
 			Error {
 				code: ErrorCode::InvalidParams,
-				message: format!("{}", "An error occurred."),//e),
+				message: msg,
 				data: None
 			}
 		})
@@ -235,9 +228,7 @@ impl Rpc for RpcImpl {
 			let msg = match e {
 				MacOSUninstallError::PkgutilFailure(error) => {
 					match error {
-						// ProcessError::Io(io_error) => io_error.message,
 						ProcessError::Unknown(output) => String::from_utf8_lossy(&output.stderr).to_string(),
-
 						_ => format!("{:?}", &error)
 					}
 				}
@@ -256,7 +247,7 @@ impl Rpc for RpcImpl {
 		let repo = match repo_check(&self, repo_id) {
 			Ok(v) => v,
 			Err(e) => {
-				subscriber.reject(e);
+				subscriber.reject(e).unwrap();
 				return;
 			}
 		};
@@ -264,12 +255,12 @@ impl Rpc for RpcImpl {
 		let package = match parse_package(&repo, &package_id) {
 			Ok(v) => v,
 			Err(e) => {
-				subscriber.reject(e);
+				subscriber.reject(e).unwrap();
 				return;
 			}
 		};
 
-		let target = parse_target(target);
+		let _target = parse_target(target);
 
 		let id = self.uid.fetch_add(1, atomic::Ordering::SeqCst);
 		let sub_id = SubscriptionId::Number(id as u64);
@@ -285,7 +276,7 @@ impl Rpc for RpcImpl {
 			if !package_cache.exists() {
 				create_dir_all(&package_cache).unwrap();
 			}
-			let pkg_path = package.download(&package_cache, 
+			let _pkg_path = package.download(&package_cache, 
 				Some(|cur, max| {
 					match sink.notify(Ok([cur, max])).wait() {
 						Ok(_) => {},
@@ -295,38 +286,10 @@ impl Rpc for RpcImpl {
 		});
 	}
 
-	fn download_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
+	fn download_unsubscribe(&self, _id: SubscriptionId) -> Result<bool> {
+		// TODO: handle cancel request
 		return Ok(true)
 	}
-
-	// fn subscribe(&self, _meta: Self::Metadata, subscriber: pubsub::Subscriber<String>, param: u64) {
-	// 	if param != 10 {
-	// 		subscriber.reject(Error {
-	// 			code: ErrorCode::InvalidParams,
-	// 			message: "Rejecting subscription - invalid parameters provided.".into(),
-	// 			data: None,
-	// 		}).unwrap();
-	// 		return;
-	// 	}
-
-	// 	let id = self.uid.fetch_add(1, atomic::Ordering::SeqCst);
-	// 	let sub_id = SubscriptionId::Number(id as u64);
-	// 	let sink = subscriber.assign_id(sub_id.clone()).unwrap();
-	// 	self.active.write().unwrap().insert(sub_id, sink);
-	// }
-
-	// fn unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
-	// 	let removed = self.active.write().unwrap().remove(&id);
-	// 	if removed.is_some() {
-	// 		Ok(true)
-	// 	} else {
-	// 		Err(Error {
-	// 			code: ErrorCode::InvalidParams,
-	// 			message: "Invalid subscription.".into(),
-	// 			data: None,
-	// 		})
-	// 	}
-	// }
 }
 
 pub fn start() {
@@ -339,13 +302,8 @@ pub fn start() {
 	thread::spawn(move || {
 		receiver.for_each(|item| {
 			println!("{}", item);
-			// match item {
-			// 	Ok(v) => println!("{}", v),
-			// 	Err(_) => {}
-			// };
 			future::ok(())
 		}).wait();
-		println!("THIS DOTH ENDED");
 	});
 	
 	let stdin = std::io::stdin();
@@ -353,9 +311,9 @@ pub fn start() {
 
 	loop {
 		let mut buf = vec![];
-		let n = match stdin.read_until('\n' as u8, &mut buf) {
+		match stdin.read_until('\n' as u8, &mut buf) {
 			Err(_) | Ok(0) => break,
-			Ok(n) => n
+			Ok(_) => {}
 		};
 		
 		let req = String::from_utf8_lossy(&buf);
@@ -368,13 +326,4 @@ pub fn start() {
 			None => {}
 		};
     }
-
-	// let server = jsonrpc_tcp_server::ServerBuilder::new(io)
-	// 	.session_meta_extractor(|context: &jsonrpc_tcp_server::RequestContext| {
-
-	// 	})
-	// 	.start(&format!("0.0.0.0:{}", port).parse().unwrap())
-	// 	.expect("Server must start with no issues");
-
-	// server.wait()
 }
