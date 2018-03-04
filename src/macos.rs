@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::fs::{remove_file, remove_dir};
 use std::fmt::Display;
 use std::str::FromStr;
+use std::process;
 use std::process::Command;
 use std::collections::BTreeMap;
 use ::{Repository};
@@ -41,18 +42,20 @@ fn test_bundle_plist() {
     println!("{:?}", plist);
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub enum MacOSInstallError {
     NoInstaller,
     WrongInstallerType,
     InvalidFileType,
-    PackageNotInCache
+    PackageNotInCache,
+    InstallerFailure(ProcessError)
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub enum MacOSUninstallError {
     NoInstaller,
-    WrongInstallerType
+    WrongInstallerType,
+    PkgutilFailure(ProcessError)
 }
 
 pub struct MacOSPackageStore<'a> {
@@ -89,7 +92,10 @@ impl<'a> MacOSPackageStore<'a> {
             return Err(MacOSInstallError::PackageNotInCache)
         }
         
-        install_macos_package(&pkg_path, target).unwrap();
+        match install_macos_package(&pkg_path, target) {
+            Err(e) => return Err(MacOSInstallError::InstallerFailure(e)),
+            _ => {}
+        };
 
         Ok(self.status_impl(installer, package, target).unwrap())
     }
@@ -105,7 +111,10 @@ impl<'a> MacOSPackageStore<'a> {
             _ => return Err(MacOSUninstallError::WrongInstallerType)
         };
 
-        uninstall_macos_package(&installer.pkg_id, target).unwrap();
+        match uninstall_macos_package(&installer.pkg_id, target) {
+            Err(e) => return Err(MacOSUninstallError::PkgutilFailure(e)),
+            _ => {}
+        };
 
         Ok(self.status_impl(installer, package, target).unwrap())
     }
@@ -126,8 +135,11 @@ impl<'a> MacOSPackageStore<'a> {
 
     fn status_impl(&self, installer: &MacOSInstaller, package: &'a Package, target: MacOSInstallTarget) -> Result<PackageStatus, PackageStatusError> {
         let pkg_info = match get_package_info(&installer.pkg_id, target) {
-            Some(v) => v,
-            None => return Ok(PackageStatus::NotInstalled)
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("{:?}", e);
+                return Ok(PackageStatus::NotInstalled);
+            }
         };
 
         let installed_version = match semver::Version::parse(&pkg_info.pkg_version) {
@@ -148,24 +160,24 @@ impl<'a> MacOSPackageStore<'a> {
     }
 }
 
-// fn get_installed_packages(target: MacOSInstallTarget) -> Result<Vec<String>, io::Error> {
-//     use std::io::Cursor;
-//     use std::env;
+fn get_installed_packages(target: MacOSInstallTarget) -> Result<Vec<String>, io::Error> {
+    use std::io::Cursor;
+    use std::env;
 
-//     let home_dir = env::home_dir().expect("Always find home directory");
+    let home_dir = env::home_dir().expect("Always find home directory");
     
-//     let mut args = vec!["--pkgs-plist"];
-//     if let MacOSInstallTarget::User = target {
-//         args.push("--volume");
-//         args.push(&home_dir.to_str().unwrap());
-//     }
+    let mut args = vec!["--pkgs-plist"];
+    if let MacOSInstallTarget::User = target {
+        args.push("--volume");
+        args.push(&home_dir.to_str().unwrap());
+    }
 
-//     let output = Command::new("pkgutil").args(&args).output()?;
-//     let plist_data = String::from_utf8(output.stdout).expect("plist should always be valid UTF-8");
-//     let cursor = Cursor::new(plist_data);
-//     let plist: Vec<String> = deserialize_plist(cursor).expect("plist should always be valid");
-//     return Ok(plist);
-// }
+    let output = Command::new("pkgutil").args(&args).output()?;
+    let plist_data = String::from_utf8(output.stdout).expect("plist should always be valid UTF-8");
+    let cursor = Cursor::new(plist_data);
+    let plist: Vec<String> = deserialize_plist(cursor).expect("plist should always be valid");
+    return Ok(plist);
+}
 
 #[derive(Debug, Deserialize)]
 struct MacOSPackageExportPath {
@@ -205,7 +217,7 @@ impl MacOSPackageExportPlist {
     }
 }
 
-fn get_package_info(bundle_id: &str, target: MacOSInstallTarget) -> Option<MacOSPackageExportPlist> {
+fn get_package_info(bundle_id: &str, target: MacOSInstallTarget) -> Result<MacOSPackageExportPlist, ProcessError> {
     use std::io::Cursor;
     use std::env;
 
@@ -215,25 +227,29 @@ fn get_package_info(bundle_id: &str, target: MacOSInstallTarget) -> Option<MacOS
         args.push("--volume");
         args.push(&home_dir.to_str().unwrap());
     }
-
     let res = Command::new("pkgutil").args(&args).output();
     let output = match res {
         Ok(v) => v,
-        Err(_) => return None
+        Err(e) => {
+            return Err(ProcessError::Io(e));
+        }
     };
+
     if !output.status.success() {
-        return None;
+        eprintln!("{:?}", output);
+        return Err(ProcessError::Unknown(output));
     }
+
     let plist_data = String::from_utf8(output.stdout).expect("plist should always be valid UTF-8");
     let cursor = Cursor::new(plist_data);
     let plist: MacOSPackageExportPlist = deserialize_plist(cursor).expect("plist should always be valid");
-    return Some(plist);
+    return Ok(plist);
 }
 
 #[derive(Debug)]
-enum ProcessError {
+pub enum ProcessError {
     Io(io::Error),
-    Unknown(String)
+    Unknown(process::Output)
 }
 
 fn install_macos_package(pkg_path: &Path, target: MacOSInstallTarget) -> Result<(), ProcessError> {
@@ -255,13 +271,13 @@ fn install_macos_package(pkg_path: &Path, target: MacOSInstallTarget) -> Result<
         Err(e) => return Err(ProcessError::Io(e))
     };
     if !output.status.success() {
-        return Err(ProcessError::Unknown(String::from_utf8_lossy(&output.stderr).to_string()));
+        return Err(ProcessError::Unknown(output));
     }
     Ok(())
 }
 
-fn uninstall_macos_package(bundle_id: &str, target: MacOSInstallTarget) -> Result<(), ()> {
-    let package_info = get_package_info(bundle_id, target).unwrap();
+fn uninstall_macos_package(bundle_id: &str, target: MacOSInstallTarget) -> Result<(), ProcessError> {
+    let package_info = get_package_info(bundle_id, target)?;
 
     let mut errors = vec![];
     let mut directories = vec![];
@@ -272,8 +288,16 @@ fn uninstall_macos_package(bundle_id: &str, target: MacOSInstallTarget) -> Resul
             continue;
         }
 
-        println!("Deleting: {:?}", &path);
-        remove_file(path).unwrap();
+        eprintln!("Deleting: {:?}", &path);
+        match remove_file(path) {
+            Err(err) => {
+                match err.kind() {
+                    io::ErrorKind::NotFound => {},
+                    _ => errors.push(err)
+                }
+            },
+            Ok(_) => {}
+        };
     }
 
     // Ensure children are deleted first
@@ -284,21 +308,21 @@ fn uninstall_macos_package(bundle_id: &str, target: MacOSInstallTarget) -> Resul
     });
 
     for dir in directories {
-        println!("Deleting: {:?}", &dir);
+        eprintln!("Deleting: {:?}", &dir);
         match remove_dir(dir) {
             Err(e) => errors.push(e),
             Ok(_) => {}
         }
     }
 
-    println!("{:?}", errors);
+    eprintln!("{:?}", errors);
     
-    forget_pkg_id(bundle_id, target).unwrap();
+    forget_pkg_id(bundle_id, target)?;
 
     Ok(())
 }
 
-fn forget_pkg_id(bundle_id: &str, target: MacOSInstallTarget) -> Result<(), ()> {
+fn forget_pkg_id(bundle_id: &str, target: MacOSInstallTarget) -> Result<(), ProcessError> {
     use std::env;
 
     let home_dir = env::home_dir().expect("Always find home directory");
@@ -312,13 +336,13 @@ fn forget_pkg_id(bundle_id: &str, target: MacOSInstallTarget) -> Result<(), ()> 
     let output = match res {
         Ok(v) => v,
         Err(e) => {
-            println!("{:?}", e);
-            return Err(())
+            eprintln!("{:?}", e);
+            return Err(ProcessError::Io(e));
         }
     };
     if !output.status.success() {
-        println!("{:?}", output.status.code().unwrap());
-        return Err(());
+        eprintln!("{:?}", output.status.code().unwrap());
+        return Err(ProcessError::Unknown(output));
     }
     Ok(())
 }

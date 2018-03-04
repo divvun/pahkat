@@ -3,18 +3,21 @@ extern crate jsonrpc_tcp_server;
 
 use std::thread;
 use std::sync::{atomic, Arc, RwLock};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use jsonrpc_core::{Params, Metadata, Error, ErrorCode, Result};
 use jsonrpc_core::types::Value;
-use jsonrpc_core::futures::Future;
+use jsonrpc_core::futures::{Future, Poll, Async, Stream, future};
+use jsonrpc_core::futures::sync::mpsc;
 use jsonrpc_pubsub::{Session, PubSubMetadata, PubSubHandler, SubscriptionId};
 
 use jsonrpc_macros::pubsub;
 use pahkat::types::*;
 use ::macos::*;
 use ::{Repository, StoreConfig, PackageStatus, PackageStatusError, Download};
-
+use std::fs::create_dir_all;
+use std::io::{BufRead, Read};
+use std;
 
 #[derive(Clone, Default)]
 struct Meta {
@@ -28,45 +31,47 @@ impl PubSubMetadata for Meta {
 	}
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RepoConfig {
+	pub url: String,
+	pub channel: String
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PackageStatusResponse {
+	pub status: PackageStatus,
+    pub target: MacOSInstallTarget
+}
+
 build_rpc_trait! {
 	pub trait Rpc {
 		type Metadata;
 
+		#[rpc(name = "set_repositories")]
+		fn set_repositories(&self, Vec<RepoConfig>) -> Result<bool>;
+
 		#[rpc(name = "repository")]
-		fn repository(&self, String) -> Result<Repository>;
+		fn repository(&self, String, String) -> Result<Repository>;
+
+		#[rpc(name = "repository_statuses")]
+		fn repository_statuses(&self, String) -> Result<BTreeMap<String, PackageStatusResponse>>;
 
 		#[rpc(name = "status")]
-		fn status(&self, String, u8) -> Result<PackageStatus>;
+		fn status(&self, String, String, u8) -> Result<PackageStatus>;
 
 		#[rpc(name = "install")]
-		fn install(&self, String, u8) -> Result<PackageStatus>;
+		fn install(&self, String, String, u8) -> Result<PackageStatus>;
 
 		#[rpc(name = "uninstall")]
-		fn uninstall(&self, String, u8) -> Result<PackageStatus>;
+		fn uninstall(&self, String, String, u8) -> Result<PackageStatus>;
 
 		#[pubsub(name = "download")] {
 			#[rpc(name = "download_subscribe")]
-			fn download_subscribe(&self, Self::Metadata, pubsub::Subscriber<[usize; 2]>, String, u8);
+			fn download_subscribe(&self, Self::Metadata, pubsub::Subscriber<[usize; 2]>, String, String, u8);
 
 			#[rpc(name = "download_unsubscribe")]
 			fn download_unsubscribe(&self, SubscriptionId) -> Result<bool>;
 		}
-
-		// #[pubsub(name = "install")] {
-		// 	#[rpc(name = "install_subscribe")]
-		// 	fn install_subscribe(&self, pubsub::Subscriber<usize>, String, String);
-
-		// 	#[rpc(name = "install_unsubscribe")]
-		// 	fn install_unsubscribe(&self, SubscriptionId) -> Result<bool>;
-		// }
-
-		// #[pubsub(name = "uninstall")] {
-		// 	#[rpc(name = "uninstall_subscribe")]
-		// 	fn uninstall_subscribe(&self, pubsub::Subscriber<usize>, String, String);
-
-		// 	#[rpc(name = "uninstall_unsubscribe")]
-		// 	fn uninstall_unsubscribe(&self, SubscriptionId) -> Result<bool>;
-		// }
 	}
 }
 
@@ -74,13 +79,14 @@ build_rpc_trait! {
 struct RpcImpl {
 	uid: atomic::AtomicUsize,
 	active: Arc<RwLock<HashMap<SubscriptionId, pubsub::Sink<String>>>>,
-	current_repo: Arc<RwLock<Option<Repository>>>
+	repo_configs: Arc<RwLock<Vec<RepoConfig>>>,
+	repo: Arc<RwLock<HashMap<String, Repository>>>
 }
 
-fn repo_check(rpc_impl: &RpcImpl) -> Result<Repository> {
-	let rw_guard = rpc_impl.current_repo.read().unwrap();
-	match *rw_guard {
-		Some(ref v) => Ok(v.clone()),
+fn repo_check(rpc_impl: &RpcImpl, repo_id: String) -> Result<Repository> {
+	let rw_guard = rpc_impl.repo.read().unwrap();
+	match rw_guard.get(&repo_id) {
+		Some(v) => Ok(v.clone()),
 		None => {
 			Err(Error {
 				code: ErrorCode::InvalidParams,
@@ -112,18 +118,31 @@ fn parse_package(repo: &Repository, package_id: &str) -> Result<Package> {
 	}
 }
 
+impl RpcImpl {
+	fn save(&self) {
+		// TODO
+	}
+}
+
 impl Rpc for RpcImpl {
 	type Metadata = Meta;
 
-	fn repository(&self, url: String) -> Result<Repository> {
+	fn set_repositories(&self, repos: Vec<RepoConfig>) -> Result<bool> {
+		*self.repo_configs.write().unwrap() = repos;
+		self.save();
+		return Ok(true)
+	}
+
+	fn repository(&self, url: String, channel: String) -> Result<Repository> {
 		let repo = Repository::from_url(&url).unwrap();
-		*self.current_repo.write().unwrap() = Some(repo.clone());
+		let mut repo_map = self.repo.write().unwrap();
+		repo_map.insert(url, repo.clone());
 		// println!("{:?}", repo);
 		Ok(repo)
 	}
 
-	fn status(&self, package_id: String, target: u8) -> Result<PackageStatus> {
-		let repo = repo_check(&self)?;
+	fn status(&self, repo_id: String, package_id: String, target: u8) -> Result<PackageStatus> {
+		let repo = repo_check(&self, repo_id)?;
 		let package = parse_package(&repo, &package_id)?;
 		let target = parse_target(target);
 		
@@ -140,8 +159,54 @@ impl Rpc for RpcImpl {
 		})
 	}
 
-	fn install(&self, package_id: String, target: u8) -> Result<PackageStatus> {
-		let repo = repo_check(&self)?;
+	fn repository_statuses(&self, repo_id: String) -> Result<BTreeMap<String, PackageStatusResponse>> {
+		let repo = repo_check(&self, repo_id)?;
+		
+		// TODO make init check
+		let config = StoreConfig::load_default().unwrap();
+		let store = MacOSPackageStore::new(&repo, &config);
+
+		let mut map = BTreeMap::new();
+
+		for package in repo.packages().values() {
+			let status = match store.status(&package, MacOSInstallTarget::System) {
+				Ok(v) => v,
+				Err(e) => {
+					eprintln!("{:?}", e);
+					PackageStatus::NotInstalled
+				}
+ 			};
+
+			match status {
+				PackageStatus::NotInstalled => {},
+				_ => {
+					map.insert(package.id.clone(), PackageStatusResponse {
+						status: status,
+						target: MacOSInstallTarget::System
+					});
+					continue;
+				}
+			};
+
+			let status = match store.status(&package, MacOSInstallTarget::User) {
+				Ok(v) => v,
+				Err(e) => {
+					eprintln!("{:?}", e);
+					PackageStatus::NotInstalled
+				}
+ 			};
+
+			map.insert(package.id.clone(), PackageStatusResponse {
+				status: status,
+				target: MacOSInstallTarget::User
+			});
+		}
+		
+		Ok(map)
+	}
+
+	fn install(&self, repo_id: String, package_id: String, target: u8) -> Result<PackageStatus> {
+		let repo = repo_check(&self, repo_id)?;
 		let package = parse_package(&repo, &package_id)?;
 		let target = parse_target(target);
 		
@@ -157,9 +222,8 @@ impl Rpc for RpcImpl {
 		})
 	}
 
-
-	fn uninstall(&self, package_id: String, target: u8) -> Result<PackageStatus> {
-		let repo = repo_check(&self)?;
+	fn uninstall(&self, repo_id: String, package_id: String, target: u8) -> Result<PackageStatus> {
+		let repo = repo_check(&self, repo_id)?;
 		let package = parse_package(&repo, &package_id)?;
 		let target = parse_target(target);
 		
@@ -168,16 +232,28 @@ impl Rpc for RpcImpl {
 		let store = MacOSPackageStore::new(&repo, &config);
 		
 		store.uninstall(&package, target).map_err(|e| {
+			let msg = match e {
+				MacOSUninstallError::PkgutilFailure(error) => {
+					match error {
+						// ProcessError::Io(io_error) => io_error.message,
+						ProcessError::Unknown(output) => String::from_utf8_lossy(&output.stderr).to_string(),
+
+						_ => format!("{:?}", &error)
+					}
+				}
+				_ => format!("{:?}", &e)
+			};
+
 			Error {
 				code: ErrorCode::InvalidParams,
-				message: format!("{}", "An error occurred."),//e),
+				message: msg,
 				data: None
 			}
 		})
 	}
 
-	fn download_subscribe(&self, _meta: Self::Metadata, subscriber: pubsub::Subscriber<[usize; 2]>, package_id: String, target: u8) {
-		let repo = match repo_check(&self) {
+	fn download_subscribe(&self, _meta: Self::Metadata, subscriber: pubsub::Subscriber<[usize; 2]>, repo_id: String, package_id: String, target: u8) {
+		let repo = match repo_check(&self, repo_id) {
 			Ok(v) => v,
 			Err(e) => {
 				subscriber.reject(e);
@@ -205,13 +281,15 @@ impl Rpc for RpcImpl {
 			let store = MacOSPackageStore::new(&repo, &config);
 
 			let package_cache = store.download_path(&package);
+			// println!("{:?}", &package_cache);
+			if !package_cache.exists() {
+				create_dir_all(&package_cache).unwrap();
+			}
 			let pkg_path = package.download(&package_cache, 
 				Some(|cur, max| {
 					match sink.notify(Ok([cur, max])).wait() {
 						Ok(_) => {},
-						Err(_) => {
-							println!("Subscription has ended, finishing.");
-						}
+						Err(_) => {}
 					}
 				})).unwrap();
 		});
@@ -254,28 +332,49 @@ impl Rpc for RpcImpl {
 pub fn start() {
 	let mut io = PubSubHandler::default();
 	let rpc = RpcImpl::default();
-	let active_subscriptions = rpc.active.clone();
-
-	thread::spawn(move || {
-		loop {
-			{
-				let subscribers = active_subscriptions.read().unwrap();
-				println!("{:?}", subscribers.len());
-			}
-			thread::sleep(::std::time::Duration::from_secs(1));
-		}
-	});
 
 	io.extend_with(rpc.to_delegate());
+	
+	let (sender, receiver) = mpsc::channel::<String>(0);
+	thread::spawn(move || {
+		receiver.for_each(|item| {
+			println!("{}", item);
+			// match item {
+			// 	Ok(v) => println!("{}", v),
+			// 	Err(_) => {}
+			// };
+			future::ok(())
+		}).wait();
+		println!("THIS DOTH ENDED");
+	});
+	
+	let stdin = std::io::stdin();
+	let mut stdin = stdin.lock();
 
-	let server = jsonrpc_tcp_server::ServerBuilder::new(io)
-		.session_meta_extractor(|context: &jsonrpc_tcp_server::RequestContext| {
-			Meta {
-				session: Some(Arc::new(Session::new(context.sender.clone()))),
-			}
-		})
-		.start(&"0.0.0.0:3030".parse().unwrap())
-		.expect("Server must start with no issues");
+	loop {
+		let mut buf = vec![];
+		let n = match stdin.read_until('\n' as u8, &mut buf) {
+			Err(_) | Ok(0) => break,
+			Ok(n) => n
+		};
+		
+		let req = String::from_utf8_lossy(&buf);
+		let meta = Meta {
+			session: Some(Arc::new(Session::new(sender.clone())))
+		};
+		
+		match io.handle_request_sync(&req, meta) {
+			Some(v) => println!("{}", v),
+			None => {}
+		};
+    }
 
-	server.wait()
+	// let server = jsonrpc_tcp_server::ServerBuilder::new(io)
+	// 	.session_meta_extractor(|context: &jsonrpc_tcp_server::RequestContext| {
+
+	// 	})
+	// 	.start(&format!("0.0.0.0:{}", port).parse().unwrap())
+	// 	.expect("Server must start with no issues");
+
+	// server.wait()
 }
