@@ -274,19 +274,21 @@ fn main() {
                 ("init", Some(matches)) => {
                     let url = matches.value_of("url").unwrap();
                     let cache_dir = matches.value_of("cache-dir").unwrap();
-                    let config = StoreConfig { 
-                        url: url.to_owned(),
-                        cache_dir: cache_dir.to_owned()
-                    };
-                    let config_path = env::home_dir().unwrap()
-                        .join("Library/Application Support/Pahkat/config.json");
-                     
-                    if config_path.exists() {
-                        println!("Path already exists; aborting.");
-                        return;
-                    }
 
-                    config.save(&config_path);
+                    macos::init(&url, &cache_dir);
+                    // let config = StoreConfig { 
+                    //     url: url.to_owned(),
+                    //     cache_dir: cache_dir.to_owned()
+                    // };
+                    // let config_path = env::home_dir().unwrap()
+                    //     .join("Library/Application Support/Pahkat/config.json");
+                     
+                    // if config_path.exists() {
+                    //     println!("Path already exists; aborting.");
+                    //     return;
+                    // }
+
+                    // config.save(&config_path);
                 },
                 ("list", Some(matches)) => {
                     let config_path = env::home_dir().unwrap()

@@ -130,8 +130,7 @@ impl Rpc for RpcImpl {
 		let package = parse_package(&repo, &package_id)?;
 		let target = parse_target(target);
 		
-		// TODO make init check
-		let config = StoreConfig::load_default().unwrap();
+		let config = StoreConfig::load_or_default();
 		let store = MacOSPackageStore::new(&repo, &config);
 		let status = store.status(&package, target);
 		status.map_err(|e| {
@@ -146,8 +145,7 @@ impl Rpc for RpcImpl {
 	fn repository_statuses(&self, repo_id: String) -> Result<BTreeMap<String, PackageStatusResponse>> {
 		let repo = repo_check(&self, repo_id)?;
 		
-		// TODO make init check
-		let config = StoreConfig::load_default().unwrap();
+		let config = StoreConfig::load_or_default();
 		let store = MacOSPackageStore::new(&repo, &config);
 
 		let mut map = BTreeMap::new();
@@ -194,8 +192,7 @@ impl Rpc for RpcImpl {
 		let package = parse_package(&repo, &package_id)?;
 		let target = parse_target(target);
 		
-		// TODO make init check
-		let config = StoreConfig::load_default().unwrap();
+		let config = StoreConfig::load_or_default();
 		let store = MacOSPackageStore::new(&repo, &config);
 		store.install(&package, target).map_err(|e| {
 			let msg = match e {
@@ -220,8 +217,7 @@ impl Rpc for RpcImpl {
 		let package = parse_package(&repo, &package_id)?;
 		let target = parse_target(target);
 		
-		// TODO make init check
-		let config = StoreConfig::load_default().unwrap();
+		let config = StoreConfig::load_or_default();
 		let store = MacOSPackageStore::new(&repo, &config);
 		
 		store.uninstall(&package, target).map_err(|e| {
@@ -268,7 +264,7 @@ impl Rpc for RpcImpl {
 
 		thread::spawn(move || {
 			let sink = sink.clone();
-			let config = StoreConfig::load_default().unwrap();
+			let config = StoreConfig::load_or_default();
 			let store = MacOSPackageStore::new(&repo, &config);
 
 			let package_cache = store.download_path(&package);

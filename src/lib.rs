@@ -119,18 +119,30 @@ impl StoreConfig {
         Ok(())
     }
 
-    pub fn load_default() -> Result<StoreConfig, ()> {
-        return StoreConfig::load(&env::home_dir().unwrap()
-            .join("Library/Application Support/Pahkat/config.json"))
-    }
+    pub fn load_or_default() -> StoreConfig {
+        let res = StoreConfig::load(&env::home_dir().unwrap()
+            .join("Library/Application Support/Pahkat/config.json"));
+        
+        let config = match res {
+            Ok(v) => v,
+            Err(_) => StoreConfig {
+                url: "".to_owned(),
+                cache_dir: env::home_dir().unwrap()
+                    .join("Library/Caches/Pahkat/packages")
+                    .to_str().unwrap().to_owned()
+            }
+        };
 
-    pub fn load(config_path: &Path) -> Result<StoreConfig, ()> {
-        if !config_path.exists() {
-            return Err(())
+        if Path::new(&config.cache_dir).exists() {
+            create_dir_all(&config.cache_dir).unwrap();
         }
 
-        let file = File::open(config_path).unwrap();
-        let config: StoreConfig = serde_json::from_reader(file).unwrap();
+        config
+    }
+
+    pub fn load(config_path: &Path) -> io::Result<StoreConfig> {
+        let file = File::open(config_path)?;
+        let config: StoreConfig = serde_json::from_reader(file)?;
 
         Ok(config)
     }

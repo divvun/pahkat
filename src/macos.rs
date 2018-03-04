@@ -137,7 +137,13 @@ impl<'a> MacOSPackageStore<'a> {
         let pkg_info = match get_package_info(&installer.pkg_id, target) {
             Ok(v) => v,
             Err(e) => {
-                eprintln!("{:?}", e);
+                match e {
+                    ProcessError::NotFound => {},
+                    _ => {
+                        eprintln!("{:?}", e); 
+                    }
+                };
+                
                 return Ok(PackageStatus::NotInstalled);
             }
         };
@@ -236,7 +242,12 @@ fn get_package_info(bundle_id: &str, target: MacOSInstallTarget) -> Result<MacOS
     };
 
     if !output.status.success() {
-        eprintln!("{:?}", output);
+        if let Some(code) = output.status.code() {
+            if code == 1 {
+              return Err(ProcessError::NotFound);
+            }
+        }
+        
         return Err(ProcessError::Unknown(output));
     }
 
@@ -249,7 +260,8 @@ fn get_package_info(bundle_id: &str, target: MacOSInstallTarget) -> Result<MacOS
 #[derive(Debug)]
 pub enum ProcessError {
     Io(io::Error),
-    Unknown(process::Output)
+    Unknown(process::Output),
+    NotFound
 }
 
 fn install_macos_package(pkg_path: &Path, target: MacOSInstallTarget) -> Result<(), ProcessError> {
@@ -345,4 +357,21 @@ fn forget_pkg_id(bundle_id: &str, target: MacOSInstallTarget) -> Result<(), Proc
         return Err(ProcessError::Unknown(output));
     }
     Ok(())
+}
+
+pub fn init(url: &str, cache_dir: &str) {
+    let config = StoreConfig { 
+        url: url.to_owned(),
+        cache_dir: cache_dir.to_owned()
+    };
+    
+    let config_path = env::home_dir().unwrap()
+        .join("Library/Application Support/Pahkat/config.json");
+        
+    if config_path.exists() {
+        println!("Path already exists; aborting.");
+        return;
+    }
+
+    config.save(&config_path);
 }
