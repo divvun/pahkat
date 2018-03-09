@@ -1,0 +1,197 @@
+=== Creating a repository
+
+To create a repository, run `pahkat repo init`. If you wish to specify a directory other than the current working directory, provide a `-p` flag to the `repo` subcommand, like: `pahkat repo -p my-repo init`.
+
+The base URL is the URL where your repository will be accessed from, such as `https://repo.example.com`.
+
+.An example of the initialisation questionnaire
+----
+Base URL: https://repo.example.com
+Name: (Repository)
+Description: A test repository.
+Supported filters: category, language
+Primary Filter: (category)
+Supported channels: stable, beta, alpha, nightly
+Channels (comma-separated): (stable)
+
+{
+  "@context": "https://pahkat.org/",
+  "@type": "Repository",
+  "agent": {
+    "@type": "RepositoryAgent",
+    "name": "pahkat",
+    "version": "0.6.0",
+    "url": "https://github.com/divvun/pahkat"
+  },
+  "base": "https://repo.example.com/",
+  "name": {
+    "en": "Repository"
+  },
+  "description": {
+    "en": "A test repository."
+  },
+  "primaryFilter": "category",
+  "channels": [
+    "stable"
+  ],
+  "categories": {
+    "en": {}
+  }
+}
+
+Save index.json and generate repo directories? (yes)
+  Generating repository index
+  Generating packages index
+  Generating virtuals index
+     Writing repository index
+     Writing packages index
+     Writing virtuals index
+----
+
+By default, the `name`, `description` and `categories` fields only contain English variants. These may be extended with any BCP-47 tagged languages.
+
+Once this has been run, you should have a directory layout as follows:
+
+----
+demo-repo/
+├── index.json
+├── packages
+│   └── index.json
+└── virtuals
+    └── index.json
+----
+
+=== Adding packages to the repository
+
+Adding a package to a repository is a similar process. Run `pahkat init` in the working directory of your repository, or provide the `-p` flag,
+and a questionnaire will appear to generate your package metadata.
+
+.A package questionnaire example
+----
+Package identifier: test
+Name: Test Package
+Description: A test package.
+Version: (0.1.0)
+Category: test
+Package languages are languages the installed package supports.
+Package languages (comma-separated): (en) zz
+Supported platforms: android, ios, linux, macos, windows
+Specify platform support like "windows" or with version guards "windows >= 8.1".
+Platforms (comma-separated): (macos)
+
+{
+  "@context": "https://pahkat.org/",
+  "@type": "Package",
+  "id": "test",
+  "name": {
+    "en": "Test Package"
+  },
+  "description": {
+    "en": "A test package."
+  },
+  "version": "0.1.0",
+  "category": "test",
+  "languages": [
+    "zz"
+  ],
+  "platform": {
+    "macos": "*"
+  },
+  "dependencies": {},
+  "virtualDependencies": {}
+}
+
+Save index.json? (yes)
+----
+
+Your repository directory should now look like this:
+
+----
+demo-repo/
+├── index.json
+├── packages
+│   ├── index.json
+│   └── test
+│       └── index.json
+└── virtuals
+    └── index.json
+----
+
+=== Adding an installer to a package
+
+In order for packages to be installable, you have to add the installation metadata as the `installer` field. Installers are disjunct data types distinguished by their `@type` field.
+
+Currently supported installer types are: `WindowsInstaller`, `MacOSInstaller` and `TarballInstaller`.
+
+For this example we will use `MacOSInstaller`, but the process is similar for all installer types.
+
+==== macOS installer
+
+Run `pahkat installer macos --help` to see all of the available flags and required flags. In this example we will be injecting an installer that requires
+a reboot after installation and after uninstallation, and can be installed into the user directory as well as to the system.
+
+You can use `du -b` to get the size of your installed package to find its size in bytes.
+
+----
+$ pahkat installer -p demo-repo/packages/test macos \
+    -rR \
+    --size 217719 --package macos/North\ Sami\ Keyboard\ 1.0.1.pkg \
+    --pkgid no.uit.giella.keyboards.sme.keyboardlayout.sme \
+    --targets user,system \
+    --url https://gtsvn.uit.no/langtech/trunk/keyboards/sme/macos/North%20Sami%20Keyboard%201.0.1.pkg
+
+{
+  "@context": "https://pahkat.org/",
+  "@type": "Package",
+  "id": "test",
+  "name": {
+    "en": "Test Package"
+  },
+  "description": {
+    "en": "A test package."
+  },
+  "version": "0.1.0",
+  "category": "test",
+  "languages": [
+    "zz"
+  ],
+  "platform": {
+    "macos": "*"
+  },
+  "dependencies": {},
+  "virtualDependencies": {},
+  "installer": {
+    "@type": "MacOSInstaller",
+    "url": "https://gtsvn.uit.no/langtech/trunk/keyboards/sme/macos/North%20Sami%20Keyboard%201.0.1.pkg",
+    "pkgId": "no.uit.giella.keyboards.sme.keyboardlayout.sme",
+    "targets": [
+      "system",
+      "user"
+    ],
+    "requiresReboot": true,
+    "requiresUninstallReboot": true,
+    "size": 79523,
+    "installedSize": 217719,
+    "signature": null
+  }
+}
+
+Save index.json? (yes)
+----
+
+Any time you wish to override the installer with new data, run this command again.
+
+It is important that you do not forget to re-index your repository, otherwise the packages index will not be updated.
+
+To do that, run `pahkat repo index`.
+
+----
+$ pahkat repo -p demo-repo index
+  Generating repository index
+  Generating packages index
+   Inserting test 0.1.0
+  Generating virtuals index
+     Writing repository index
+     Writing packages index
+     Writing virtuals index
+----

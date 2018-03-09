@@ -1,31 +1,32 @@
-== What is Báhkat?
+=== What is Páhkat?
 
-Báhkat is a tool to generate and manage a software repository, implementing the in-development standard
-of the same name ("the Báhkat standard"), to solve the following problems:
+Páhkat is a tool to generate and manage a software repository, implementing the in-development standard
+of the same name ("the Páhkat standard"), to solve the following problems:
 
 * Platform-agnostic metadata format for defining packages, dependencies and related information
 * Specific support for using the most platform-appropriate method for installing packages
 * First-class support for localisation of relevant properties (such as name or description)
 * Consistent linked data model
 * An easy to parse format for computers and humans
-* An OpenAPI-compliant HTTP API, easing development of Báhkat-compliant clients
+* An OpenAPI-compliant HTTP API, easing development of Páhkat-compliant clients
 
 This is the reference implementation of the in-development standard. There are several clients in development:
 
-* https://github.com/bbqsrc/pahkat-win[Pákhat C#/WPF client] - Windows 8.1+
-* https://github.com/bbqsrc/pahkat-client[Pákhat Rust command-line client] - Windows 8.1+, Linux, macOS, etc
+* https://github.com/divvun/pahkat-client-windows[Pákhat C#/WPF client] - Windows 8.1+
+* https://github.com/divvun/pahkat-client-macos[Pákhat Swift/Cocoa client] - macOS 10.10+
+* https://github.com/divvun/pahkat-client-core[Pákhat core library and command line client] - Windows 8.1+, Linux, macOS, etc
 
-Báhkat is alpha software licensed under the Apache 2 license. This software should not be used in production.
+Páhkat is alpha software licensed under the Apache 2 license. This software should not be used in production.
 
-== Supported platforms
+=== Supported platforms
 
-Báhkat can be compiled and run on any platform supported by the Rust compiler. A Báhkat repository is to be delivered via HTTPS,
+Páhkat can be compiled and run on any platform supported by the Rust compiler. A Páhkat repository is to be delivered via HTTPS,
 and can be hosted on any platform that supports it.
 
-The Báhkat repository itself is platform-agnostic. The platform field in a package is simply a string with a version guard.
+The Páhkat repository itself is platform-agnostic. The platform field in a package is simply a string with a version guard.
 
-Báhkat clients are responsible for implementation of support for the relevant platform identifiers.
+Páhkat clients are responsible for implementation of support for the relevant platform identifiers.
 
-Currently, the Pákhat C#/WPF supports Windows 8.1+ installers (both .msi and .exe), while the command-line 
-client supports a prefix on any platform where the client can be run for a yet-to-be-documented XZ-compressed
-tarball format.
+Currently, the Pákhat C#/WPF supports Windows 8.1+ installers (both .msi and .exe), the macOS client supports .pkg files, 
+while the command-line client supports a prefix on any platform where the client can be run for a 
+yet-to-be-documented XZ-compressed tarball format, as well as the platform-specific installers.

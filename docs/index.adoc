@@ -6,7 +6,7 @@ Brendan Molloy <brendan@bbqsrc.net>
 :icons: font
 :toc: left
 :toclevels: 3
-:projversion: 0.1.0
+:projversion: 0.6.0
 :sectlinks:
 :sectnums:
 :linkattrs:
@@ -32,7 +32,7 @@ Please follow the warnings or errors that the `pahkat` tool provides, and if som
 an issue on GitHub.
 ====
 
-== Introduction to Báhkat {projversion}
+== Introduction to Páhkat {projversion}
 
 include::intro.adoc[]
 
@@ -40,8 +40,8 @@ include::intro.adoc[]
 
 include::install.adoc[]
 
-// == Quickstart
-// include::quickstart.adoc[]
+== Quickstart
+include::quickstart.adoc[]
 
 == Repositories
 
