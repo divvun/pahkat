@@ -10,9 +10,10 @@ use ::{Repository};
 
 use serde::de::{self, Deserialize, Deserializer};
 use plist::serde::{deserialize as deserialize_plist};
+use sentry::models::*;
+use sentry::sentry::stacktrace;
 
 use ::*;
-
 
 fn from_str<'de, T, D>(deserializer: D) -> Result<T, D::Error>
     where T: FromStr,
@@ -283,6 +284,17 @@ fn install_macos_package(pkg_path: &Path, target: MacOSInstallTarget) -> Result<
         Err(e) => return Err(ProcessError::Io(e))
     };
     if !output.status.success() {
+        let msg = format!("Exit code: {}", output.status.code().unwrap());        
+        let ex = Exception::new(vec![
+            ExceptionValue::new("InstallerError", &msg, Some(module_path!()), stacktrace(env!("CARGO_PKG_NAME")))
+        ]);
+        let event = SENTRY.event()
+            .exception(ex)
+            .extra(btreemap! {
+                "stdout".to_owned() => String::from(String::from_utf8_lossy(&output.stdout)),
+                "stderr".to_owned() => String::from(String::from_utf8_lossy(&output.stderr))
+            }).build().unwrap();
+        SENTRY.capture_event(&event).unwrap();
         return Err(ProcessError::Unknown(output));
     }
     Ok(())
@@ -348,12 +360,24 @@ fn forget_pkg_id(bundle_id: &str, target: MacOSInstallTarget) -> Result<(), Proc
     let output = match res {
         Ok(v) => v,
         Err(e) => {
+            
             eprintln!("{:?}", e);
             return Err(ProcessError::Io(e));
         }
     };
     if !output.status.success() {
         eprintln!("{:?}", output.status.code().unwrap());
+        let msg = format!("Exit code: {}", output.status.code().unwrap());        
+        let ex = Exception::new(vec![
+            ExceptionValue::new("PkgutilError", &msg, Some(module_path!()), stacktrace(env!("CARGO_PKG_NAME")))
+        ]);
+        let event = SENTRY.event()
+            .exception(ex)
+            .extra(btreemap! {
+                "stdout".to_owned() => String::from(String::from_utf8_lossy(&output.stdout)),
+                "stderr".to_owned() => String::from(String::from_utf8_lossy(&output.stderr))
+            }).build().unwrap();
+        SENTRY.capture_event(&event).unwrap();
         return Err(ProcessError::Unknown(output));
     }
     Ok(())
@@ -373,5 +397,5 @@ pub fn init(url: &str, cache_dir: &str) {
         return;
     }
 
-    config.save(&config_path);
+    config.save(&config_path).unwrap();
 }

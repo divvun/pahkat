@@ -12,7 +12,7 @@ path = "src/bin/pahkatc.rs"
 required-features = ["binaries"]
 
 [dependencies]
-pahkat = { git = "https://github.com/divvun/pahkat", branch = "feature/macos" }
+pahkat = { git = "https://github.com/divvun/pahkat", branch = "master" }
 rusqlite = "*"
 reqwest = "*"
 serde = "*"
@@ -26,6 +26,9 @@ url = "*"
 rhai = "0.8.1"
 libc = "*"
 rust-crypto = "^0.2"
+lazy_static = "1.0"
+sentry = { path = "../sentry-rust", branch = "master" }
+maplit = "1.0"
 
 # Windows-specific
 winreg = { git = "https://github.com/bbqsrc/winreg-rs", branch = "master" }

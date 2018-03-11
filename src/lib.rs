@@ -5,6 +5,8 @@ extern crate serde_json;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
+#[macro_use]
+extern crate lazy_static;
 extern crate semver;
 extern crate xz2;
 extern crate tar;
@@ -25,8 +27,12 @@ extern crate jsonrpc_tcp_server;
 #[cfg(target_os = "macos")]
 extern crate plist;
 extern crate crypto;
+extern crate sentry;
+#[macro_use]
+extern crate maplit;
 
 use std::env;
+use sentry::sentry::Sentry;
 
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
@@ -37,6 +43,7 @@ use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::fs::{create_dir_all, File};
 use std::fmt;
+// use std::sync::{Arc, Mutex};
 
 #[cfg(windows)]
 mod windows;
@@ -45,6 +52,12 @@ pub mod macos;
 #[cfg(feature = "ipc")]
 pub mod ipc;
 pub mod tarball;
+
+const DSN: &'static str = "https://0a0fc86e9d2447e8b0b807087575e8c6:3d610a0fea7b49d6803061efa16c2ddc@sentry.io/301711";
+
+lazy_static! {
+    static ref SENTRY: Sentry = Sentry::new(&DSN).unwrap();
+}
 
 // pub mod exports;
 
@@ -182,7 +195,7 @@ impl Repository {
 }
 
 pub trait Download {
-    fn download<F>(&self, dir_path: &Path, progress: Option<F>) -> Option<PathBuf>
+    fn download<F>(&self, dir_path: &Path, progress: Option<F>) -> Result<PathBuf, DownloadError>
             where F: Fn(usize, usize) -> ();
 }
 
@@ -227,21 +240,31 @@ impl<W: Write, F> Write for ProgressWriter<W, F>
     }
 }
 
-impl Download for Package {
+#[derive(Debug)]
+pub enum DownloadError {
+    EmptyFile,
+    NoUrl,
+    HttpStatusFailure(u16)
+}
 
+impl Download for Package {
     // TODO: should return Result<PathBuf, E>
-    fn download<F>(&self, dir_path: &Path, progress: Option<F>) -> Option<PathBuf>
+    fn download<F>(&self, dir_path: &Path, progress: Option<F>) -> Result<PathBuf, DownloadError>
             where F: Fn(usize, usize) -> () {
         use reqwest::header::*;
 
         let installer = match self.installer() {
             Some(v) => v,
-            None => return None
+            None => return Err(DownloadError::NoUrl)
         };
         let url_str = installer.url();
 
         let url = url::Url::parse(&url_str).unwrap();
         let mut res = reqwest::get(&url_str).unwrap();
+
+        if !res.status().is_success() {
+            return Err(DownloadError::HttpStatusFailure(res.status().as_u16()))
+        }
 
         let filename = &url.path_segments().unwrap().last().unwrap();
         let tmp_path = dir_path.join(&filename).to_path_buf();
@@ -262,10 +285,10 @@ impl Download for Package {
         };
         
         if write_res.unwrap() == 0 {
-            return None;
+            return Err(DownloadError::EmptyFile);
         }
 
-        Some(tmp_path)
+        Ok(tmp_path)
     }
 }
 

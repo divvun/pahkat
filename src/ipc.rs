@@ -198,7 +198,7 @@ impl Rpc for RpcImpl {
 			let msg = match e {
 				MacOSInstallError::InstallerFailure(error) => {
 					match error {
-						ProcessError::Unknown(output) => String::from_utf8_lossy(&output.stderr).to_string(),
+						ProcessError::Unknown(output) => String::from_utf8_lossy(&output.stdout).to_string(),
 						_ => format!("{:?}", &error)
 					}
 				}
@@ -272,13 +272,27 @@ impl Rpc for RpcImpl {
 			if !package_cache.exists() {
 				create_dir_all(&package_cache).unwrap();
 			}
-			let _pkg_path = package.download(&package_cache, 
+
+			let pkg_path = package.download(&package_cache, 
 				Some(|cur, max| {
 					match sink.notify(Ok([cur, max])).wait() {
 						Ok(_) => {},
 						Err(_) => {}
 					}
-				})).unwrap();
+				}));
+			
+			match pkg_path {
+				Ok(_) => {},
+				Err(e) => {
+					eprintln!("{:?}", &e);
+					let error = Error {
+						code: ErrorCode::InvalidParams,
+						message: format!("{:?}", &e),
+						data: None
+					};
+					sink.notify(Err(error)).wait();
+				}
+			};
 		});
 	}
 
