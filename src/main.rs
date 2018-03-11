@@ -32,17 +32,14 @@ macro_rules! ld_type {
 
 const LD_CONTEXT: &'static str = "https://pahkat.org/";
 
-fn default_pkg_id(path: &Path) -> String {
-    let c = path.components().last().unwrap();
-    c.as_os_str()
-        .to_string_lossy()
-        .to_string()
-        .to_lowercase()
-}
-
-fn request_package_data(cur_dir: &Path) -> Package {
-    let package_id = prompt_line("Package identifier", &default_pkg_id(cur_dir)).unwrap();
+fn request_package_data(cur_dir: &Path) -> Option<Package> {
+    let package_id = prompt_line("Package identifier", "").unwrap();
     
+    if cur_dir.join(&format!("{}/index.json", &package_id)).exists() {
+        progress(Color::Red, "Error", &format!("Package {} already exists; aborting.", &package_id)).unwrap();
+        return None;
+    }
+
     let en_name = prompt_line("Name", "").unwrap();
     let mut name = BTreeMap::new();
     name.insert("en".to_owned(), en_name);
@@ -68,7 +65,7 @@ fn request_package_data(cur_dir: &Path) -> Package {
         .collect();
     let platform = parse_platform_list(&platform_vec);
 
-    Package {
+    Some(Package {
         _context: Some(LD_CONTEXT.to_owned()),
         _type: ld_type!("Package"),
         id: package_id,
@@ -81,7 +78,7 @@ fn request_package_data(cur_dir: &Path) -> Package {
         dependencies: Default::default(),
         virtual_dependencies: Default::default(),
         installer: None
-    }
+    })
 }
 
 fn request_repo_data() -> Repository {
@@ -128,23 +125,24 @@ fn request_repo_data() -> Repository {
 }
 
 fn package_init(output_dir: &Path) {
-    if open_repo(&output_dir).is_ok() {
-        progress(Color::Red, "Error", "Cannot generate package within repository; aborting.").unwrap();
+    if !open_repo(&output_dir).is_ok() {
+        progress(Color::Red, "Error", "Cannot generate package outside of a repository; aborting.").unwrap();
         return;
     }
 
-    if output_dir.join("index.json").exists() {
-        progress(Color::Red, "Error", "A file or directory named 'index.json' already exists; aborting.").unwrap();
-        return;
-    }
+    let pkg_data = match request_package_data(output_dir) {
+        Some(v) => v,
+        None => { return; }
+    };
 
-    let pkg_data = request_package_data(output_dir);
     let json = serde_json::to_string_pretty(&pkg_data).unwrap();
     
     println!("\n{}\n", json);
 
     if prompt_question("Save index.json", true) {
-        let mut file = File::create(output_dir.join("index.json")).unwrap();
+        let package_dir = output_dir.join(&format!("packages/{}", &pkg_data.id));
+        fs::create_dir(&package_dir).unwrap();
+        let mut file = File::create(&package_dir.join("index.json")).unwrap();
         file.write_all(json.as_bytes()).unwrap();
         file.write(&[b'\n']).unwrap();
     }
@@ -422,7 +420,7 @@ fn package_tarball_installer(file_path: &Path, force_yes: bool, tarball: &str, u
     file.write(&[b'\n']).unwrap();
 }
 
-fn package_macos_installer(file_path: &Path, force_yes: bool, installer: &str, targets: Vec<&str>, pkg_id: &str,
+fn package_macos_installer(file_path: &Path, version: &str, force_yes: bool, installer: &str, targets: Vec<&str>, pkg_id: &str,
         url: &str, size: usize, requires_reboot: bool, requires_uninst_reboot: bool) {
     let mut pkg = match open_package(&file_path) {
         Ok(pkg) => pkg,
@@ -465,6 +463,7 @@ fn package_macos_installer(file_path: &Path, force_yes: bool, installer: &str, t
         signature: None
     };
 
+    pkg.version = version.to_owned();
     pkg.installer = Some(Installer::MacOS(installer_index));
 
     let json = serde_json::to_string_pretty(&pkg).unwrap();
@@ -559,11 +558,11 @@ fn main() {
         .subcommand(
             SubCommand::with_name("init")
             .about("Initialise a package to the specified directory")
-            .arg(Arg::with_name("output")
-                .value_name("OUTPUT")
-                .help("The installer index output directory (default: current working directory)")
-                .short("o")
-                .long("output")
+            .arg(Arg::with_name("path")
+                .value_name("PATH")
+                .help("The repository root directory (default: current working directory)")
+                .short("p")
+                .long("path")
                 .takes_value(true)
             )
         )
@@ -588,6 +587,13 @@ fn main() {
                         .takes_value(true)
                         .required(true)
                     )
+                    .arg(Arg::with_name("version")
+                        .value_name("VERSION")
+                        .help("Package version")
+                        .short("v")
+                        .long("version")
+                        .takes_value(true)
+                        .required(true))
                     .arg(Arg::with_name("pkg-id")
                         .value_name("PKGID")
                         .help("The bundle identifier for the installed package (eg, com.example.package)")
@@ -742,9 +748,9 @@ fn main() {
     match matches.subcommand() {
         ("init", Some(matches)) => {
             let current_dir = &env::current_dir().unwrap();
-            let output: &Path = matches.value_of("output")
+            let path: &Path = matches.value_of("path")
                 .map_or(&current_dir, |v| Path::new(v));
-            package_init(&output)
+            package_init(&path)
         },
         ("installer", Some(matches)) => {
             let current_dir = &env::current_dir().unwrap();
@@ -754,6 +760,7 @@ fn main() {
             match matches.subcommand() {
                 ("macos", Some(matches)) => {
                     let installer = matches.value_of("package").unwrap();
+                    let version = matches.value_of("version").unwrap();
                     let targets: Vec<&str> = matches.value_of("targets").unwrap().split(",").collect();
                     let pkg_id = matches.value_of("pkg-id").unwrap();
                     let url = matches.value_of("url").unwrap();
@@ -763,7 +770,7 @@ fn main() {
                     let requires_uninst_reboot = matches.is_present("requires-uninst-reboot");
                     let skip_confirm = matches.is_present("skip-confirmation");
 
-                    package_macos_installer(path, skip_confirm, installer, targets, pkg_id, url, size, requires_reboot, 
+                    package_macos_installer(path, version, skip_confirm, installer, targets, pkg_id, url, size, requires_reboot, 
                         requires_uninst_reboot);
                 },
                 ("windows", Some(matches)) => {
