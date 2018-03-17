@@ -1,4 +1,5 @@
 extern crate pahkat;
+#[cfg(prefix)]
 extern crate rusqlite;
 extern crate reqwest;
 extern crate serde_json;
@@ -8,10 +9,13 @@ extern crate serde_derive;
 #[macro_use]
 extern crate lazy_static;
 extern crate semver;
+#[cfg(prefix)]
 extern crate xz2;
+#[cfg(prefix)]
 extern crate tar;
 extern crate tempdir;
 extern crate url;
+#[cfg(prefix)]
 extern crate rhai;
 #[cfg(windows)]
 extern crate winreg;

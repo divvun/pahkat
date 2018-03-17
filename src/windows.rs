@@ -1,6 +1,6 @@
 #![cfg(windows)]
 
-use {Package, PackageStore, PackageStatus, PackageStatusError, Installer};
+use {Package, PackageStatus, PackageStatusError, Installer};
 use std::path::Path;
 use winreg::RegKey;
 use winreg::enums::*;
@@ -68,17 +68,13 @@ enum WindowsInstallError {
     Win32Error(io::Error)
 }
 
-impl<'a> PackageStore<'a> for WindowsPackageStore {
-    type StatusResult = Result<PackageStatus, PackageStatusError>;
-    type InstallResult = Result<(), ()>;
-    type UninstallResult = Result<(), ()>;
-
-    fn status(&self, package: &'a Package) -> Self::StatusResult {
+impl WindowsPackageStore {
+    fn status(&self, package: &Package) -> Result<PackageStatus, PackageStatusError> {
         let installer = match package.installer() {
             None => return Err(PackageStatusError::NoInstaller),
             Some(v) => match v {
-                &Installer::Tarball(_) => return Err(PackageStatusError::WrongInstallerType),
-                &Installer::Windows(ref v) => v
+                &Installer::Windows(ref v) => v,
+                _ => return Err(PackageStatusError::WrongInstallerType),
             }
         };
 
@@ -107,12 +103,11 @@ impl<'a> PackageStore<'a> for WindowsPackageStore {
         unimplemented!()
     }
 
-    fn install(&self, package: &'a Package, path: &'a Path) -> Self::InstallResult {
-        
-
+    fn install(&self, package: &Package, path: &Path) -> Result<(), ()> {
         unimplemented!()
     }
-    fn uninstall(&self, package: &'a Package) -> Self::UninstallResult {
+
+    fn uninstall(&self, package: &Package) -> Result<(), ()> {
         unimplemented!()
     }
 }

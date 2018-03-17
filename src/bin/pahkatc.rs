@@ -6,22 +6,26 @@ extern crate pahkat_client;
 use clap::{App, AppSettings, Arg, SubCommand};
 use pahkat::types::{Package, MacOSInstallTarget};
 use pahkat_client::*;
+#[cfg(prefix)]
 use pahkat_client::tarball::*;
+#[cfg(target_os = "macos")]
 use pahkat_client::macos::*;
 use std::path::Path;
 use std::env;
 use std::fs;
 
 fn main() {
-    let matches = App::new("Páhkat")
+    let mut app = App::new("Páhkat")
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .version(crate_version!())
         .author("Brendan Molloy <brendan@bbqsrc.net>")
         .about("The last package manager. \"Pákhat\" is the nominative plural form for \"packages\" in Northern Sámi.")
         .subcommand(
             SubCommand::with_name("ipc").setting(AppSettings::Hidden)
-        )
-        .subcommand(
+        );
+
+    if cfg!(target_os = "macos") {
+        app = app.subcommand(
             SubCommand::with_name("macos")
             .about("MacOS-specific commands")
             .subcommand(
@@ -81,8 +85,11 @@ fn main() {
                     .short("u")
                     .long("user"))
             )
-        )
-        .subcommand(
+        );
+    }
+
+    if cfg!(prefix) {
+        app = app.subcommand(
             SubCommand::with_name("prefix")
                 .about("Commands for managing an installation prefix")
             .subcommand(
@@ -151,10 +158,10 @@ fn main() {
                         .help("The package identifier to uninstall")
                         .required(true))
             )
-        )
-        .get_matches();
+        );
+    }
 
-    match matches.subcommand() {
+    match app.get_matches().subcommand() {
         #[cfg(feature="ipc")]
         ("ipc", _) => {
             ipc::start();
@@ -308,6 +315,7 @@ fn main() {
                 _ => {}
             }
         },
+        #[cfg(prefix)]
         ("prefix", Some(matches)) => {
             match matches.subcommand() {
                 ("init", Some(matches)) => {
@@ -401,6 +409,7 @@ fn main() {
     }
 }
 
+#[cfg(prefix)]
 fn open_prefix(path: &str) -> Result<Prefix, ()> {
     let prefix = Prefix::open(Path::new(path)).unwrap();
     Ok(prefix)

@@ -13,29 +13,24 @@ required-features = ["binaries"]
 
 [dependencies]
 pahkat = { git = "https://github.com/divvun/pahkat", branch = "master" }
-rusqlite = "*"
 reqwest = "*"
 serde = "*"
 serde_json = "*"
 serde_derive = "*"
 semver = "0.9.0"
-tar = "*"
-xz2 = "*"
 tempdir = "*"
 url = "*"
-rhai = "0.8.1"
 libc = "*"
 rust-crypto = "^0.2"
 lazy_static = "1.0"
 sentry = { path = "../sentry-rust", branch = "master" }
 maplit = "1.0"
 
-# Windows-specific
-winreg = { git = "https://github.com/bbqsrc/winreg-rs", branch = "master" }
-
-# MacOS-specific
-[target.'cfg(target_os="macos")'.dependencies]
-plist = { version = "0.2" }
+# Prefix feature
+rhai = { version = "0.8", optional = true }
+xz2 = { version = "*", optional = true }
+rusqlite = { version = "*", features = ["bundled"], optional = true }
+tar = { version = "*", optional = true }
 
 # Binaries feature
 clap = { version = "*", optional = true }
@@ -47,6 +42,15 @@ jsonrpc-macros = { version = "*", optional = true }
 jsonrpc-pubsub = { version = "*", optional = true }
 jsonrpc-tcp-server = { version = "*", optional = true }
 
+# MacOS-specific
+[target.'cfg(target_os="macos")'.dependencies]
+plist = { version = "0.2" }
+
+# Windows-specific
+[target.'cfg(target_os="windows")'.dependencies]
+winreg = { git = "https://github.com/bbqsrc/winreg-rs", branch = "master" }
+
 [features]
+prefix = ["rhai", "tar", "xz2", "rusqlite"]
 ipc = ["jsonrpc-core", "jsonrpc-macros", "jsonrpc-pubsub", "jsonrpc-tcp-server"]
 binaries = ["clap", "termcolor"]

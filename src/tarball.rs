@@ -1,3 +1,5 @@
+#![cfg(prefix)]
+
 use pahkat::types::*;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
