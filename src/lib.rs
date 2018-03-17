@@ -9,16 +9,16 @@ extern crate serde_derive;
 #[macro_use]
 extern crate lazy_static;
 extern crate semver;
-#[cfg(prefix)]
-extern crate xz2;
-#[cfg(prefix)]
-extern crate tar;
 extern crate tempdir;
 extern crate url;
-#[cfg(prefix)]
+
+#[cfg(feature = "prefix")]
 extern crate rhai;
-#[cfg(windows)]
-extern crate winreg;
+#[cfg(feature = "prefix")]
+extern crate xz2;
+#[cfg(feature = "prefix")]
+extern crate tar;
+
 #[cfg(feature = "ipc")]
 extern crate jsonrpc_core;
 #[cfg(feature = "ipc")]
@@ -26,18 +26,24 @@ extern crate jsonrpc_pubsub;
 #[macro_use]
 #[cfg(feature = "ipc")]
 extern crate jsonrpc_macros;
-#[cfg(feature = "ipc")]
-extern crate jsonrpc_tcp_server;
+
+#[cfg(windows)]
+extern crate winreg;
+
 #[cfg(target_os = "macos")]
 extern crate plist;
+#[macro_use]
+#[cfg(target_os = "macos")]
+extern crate maplit;
+
+#[cfg(windows)]
+extern crate winapi;
+
 extern crate crypto;
 extern crate sentry;
-#[macro_use]
-extern crate maplit;
 
 use std::env;
 use sentry::sentry::Sentry;
-
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
 use pahkat::types::*;
@@ -50,7 +56,7 @@ use std::fmt;
 // use std::sync::{Arc, Mutex};
 
 #[cfg(windows)]
-mod windows;
+pub mod windows;
 #[cfg(target_os = "macos")]
 pub mod macos;
 #[cfg(feature = "ipc")]
@@ -124,6 +130,37 @@ pub struct StoreConfig {
     pub cache_dir: String
 }
 
+#[cfg(target_os = "macos")]
+pub fn default_config_path() -> PathBuf {
+    env::home_dir().unwrap().join("Library/Application Support/Pahkat/config.json")
+}
+
+#[cfg(target_os = "linux")]
+pub fn default_config_path() -> PathBuf {
+    env::home_dir().unwrap().join(".config/pahkat/config.json")
+}
+
+#[cfg(windows)]
+pub fn default_config_path() -> PathBuf {
+    env::home_dir().unwrap().join(r#"AppData\Roaming\Pahkat\config.json"#)
+}
+
+#[cfg(target_os = "macos")]
+pub fn default_cache_path() -> PathBuf {
+    env::home_dir().unwrap().join("Library/Caches/Pahkat/packages")
+}
+
+#[cfg(target_os = "linux")]
+pub fn default_cache_path() -> PathBuf {
+    env::home_dir().unwrap().join(".cache/pahkat/packages")
+}
+
+#[cfg(windows)]
+pub fn default_cache_path() -> PathBuf {
+    env::home_dir().unwrap().join(r#"AppData\Local\Pahkat\packages"#)
+}
+
+
 impl StoreConfig {
     pub fn save(&self, config_path: &Path) -> Result<(), ()> { 
         let cfg_str = serde_json::to_string_pretty(&self).unwrap();
@@ -137,15 +174,13 @@ impl StoreConfig {
     }
 
     pub fn load_or_default() -> StoreConfig {
-        let res = StoreConfig::load(&env::home_dir().unwrap()
-            .join("Library/Application Support/Pahkat/config.json"));
+        let res = StoreConfig::load(&default_config_path());
         
         let config = match res {
             Ok(v) => v,
             Err(_) => StoreConfig {
                 url: "".to_owned(),
-                cache_dir: env::home_dir().unwrap()
-                    .join("Library/Caches/Pahkat/packages")
+                cache_dir: default_cache_path()
                     .to_str().unwrap().to_owned()
             }
         };
@@ -252,7 +287,6 @@ pub enum DownloadError {
 }
 
 impl Download for Package {
-    // TODO: should return Result<PathBuf, E>
     fn download<F>(&self, dir_path: &Path, progress: Option<F>) -> Result<PathBuf, DownloadError>
             where F: Fn(usize, usize) -> () {
         use reqwest::header::*;

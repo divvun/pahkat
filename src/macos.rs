@@ -149,6 +149,8 @@ impl<'a> MacOSPackageStore<'a> {
             }
         };
 
+        // TODO: handle skipped versions
+
         let installed_version = match semver::Version::parse(&pkg_info.pkg_version) {
             Err(_) => return Err(PackageStatusError::ParsingVersion),
             Ok(v) => v

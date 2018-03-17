@@ -1,11 +1,84 @@
 #![cfg(windows)]
-
+use pahkat::types::*;
 use {Package, PackageStatus, PackageStatusError, Installer};
-use std::path::Path;
+use std::path::{PathBuf, Path};
 use winreg::RegKey;
 use winreg::enums::*;
 use semver;
 use std::io;
+use ::{Repository, StoreConfig};
+use std::process::{self, Command};
+use std::ffi::{OsString};
+use url;
+
+pub fn init(url: &str, cache_dir: &str) {
+    let config = StoreConfig { 
+        url: url.to_owned(),
+        cache_dir: cache_dir.to_owned()
+    };
+    
+    let config_path = ::default_config_path();
+        
+    if config_path.exists() {
+        println!("Path already exists; aborting.");
+        return;
+    }
+
+    config.save(&config_path).unwrap();
+}
+
+
+mod sys {
+    use winapi::um::shellapi::CommandLineToArgvW;
+    use winapi::um::winbase::LocalFree;
+    use winapi::ctypes::c_void;
+    use std::os::windows::ffi::OsStrExt;
+    use std::os::windows::ffi::OsStringExt;
+    use std::ffi::{OsString, OsStr};
+    use std::ops::Range;
+    use std::slice;
+
+    // https://github.com/rust-lang/rust/blob/f76d9bcfc2c269452522fbbe19f66fe653325646/src/libstd/sys/windows/os.rs#L286-L289
+    pub struct Args {
+        range: Range<isize>,
+        cur: *mut *mut u16,
+    }
+
+    impl Iterator for Args {
+        type Item = OsString;
+        fn next(&mut self) -> Option<OsString> {
+            self.range.next().map(|i| unsafe {
+                let ptr = *self.cur.offset(i);
+                let mut len = 0;
+                while *ptr.offset(len) != 0 { len += 1; }
+
+                // Push it onto the list.
+                let ptr = ptr as *const u16;
+                let buf = slice::from_raw_parts(ptr, len as usize);
+                OsStringExt::from_wide(buf)
+            })
+        }
+        fn size_hint(&self) -> (usize, Option<usize>) { self.range.size_hint() }
+    }
+
+    impl ExactSizeIterator for Args {
+        fn len(&self) -> usize { self.range.len() }
+    }
+
+    impl Drop for Args {
+        fn drop(&mut self) {
+            unsafe { LocalFree(self.cur as *mut c_void); }
+        }
+    }
+
+    pub fn args<S: AsRef<OsStr>>(input: S) -> Args {
+        let input_vec: Vec<u16> = OsStr::new(&input).encode_wide().chain(Some(0).into_iter()).collect();
+        let lp_cmd_line = input_vec.as_ptr();
+        let mut args: i32 = 0;
+        let arg_list: *mut *mut u16 = unsafe { CommandLineToArgvW(lp_cmd_line, &mut args) };
+        Args { range: 0..(args as isize), cur: arg_list }
+    }
+}
 
 mod Keys {
     pub const UninstallPath: &'static str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall";
@@ -15,99 +88,204 @@ mod Keys {
     pub const UninstallString: &'static str = "UninstallString";
 }
 
-struct WindowsPackageStore {
-
+pub struct WindowsPackageStore<'a> {
+    repo: &'a Repository,
+    config: &'a StoreConfig
 }
 
-/*
-public PackageInstallStatus InstallStatus(Package package)
-{
-    if (package.Installer == null)
-    {
-        return PackageInstallStatus.ErrorNoInstaller;
+fn installer(package: &Package) -> Result<&WindowsInstaller, PackageStatusError> {
+    match package.installer() {
+        None => Err(PackageStatusError::NoInstaller),
+        Some(v) => match v {
+            &Installer::Windows(ref v) => Ok(v),
+            _ => Err(PackageStatusError::WrongInstallerType)
+        }
     }
+}
 
-    var installer = package.Installer;
-    var hklm = _registry.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Default);
-    var path = $@"{Keys.UninstallPath}\{installer.ProductCode}";
-    var instKey = hklm.OpenSubKey(path);
+#[derive(Debug)]
+pub enum InstallError {
+    InvalidInstaller,
+    InvalidType,
+    PackageNotInCache,
+    Process(ProcessError),
+}
 
-    if (instKey == null)
-    {
-        return PackageInstallStatus.NotInstalled;
+#[derive(Debug)]
+pub enum UninstallError {
+    InvalidInstaller,
+    InvalidType,
+    NotInstalled,
+    NoUninstString,
+    Process(ProcessError)
+}
+
+#[derive(Debug)]
+pub enum ProcessError {
+    Io(io::Error),
+    Unknown(process::Output)
+}
+
+fn uninstall_regkey(installer: &WindowsInstaller) -> Option<RegKey> {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let path = Path::new(Keys::UninstallPath).join(&installer.product_code);
+    
+    match hklm.open_subkey(&path) {
+        Err(e) => None,
+        Ok(v) => Some(v)
+    }
+}
+
+impl<'a> WindowsPackageStore<'a> {
+    pub fn new(repo: &'a Repository, config: &'a StoreConfig) -> WindowsPackageStore<'a> {
+        WindowsPackageStore { repo: repo, config: config }
     }
     
-    var displayVersion = instKey.Get(Keys.DisplayVersion, "");
-    if (displayVersion == "")
-    {
-        return PackageInstallStatus.ErrorParsingVersion;
+    // TODO: review if there is a better place to put this function...
+    pub fn download_path(&self, _package: &Package) -> PathBuf {
+        return Path::new(&self.config.cache_dir).join(self.repo.hash_id())
     }
 
-    var comp = CompareVersion(AssemblyVersion.Create, package.Version, displayVersion);
-    if (comp != PackageInstallStatus.ErrorParsingVersion)
-    {
-        return comp;
-    }
+    pub fn status(&self, package: &'a Package) -> Result<PackageStatus, PackageStatusError> {
+        let installer = installer(&package)?;
 
-    if (SkippedVersion(package) == package.Version)
-    {
-        return PackageInstallStatus.VersionSkipped;
-    }
-        
-    comp = CompareVersion(SemanticVersion.Create, package.Version, displayVersion);
-    if (comp != PackageInstallStatus.ErrorParsingVersion)
-    {
-        return comp;
-    }
+        eprintln!("Checking status...");
 
-    return PackageInstallStatus.ErrorParsingVersion;
-}
-*/
-
-enum WindowsInstallError {
-    Win32Error(io::Error)
-}
-
-impl WindowsPackageStore {
-    fn status(&self, package: &Package) -> Result<PackageStatus, PackageStatusError> {
-        let installer = match package.installer() {
-            None => return Err(PackageStatusError::NoInstaller),
-            Some(v) => match v {
-                &Installer::Windows(ref v) => v,
-                _ => return Err(PackageStatusError::WrongInstallerType),
-            }
+        let inst_key = match uninstall_regkey(&installer) {
+            Some(v) => v,
+            None => return Ok(PackageStatus::NotInstalled)
         };
 
-        let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-        let path = Path::new(Keys::UninstallPath).join(&installer.product_code);
-        let inst_key = match hklm.open_subkey(&path) {
-            Err(_) => return Ok(PackageStatus::NotInstalled),
-            Ok(v) => v
-        };
+        eprintln!("WAT");
 
         let disp_version: String = match inst_key.get_value(Keys::DisplayVersion) {
             Err(_) => return Err(PackageStatusError::ParsingVersion),
             Ok(v) => v
         };
 
-        let disp_semver = match semver::Version::parse(&disp_version) {
+        let installed_version = match semver::Version::parse(&disp_version) {
             Err(_) => return Err(PackageStatusError::ParsingVersion),
             Ok(v) => v
         };
 
-        let pkg_semver = match semver::Version::parse(&package.version) {
+        let candidate_version = match semver::Version::parse(&package.version) {
             Err(_) => return Err(PackageStatusError::ParsingVersion),
             Ok(v) => v
         };
 
-        unimplemented!()
+        // TODO: handle skipped versions
+        // TODO: assembly version lol
+
+        if candidate_version > installed_version {
+            Ok(PackageStatus::RequiresUpdate)
+        } else {
+            Ok(PackageStatus::UpToDate)
+        }
     }
 
-    fn install(&self, package: &Package, path: &Path) -> Result<(), ()> {
-        unimplemented!()
+    pub fn install(&self, package: &'a Package) -> Result<PackageStatus, InstallError> {
+        let installer = installer(&package).map_err(|_| InstallError::InvalidInstaller)?;
+        
+        let url = url::Url::parse(&installer.url).unwrap();
+        let filename = url.path_segments().unwrap().last().unwrap();
+        let pkg_path = self.download_path(&package).join(filename);
+
+        if !pkg_path.exists() {
+            return Err(InstallError::PackageNotInCache)
+        }
+
+        let mut args: Vec<OsString> = match (&installer.installer_type, &installer.args) {
+            (_, &Some(ref v)) => sys::args(&v).map(|x| x.clone()).collect(),
+            (&Some(ref type_), &None) => {
+                let mut arg_str = OsString::new();
+                match type_.as_ref() {
+                    "inno" => {
+                        arg_str.push(&pkg_path);
+                        arg_str.push(" /VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART");
+                    }
+                    "msi" => {
+                        arg_str.push("msiexec /i \"");
+                        arg_str.push(&pkg_path);
+                        arg_str.push("\" /qn /norestart");
+                    }
+                    "nsis" => {
+                        arg_str.push(&pkg_path);
+                        arg_str.push( "/SD");
+                    }
+                    _ => return Err(InstallError::InvalidType)
+                };
+                sys::args(&arg_str.as_os_str()).collect()
+            }
+            _ => return Err(InstallError::InvalidType)
+        };
+        let prog = args[0].clone();
+        args.remove(0);
+
+        let res = Command::new(&prog)
+            .args(&args)
+            .output();
+        
+        let output = match res {
+            Ok(v) => v,
+            Err(e) => {
+                return Err(InstallError::Process(ProcessError::Io(e)));
+            }
+        };
+
+        if !output.status.success() {
+            return Err(InstallError::Process(ProcessError::Unknown(output)));
+        }
+
+        self.status(package).map_err(|e| panic!(e))
     }
 
-    fn uninstall(&self, package: &Package) -> Result<(), ()> {
-        unimplemented!()
+    pub fn uninstall(&self, package: &'a Package) -> Result<PackageStatus, UninstallError> {
+        let installer = installer(&package).map_err(|_| UninstallError::InvalidInstaller)?;
+        let regkey = match uninstall_regkey(&installer) {
+            Some(v) => v,
+            None => return Err(UninstallError::NotInstalled)
+        };
+
+        let uninst_string: String = match regkey.get_value(Keys::QuietUninstallString)
+                .or_else(|_| regkey.get_value(Keys::QuietUninstallString)) {
+                    Ok(v) => v,
+                    Err(_) => return Err(UninstallError::NoUninstString)
+                };
+
+        let mut raw_args: Vec<OsString> = sys::args(&uninst_string).map(|x| x.clone()).collect();
+        let prog = raw_args[0].clone();
+        raw_args.remove(0);
+
+        let args: Vec<OsString> = match (&installer.installer_type, &installer.uninstall_args) {
+            (_, &Some(ref v)) => sys::args(&v).map(|x| x.clone()).collect(),
+            (&Some(ref type_), &None) => {
+                let arg_str = match type_.as_ref() {
+                    "inno" => "/VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART".to_owned(),
+                    "msi" => format!("/x \"{}\" /qn /norestart", &installer.product_code),
+                    "nsis" => "".to_owned(),
+                    _ => return Err(UninstallError::InvalidType)
+                };
+                sys::args(&arg_str).collect()
+            },
+            _ => return Err(UninstallError::InvalidType)
+        };
+
+        let res = Command::new(&prog)
+            .args(&args)
+            .output();
+        
+        let output = match res {
+            Ok(v) => v,
+            Err(e) => {
+                return Err(UninstallError::Process(ProcessError::Io(e)));
+            }
+        };
+
+        if !output.status.success() {
+            return Err(UninstallError::Process(ProcessError::Unknown(output)));
+        }
+
+        // TODO: handle panic
+        self.status(package).map_err(|e| panic!(e))
     }
 }

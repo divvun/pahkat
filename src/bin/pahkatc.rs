@@ -4,15 +4,20 @@ extern crate pahkat;
 extern crate pahkat_client;
 
 use clap::{App, AppSettings, Arg, SubCommand};
+use std::path::Path;
+use std::env;
+use std::fs;
+
 use pahkat::types::{Package, MacOSInstallTarget};
 use pahkat_client::*;
+
 #[cfg(prefix)]
 use pahkat_client::tarball::*;
 #[cfg(target_os = "macos")]
 use pahkat_client::macos::*;
-use std::path::Path;
-use std::env;
-use std::fs;
+#[cfg(windows)]
+use pahkat_client::windows::*;
+
 
 fn main() {
     let mut app = App::new("Páhkat")
@@ -33,7 +38,7 @@ fn main() {
                     .about("Create config")
                     .arg(Arg::with_name("url")
                         .value_name("URL")
-                        .help("URL to repository to use.")
+                        .help("URL for repository to use.")
                         .short("u")
                         .long("url")
                         .takes_value(true)
@@ -86,6 +91,57 @@ fn main() {
                     .long("user"))
             )
         );
+    }
+
+    if cfg!(windows) {
+        app = app.subcommand(
+            SubCommand::with_name("windows")
+            .about("Windows-specific commands")
+            .subcommand(
+                SubCommand::with_name("init")
+                    .about("Create config")
+                    .arg(Arg::with_name("url")
+                        .value_name("URL")
+                        .help("URL for repository to use.")
+                        .short("u")
+                        .long("url")
+                        .takes_value(true)
+                        .required(true))
+                    .arg(Arg::with_name("cache-dir")
+                        .value_name("CACHE")
+                        .short("c")
+                        .long("cache-dir")
+                        .takes_value(true)
+                        .required(true))
+            )
+            .subcommand(
+                SubCommand::with_name("list")
+                    .about("List packages in repository.")
+            )
+            .subcommand(
+                SubCommand::with_name("install")
+                .about("Install a package.")
+                .arg(Arg::with_name("package-id")
+                    .value_name("PKGID")
+                    .help("The package identifier to install")
+                    .required(true))
+            )
+            .subcommand(
+                SubCommand::with_name("uninstall")
+                .about("Uninstall a package.")
+                .arg(Arg::with_name("package-id")
+                    .value_name("PKGID")
+                    .help("The package identifier to install")
+                    .required(true))
+            )
+            .subcommand(
+                SubCommand::with_name("status")
+                .about("Query status of a package identifier")
+                .arg(Arg::with_name("package-id")
+                    .value_name("PKGID")
+                    .help("The package identifier to query")
+                    .required(true))
+            ));
     }
 
     if cfg!(prefix) {
@@ -170,9 +226,9 @@ fn main() {
         ("macos", Some(matches)) => {
             match matches.subcommand() {
                 ("status", Some(matches)) => {
-                    let package_id = matches.value_of("package-id").unwrap();
+                    let package_id = matches.value_of("package-id").expect("package-id to always exist");
 
-                    let config_path = env::home_dir().unwrap()
+                    let config_path = env::home_dir().expect("home directory to always exist")
                         .join("Library/Application Support/Pahkat/config.json");
                     let config = StoreConfig::load(&config_path).unwrap();
                     let repo = Repository::from_url(&config.url).unwrap();
@@ -283,19 +339,6 @@ fn main() {
                     let cache_dir = matches.value_of("cache-dir").unwrap();
 
                     macos::init(&url, &cache_dir);
-                    // let config = StoreConfig { 
-                    //     url: url.to_owned(),
-                    //     cache_dir: cache_dir.to_owned()
-                    // };
-                    // let config_path = env::home_dir().unwrap()
-                    //     .join("Library/Application Support/Pahkat/config.json");
-                     
-                    // if config_path.exists() {
-                    //     println!("Path already exists; aborting.");
-                    //     return;
-                    // }
-
-                    // config.save(&config_path);
                 },
                 ("list", Some(matches)) => {
                     let config_path = env::home_dir().unwrap()
@@ -315,6 +358,120 @@ fn main() {
                 _ => {}
             }
         },
+        #[cfg(windows)]
+        ("windows", Some(matches)) => {
+            match matches.subcommand() {
+                ("init", Some(matches)) => {
+                    let url = matches.value_of("url").expect("url to always exist");
+                    let cache_dir = matches.value_of("cache-dir").expect("cache-dir to always exist");
+
+                    windows::init(&url, &cache_dir);
+                }
+                ("list", Some(matches)) => {
+                    let config = StoreConfig::load_or_default();
+                    let repo = Repository::from_url(&config.url).unwrap();
+                    let mut packages: Vec<&Package> = repo.packages().values().collect();
+                    packages.sort_unstable_by(|a, b| a.id.cmp(&b.id));
+                    for pkg in packages {
+                        println!("{} {} ({}) — {}", pkg.id,
+                            pkg.version,
+                            pkg.name.get("en").unwrap_or(&"???".to_owned()),
+                            pkg.description.get("en").unwrap_or(&"???".to_owned())
+                        );
+                    }
+                },
+                ("install", Some(matches)) => {
+                    let package_id = matches.value_of("package-id").expect("package-id to always exist");
+                    let config = StoreConfig::load_or_default();
+                    let repo = Repository::from_url(&config.url).expect("repository to load");
+                    let package = match repo.packages().get(package_id) {
+                        Some(v) => v,
+                        None => {
+                            println!("{}: No package found", &package_id);
+                            return;
+                        }
+                    };
+
+                    let store = WindowsPackageStore::new(&repo, &config);
+                    // TODO: the config is responsible for creating this.
+                    let package_cache = store.download_path(&package);
+                    println!("{:?}", &package_cache);
+                    if !package_cache.exists() {
+                        fs::create_dir_all(&package_cache).expect("create package cache never fails");
+                    }
+
+                    let status = store.status(&package);
+                    match status {
+                        Ok(PackageStatus::NotInstalled) | Ok(PackageStatus::RequiresUpdate) => {
+                            let pkg_path = package.download(&package_cache, Some(|cur, max| {
+                                println!("{}/{} bytes", cur, max);
+                            })).expect("download never has a severe error");
+                            let res = store.install(package).expect("install never fails");
+
+                            // match res {
+                            //     Ok(v) => println!("{}: {:?}", &package_id, v),
+                            //     Err(e) => println!("{}: error - {:?}", &package_id, e)
+                            // };
+                        },
+                        _ => {
+                            println!("Nothing to do for identifier {}", package_id);
+                            return;
+                        }
+                    }
+                },
+                ("uninstall", Some(matches)) => {
+                    let package_id = matches.value_of("package-id").expect("package-id to always exist");
+                    let config = StoreConfig::load_or_default();
+                    let repo = Repository::from_url(&config.url).expect("repository to load");
+                    let package = match repo.packages().get(package_id) {
+                        Some(v) => v,
+                        None => {
+                            println!("{}: No package found", &package_id);
+                            return;
+                        }
+                    };
+
+                    let store = WindowsPackageStore::new(&repo, &config);
+                    let status = store.status(&package);
+                    match status {
+                        Ok(PackageStatus::UpToDate) | Ok(PackageStatus::RequiresUpdate) => {
+                            let res = store.uninstall(package).expect("uninstallation can never fail");
+
+                            // match res {
+                            //     Ok(v) => println!("{}: {:?}", &package_id, v),
+                            //     Err(e) => println!("{}: error - {:?}", &package_id, e)
+                            // };
+                        },
+                        _ => {
+                            println!("Nothing to do for identifier {}", package_id);
+                            return;
+                        }
+                    }
+
+                },
+                ("status", Some(matches)) => {
+                    let package_id = matches.value_of("package-id").unwrap();
+                    let config = StoreConfig::load_or_default();
+                    let repo = Repository::from_url(&config.url).unwrap();
+
+                    let package = match repo.packages().get(package_id) {
+                        Some(v) => v,
+                        None => {
+                            println!("{}: No package found", &package_id);
+                            return;
+                        }
+                    };
+                    let store = WindowsPackageStore::new(&repo, &config);
+                    let status = store.status(&package);
+
+                    match status {
+                        Ok(v) => println!("{}: {}", &package_id, v),
+                        Err(e) => println!("{}: {}", &package_id, e)
+                    };
+                },
+                _ => {}
+            }
+        }
         #[cfg(prefix)]
         ("prefix", Some(matches)) => {
             match matches.subcommand() {

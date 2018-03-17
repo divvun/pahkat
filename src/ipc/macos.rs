@@ -1,96 +1,10 @@
-
-extern crate jsonrpc_tcp_server;
-
-use std::thread;
-use std::sync::{atomic, Arc, RwLock};
-use std::collections::{BTreeMap, HashMap};
-
-use jsonrpc_core::{Metadata, Error, ErrorCode, Result};
-use jsonrpc_core::futures::{Future, Stream, future};
-use jsonrpc_core::futures::sync::mpsc;
-use jsonrpc_pubsub::{Session, PubSubMetadata, PubSubHandler, SubscriptionId};
-
-use jsonrpc_macros::pubsub;
-use pahkat::types::*;
-use ::macos::*;
 use ::{Repository, StoreConfig, PackageStatus, Download};
-use std::fs::create_dir_all;
-use std::io::{BufRead};
-use std;
-
-#[derive(Clone, Default)]
-struct Meta {
-	session: Option<Arc<Session>>,
-}
-
-impl Metadata for Meta {}
-impl PubSubMetadata for Meta {
-	fn session(&self) -> Option<Arc<Session>> {
-		self.session.clone()
-	}
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct RepoConfig {
-	pub url: String,
-	pub channel: String
-}
+use ::macos::*;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PackageStatusResponse {
 	pub status: PackageStatus,
     pub target: MacOSInstallTarget
-}
-
-build_rpc_trait! {
-	pub trait Rpc {
-		type Metadata;
-
-		#[rpc(name = "repository")]
-		fn repository(&self, String, String) -> Result<Repository>;
-
-		#[rpc(name = "repository_statuses")]
-		fn repository_statuses(&self, String) -> Result<BTreeMap<String, PackageStatusResponse>>;
-
-		#[rpc(name = "status")]
-		fn status(&self, String, String, u8) -> Result<PackageStatus>;
-
-		#[rpc(name = "install")]
-		fn install(&self, String, String, u8) -> Result<PackageStatus>;
-
-		#[rpc(name = "uninstall")]
-		fn uninstall(&self, String, String, u8) -> Result<PackageStatus>;
-
-		#[pubsub(name = "download")] {
-			#[rpc(name = "download_subscribe")]
-			fn download_subscribe(&self, Self::Metadata, pubsub::Subscriber<[usize; 2]>, String, String, u8);
-
-			#[rpc(name = "download_unsubscribe")]
-			fn download_unsubscribe(&self, SubscriptionId) -> Result<bool>;
-		}
-	}
-}
-
-#[derive(Default)]
-struct RpcImpl {
-	uid: atomic::AtomicUsize,
-	active: Arc<RwLock<HashMap<SubscriptionId, pubsub::Sink<String>>>>,
-	repo_configs: Arc<RwLock<Vec<RepoConfig>>>,
-	repo: Arc<RwLock<HashMap<String, Repository>>>
-}
-
-fn repo_check(rpc_impl: &RpcImpl, repo_id: String) -> Result<Repository> {
-	let rw_guard = rpc_impl.repo.read().unwrap();
-	match rw_guard.get(&repo_id) {
-		Some(v) => Ok(v.clone()),
-		None => {
-			Err(Error {
-				code: ErrorCode::InvalidParams,
-				message: "No repository set; use `repository` method first.".to_owned(),
-				data: None
-			})
-		}
-	}
 }
 
 fn parse_target(number: u8) -> MacOSInstallTarget {
@@ -101,17 +15,12 @@ fn parse_target(number: u8) -> MacOSInstallTarget {
 	}
 }
 
-fn parse_package(repo: &Repository, package_id: &str) -> Result<Package> {
-	match repo.packages().get(package_id) {
-		Some(v) => Ok(v.clone()),
-		None => {
-			Err(Error {
-				code: ErrorCode::InvalidParams,
-				message: "No package found with identifier.".to_owned(),
-				data: None
-			})
-		}
-	}
+#[derive(Default)]
+pub struct RpcImpl {
+	uid: atomic::AtomicUsize,
+	active: Arc<RwLock<HashMap<SubscriptionId, pubsub::Sink<String>>>>,
+	repo_configs: Arc<RwLock<Vec<RepoConfig>>>,
+	repo: Arc<RwLock<HashMap<String, Repository>>>
 }
 
 impl Rpc for RpcImpl {
@@ -300,40 +209,4 @@ impl Rpc for RpcImpl {
 		// TODO: handle cancel request
 		return Ok(true)
 	}
-}
-
-pub fn start() {
-	let mut io = PubSubHandler::default();
-	let rpc = RpcImpl::default();
-
-	io.extend_with(rpc.to_delegate());
-	
-	let (sender, receiver) = mpsc::channel::<String>(0);
-	thread::spawn(move || {
-		receiver.for_each(|item| {
-			println!("{}", item);
-			future::ok(())
-		}).wait();
-	});
-	
-	let stdin = std::io::stdin();
-	let mut stdin = stdin.lock();
-
-	loop {
-		let mut buf = vec![];
-		match stdin.read_until('\n' as u8, &mut buf) {
-			Err(_) | Ok(0) => break,
-			Ok(_) => {}
-		};
-		
-		let req = String::from_utf8_lossy(&buf);
-		let meta = Meta {
-			session: Some(Arc::new(Session::new(sender.clone())))
-		};
-		
-		match io.handle_request_sync(&req, meta) {
-			Some(v) => println!("{}", v),
-			None => {}
-		};
-    }
 }
