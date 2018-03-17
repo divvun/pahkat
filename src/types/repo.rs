@@ -10,9 +10,11 @@ pub struct Repository {
     pub agent: Option<RepositoryAgent>,
     pub base: String,
     pub name: BTreeMap<String, String>,
+    #[serde(default = "BTreeMap::new")]
     pub description: BTreeMap<String, String>,
     pub primary_filter: String,
     pub channels: Vec<String>,
+    #[serde(default = "BTreeMap::new")]
     pub categories: BTreeMap<String, BTreeMap<String, String>>
 }
 
