@@ -10,7 +10,7 @@ use jsonrpc_pubsub::{Session, PubSubMetadata, PubSubHandler, SubscriptionId};
 use jsonrpc_macros::pubsub;
 
 use pahkat::types::*;
-use ::{PackageStatus, Repository, StoreConfig};
+use ::{PackageStatus, Repository};
 
 #[cfg(windows)]
 mod windows;
@@ -109,7 +109,7 @@ pub fn start() {
 		receiver.for_each(|item| {
 			println!("{}", item);
 			future::ok(())
-		}).wait();
+		}).wait().expect("Wait maybe, crash never.");
 	});
 	
 	let stdin = std::io::stdin();

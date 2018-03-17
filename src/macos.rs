@@ -169,24 +169,24 @@ impl<'a> MacOSPackageStore<'a> {
     }
 }
 
-fn get_installed_packages(target: MacOSInstallTarget) -> Result<Vec<String>, io::Error> {
-    use std::io::Cursor;
-    use std::env;
+// fn get_installed_packages(target: MacOSInstallTarget) -> Result<Vec<String>, io::Error> {
+//     use std::io::Cursor;
+//     use std::env;
 
-    let home_dir = env::home_dir().expect("Always find home directory");
+//     let home_dir = env::home_dir().expect("Always find home directory");
     
-    let mut args = vec!["--pkgs-plist"];
-    if let MacOSInstallTarget::User = target {
-        args.push("--volume");
-        args.push(&home_dir.to_str().unwrap());
-    }
+//     let mut args = vec!["--pkgs-plist"];
+//     if let MacOSInstallTarget::User = target {
+//         args.push("--volume");
+//         args.push(&home_dir.to_str().unwrap());
+//     }
 
-    let output = Command::new("pkgutil").args(&args).output()?;
-    let plist_data = String::from_utf8(output.stdout).expect("plist should always be valid UTF-8");
-    let cursor = Cursor::new(plist_data);
-    let plist: Vec<String> = deserialize_plist(cursor).expect("plist should always be valid");
-    return Ok(plist);
-}
+//     let output = Command::new("pkgutil").args(&args).output()?;
+//     let plist_data = String::from_utf8(output.stdout).expect("plist should always be valid UTF-8");
+//     let cursor = Cursor::new(plist_data);
+//     let plist: Vec<String> = deserialize_plist(cursor).expect("plist should always be valid");
+//     return Ok(plist);
+// }
 
 #[derive(Debug, Deserialize)]
 struct MacOSPackageExportPath {

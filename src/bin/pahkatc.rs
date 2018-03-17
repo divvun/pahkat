@@ -4,6 +4,7 @@ extern crate pahkat;
 extern crate pahkat_client;
 
 use clap::{App, AppSettings, Arg, SubCommand};
+#[cfg(prefix)]
 use std::path::Path;
 use std::env;
 use std::fs;
@@ -274,7 +275,7 @@ fn main() {
                     let status = store.status(&package, target);
                     match status {
                         Ok(PackageStatus::UpToDate) | Ok(PackageStatus::RequiresUpdate) => {
-                            let res = store.uninstall(package, target).unwrap();
+                            let _res = store.uninstall(package, target).unwrap();
 
                             // match res {
                             //     Ok(v) => println!("{}: {:?}", &package_id, v),
@@ -319,9 +320,9 @@ fn main() {
                     let status = store.status(&package, target);
                     match status {
                         Ok(PackageStatus::NotInstalled) | Ok(PackageStatus::RequiresUpdate) => {
-                            let pkg_path = package.download(&package_cache,
+                            let _pkg_path = package.download(&package_cache,
                                 Some(|cur, max| println!("{}/{}", cur, max))).unwrap();
-                            let res = store.install(package, target).unwrap();
+                            let _res = store.install(package, target).unwrap();
 
                             // match res {
                             //     Ok(v) => println!("{}: {:?}", &package_id, v),
@@ -340,7 +341,7 @@ fn main() {
 
                     macos::init(&url, &cache_dir);
                 },
-                ("list", Some(matches)) => {
+                ("list", Some(_matches)) => {
                     let config_path = env::home_dir().unwrap()
                         .join("Library/Application Support/Pahkat/config.json");
                     let config = StoreConfig::load(&config_path).unwrap();

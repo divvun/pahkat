@@ -1,3 +1,8 @@
+use std::sync::{atomic, Arc, RwLock};
+use std::collections::HashMap;
+use std::fs::create_dir_all;
+
+use super::*;
 use ::{Repository, StoreConfig, PackageStatus, Download};
 use ::macos::*;
 
@@ -17,10 +22,10 @@ fn parse_target(number: u8) -> MacOSInstallTarget {
 
 #[derive(Default)]
 pub struct RpcImpl {
-	uid: atomic::AtomicUsize,
-	active: Arc<RwLock<HashMap<SubscriptionId, pubsub::Sink<String>>>>,
-	repo_configs: Arc<RwLock<Vec<RepoConfig>>>,
-	repo: Arc<RwLock<HashMap<String, Repository>>>
+	pub uid: atomic::AtomicUsize,
+	pub active: Arc<RwLock<HashMap<SubscriptionId, pubsub::Sink<String>>>>,
+	pub repo_configs: Arc<RwLock<Vec<RepoConfig>>>,
+	pub repo: Arc<RwLock<HashMap<String, Repository>>>
 }
 
 impl Rpc for RpcImpl {
@@ -199,7 +204,7 @@ impl Rpc for RpcImpl {
 						message: format!("{:?}", &e),
 						data: None
 					};
-					sink.notify(Err(error)).wait();
+					sink.notify(Err(error)).wait().expect("Wait maybe, crash never.");
 				}
 			};
 		});

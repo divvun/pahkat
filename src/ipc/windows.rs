@@ -1,11 +1,5 @@
 use std::sync::{atomic, Arc, RwLock};
 use std::collections::HashMap;
-// use std::default::Default;
-// use jsonrpc_core::{Metadata, Error, ErrorCode, Result};
-// use jsonrpc_core::futures::{Future, Stream, future};
-// use jsonrpc_core::futures::sync::mpsc;
-// use jsonrpc_pubsub::{Session, PubSubMetadata, PubSubHandler, SubscriptionId};
-// use jsonrpc_macros::pubsub;
 use std::fs::create_dir_all;
 
 use super::*;
