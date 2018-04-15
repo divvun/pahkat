@@ -49,6 +49,7 @@ pub enum MacOSInstallError {
     WrongInstallerType,
     InvalidFileType,
     PackageNotInCache,
+    InvalidUrl(String),
     InstallerFailure(ProcessError)
 }
 
@@ -85,7 +86,8 @@ impl<'a> MacOSPackageStore<'a> {
             _ => return Err(MacOSInstallError::WrongInstallerType)
         };
 
-        let url = url::Url::parse(&installer.url).unwrap();
+        let url = url::Url::parse(&installer.url)
+            .map_err(|_| MacOSInstallError::InvalidUrl(installer.url.to_owned()))?;
         let filename = url.path_segments().unwrap().last().unwrap();
         let pkg_path = self.download_path(&package).join(filename);
 

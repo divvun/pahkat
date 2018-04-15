@@ -32,10 +32,15 @@ impl Rpc for RpcImpl {
 	type Metadata = Meta;
 
 	fn repository(&self, url: String, _channel: String) -> Result<Repository> {
-		let repo = Repository::from_url(&url).unwrap();
-		let mut repo_map = self.repo.write().unwrap();
+		let repo = Repository::from_url(&url).map_err(|e| {
+			Error {
+				code: ErrorCode::InvalidParams,
+				message: format!("{}", e),
+				data: None
+			}
+		})?;
+		let mut repo_map = self.repo.write().expect("Repository map must always be writable");
 		repo_map.insert(url, repo.clone());
-		// println!("{:?}", repo);
 		Ok(repo)
 	}
 
@@ -157,7 +162,7 @@ impl Rpc for RpcImpl {
 		let repo = match repo_check(&self, repo_id) {
 			Ok(v) => v,
 			Err(e) => {
-				subscriber.reject(e).unwrap();
+				subscriber.reject(e).expect("download_subscribe rejection always succeeds");
 				return;
 			}
 		};
@@ -165,7 +170,7 @@ impl Rpc for RpcImpl {
 		let package = match parse_package(&repo, &package_id) {
 			Ok(v) => v,
 			Err(e) => {
-				subscriber.reject(e).unwrap();
+				subscriber.reject(e).expect("parse_package rejection always succeeds");
 				return;
 			}
 		};
@@ -174,7 +179,7 @@ impl Rpc for RpcImpl {
 
 		let id = self.uid.fetch_add(1, atomic::Ordering::SeqCst);
 		let sub_id = SubscriptionId::Number(id as u64);
-		let sink = subscriber.assign_id(sub_id.clone()).unwrap();
+		let sink = subscriber.assign_id(sub_id.clone()).expect("assign_id always succeeds");
 
 		thread::spawn(move || {
 			let sink = sink.clone();
@@ -184,7 +189,7 @@ impl Rpc for RpcImpl {
 			let package_cache = store.download_path(&package);
 			// println!("{:?}", &package_cache);
 			if !package_cache.exists() {
-				create_dir_all(&package_cache).unwrap();
+				create_dir_all(&package_cache).expect("creating package cache always succeeds");
 			}
 
 			let pkg_path = package.download(&package_cache, 

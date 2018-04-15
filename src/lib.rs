@@ -283,6 +283,7 @@ impl<W: Write, F> Write for ProgressWriter<W, F>
 pub enum DownloadError {
     EmptyFile,
     NoUrl,
+    ReqwestError(reqwest::Error),
     HttpStatusFailure(u16)
 }
 
@@ -298,7 +299,10 @@ impl Download for Package {
         let url_str = installer.url();
 
         let url = url::Url::parse(&url_str).unwrap();
-        let mut res = reqwest::get(&url_str).unwrap();
+        let mut res = match reqwest::get(&url_str) {
+            Ok(v) => v,
+            Err(e) => return Err(DownloadError::ReqwestError(e))
+        };
 
         if !res.status().is_success() {
             return Err(DownloadError::HttpStatusFailure(res.status().as_u16()))
@@ -334,6 +338,15 @@ impl Download for Package {
 pub enum RepoDownloadError {
     ReqwestError(reqwest::Error),
     JsonError(serde_json::Error)
+}
+
+impl fmt::Display for RepoDownloadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match *self {
+            RepoDownloadError::ReqwestError(ref e) => e.fmt(f),
+            RepoDownloadError::JsonError(ref e) => e.fmt(f)
+        }
+    }
 }
 
 pub fn download_repository(url: &str) -> Result<Repository, RepoDownloadError> {

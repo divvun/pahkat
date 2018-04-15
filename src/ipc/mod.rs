@@ -70,7 +70,7 @@ build_rpc_trait! {
 }
 
 fn repo_check(rpc_impl: &RpcImpl, repo_id: String) -> Result<Repository> {
-	let rw_guard = rpc_impl.repo.read().unwrap();
+	let rw_guard = rpc_impl.repo.read().expect("repo_check rw_guard always succeeds");
 	match rw_guard.get(&repo_id) {
 		Some(v) => Ok(v.clone()),
 		None => {
