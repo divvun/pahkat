@@ -11,6 +11,8 @@ use jsonrpc_macros::pubsub;
 
 use pahkat::types::*;
 use ::{PackageStatus, Repository};
+use std::fs::File;
+use std::io::Write;
 
 #[cfg(windows)]
 mod windows;
@@ -22,7 +24,7 @@ use ipc::macos::*;
 #[cfg(windows)]
 use ipc::windows::*;
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Meta {
 	session: Option<Arc<Session>>,
 }
@@ -98,7 +100,8 @@ fn parse_package(repo: &Repository, package_id: &str) -> Result<Package> {
 
 pub fn start() {
 	use std;
-
+	use std::io::Write;
+	
 	let mut io = PubSubHandler::default();
 	let rpc = RpcImpl::default();
 
@@ -107,7 +110,6 @@ pub fn start() {
 	let (sender, receiver) = mpsc::channel::<String>(0);
 	thread::spawn(move || {
 		receiver.for_each(|item| {
-			println!("{}", item);
 			future::ok(())
 		}).wait().expect("Wait maybe, crash never.");
 	});
@@ -115,20 +117,26 @@ pub fn start() {
 	let stdin = std::io::stdin();
 	let mut stdin = stdin.lock();
 
-	loop {
-		let mut buf = vec![];
-		match stdin.read_until('\n' as u8, &mut buf) {
-			Err(_) | Ok(0) => break,
-			Ok(_) => {}
+	let mut hell = File::create("C:\\Users\\brendan\\Documents\\pahkatc.txt").unwrap();
+
+	for line in stdin.lines() {
+		let req = match line {
+			Err(e) => {
+				eprintln!("{:?}", e);
+				break;
+			},
+			Ok(v) => v
 		};
 		
-		let req = String::from_utf8_lossy(&buf);
 		let meta = Meta {
 			session: Some(Arc::new(Session::new(sender.clone())))
 		};
 		
 		match io.handle_request_sync(&req, meta) {
-			Some(v) => println!("{}", v),
+			Some(v) => {
+				write!(std::io::stdout(), "{}{}", &v, LINESEP).unwrap();
+				std::io::stdout().flush();
+			}
 			None => {}
 		};
     }

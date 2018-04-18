@@ -6,6 +6,8 @@ use super::*;
 use ::{Repository, StoreConfig, PackageStatus, Download};
 use ::macos::*;
 
+pub const LINESEP: &'static str = "\n";
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PackageStatusResponse {
 	pub status: PackageStatus,
