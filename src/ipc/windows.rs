@@ -26,7 +26,13 @@ impl Rpc for RpcImpl {
 	type Metadata = Meta;
 
 	fn repository(&self, url: String, _channel: String) -> Result<Repository> {
-		let repo = Repository::from_url(&url).unwrap();
+		let repo = Repository::from_url(&url).map_err(|e| {
+			Error {
+				code: ErrorCode::InvalidParams,
+				message: format!("{}", e),
+				data: None
+			}
+		})?;
 		let mut repo_map = self.repo.write().unwrap();
 		repo_map.insert(repo.meta.base.to_owned(), repo.clone());
 		// println!("{:?}", repo);
