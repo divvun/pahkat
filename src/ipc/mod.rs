@@ -117,8 +117,6 @@ pub fn start() {
 	let stdin = std::io::stdin();
 	let mut stdin = stdin.lock();
 
-	let mut hell = File::create("C:\\Users\\brendan\\Documents\\pahkatc.txt").unwrap();
-
 	for line in stdin.lines() {
 		let req = match line {
 			Err(e) => {
