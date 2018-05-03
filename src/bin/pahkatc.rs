@@ -2,6 +2,7 @@
 extern crate clap;
 extern crate pahkat;
 extern crate pahkat_client;
+extern crate sentry;
 
 use clap::{App, AppSettings, Arg, SubCommand};
 #[cfg(prefix)]
@@ -11,6 +12,7 @@ use std::fs;
 
 use pahkat::types::{Package, MacOSInstallTarget};
 use pahkat_client::*;
+use sentry::integrations::panic::register_panic_handler;
 
 #[cfg(prefix)]
 use pahkat_client::tarball::*;
@@ -19,8 +21,12 @@ use pahkat_client::macos::*;
 #[cfg(windows)]
 use pahkat_client::windows::*;
 
+const DSN: &'static str = "https://0a0fc86e9d2447e8b0b807087575e8c6:3d610a0fea7b49d6803061efa16c2ddc@sentry.io/301711";
 
 fn main() {
+    sentry::init(DSN);
+    register_panic_handler();
+
     let mut app = App::new("Páhkat")
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .version(crate_version!())

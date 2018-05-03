@@ -115,7 +115,7 @@ pub fn start() {
 	});
 	
 	let stdin = std::io::stdin();
-	let mut stdin = stdin.lock();
+	let stdin = stdin.lock();
 
 	for line in stdin.lines() {
 		let req = match line {

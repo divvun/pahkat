@@ -43,7 +43,6 @@ extern crate crypto;
 extern crate sentry;
 
 use std::env;
-use sentry::sentry::Sentry;
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
 use pahkat::types::*;
@@ -62,12 +61,6 @@ pub mod macos;
 #[cfg(feature = "ipc")]
 pub mod ipc;
 pub mod tarball;
-
-const DSN: &'static str = "https://0a0fc86e9d2447e8b0b807087575e8c6:3d610a0fea7b49d6803061efa16c2ddc@sentry.io/301711";
-
-lazy_static! {
-    static ref SENTRY: Sentry = Sentry::new(&DSN).unwrap();
-}
 
 // pub mod exports;
 

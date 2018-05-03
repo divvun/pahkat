@@ -23,7 +23,7 @@ url = "*"
 libc = "*"
 rust-crypto = "^0.2"
 lazy_static = "1.0"
-sentry = { path = "../sentry-rust", branch = "master" }
+sentry = "0.3"
 maplit = "1.0"
 
 # Prefix feature
