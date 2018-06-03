@@ -33,15 +33,13 @@ install:
 build: false
 
 # Equivalent to Travis' `script` phase
-# TODO modify this phase as you see fit
 test_script:
-  - cargo build --verbose
-  - cargo run
+  - cargo build --verbose --bin pahkatc --features ipc,binaries
   - cargo test
 
 before_deploy:
   # Generate artifacts for release
-  - cargo build --release --features ipc,binaries
+  - cargo build --release --bin pahkatc --features ipc,binaries
   - mkdir staging
   # TODO update this part to copy the artifacts that make sense for your project
   - copy target\release\pahkatc.exe staging
