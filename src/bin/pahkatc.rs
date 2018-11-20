@@ -6,9 +6,7 @@ extern crate sentry;
 
 use clap::{App, AppSettings, Arg, SubCommand};
 #[cfg(prefix)]
-use std::path::Path;
-use std::env;
-use std::fs;
+use std::path::{Path, PathBuf};
 
 use pahkat::types::{Package, MacOSInstallTarget};
 use pahkat_client::*;
@@ -24,7 +22,7 @@ use pahkat_client::windows::*;
 const DSN: &'static str = "https://0a0fc86e9d2447e8b0b807087575e8c6:3d610a0fea7b49d6803061efa16c2ddc@sentry.io/301711";
 
 fn main() {
-    sentry::init(DSN);
+    std::mem::forget(sentry::init(DSN));
     register_panic_handler();
 
     let mut app = App::new("Páhkat")
@@ -49,13 +47,13 @@ fn main() {
                         .short("u")
                         .long("url")
                         .takes_value(true)
+                        .multiple(true)
                         .required(true))
                     .arg(Arg::with_name("cache-dir")
                         .value_name("CACHE")
                         .short("c")
                         .long("cache-dir")
-                        .takes_value(true)
-                        .required(true))
+                        .takes_value(true))
             )
             .subcommand(
                 SubCommand::with_name("list")
@@ -112,6 +110,7 @@ fn main() {
                         .help("URL for repository to use.")
                         .short("u")
                         .long("url")
+                        .multiple(true)
                         .takes_value(true)
                         .required(true))
                     .arg(Arg::with_name("cache-dir")
@@ -234,21 +233,28 @@ fn main() {
             match matches.subcommand() {
                 ("status", Some(matches)) => {
                     let package_id = matches.value_of("package-id").expect("package-id to always exist");
+                    let is_user = matches.is_present("user-target");
+                    
+                    let config = StoreConfig::load_or_default();
+                    let repos = config.repo_urls()
+                        .iter()
+                        .map(|url| Repository::from_url(url).unwrap())
+                        .collect::<Vec<_>>();
 
-                    let config_path = env::home_dir().expect("home directory to always exist")
-                        .join("Library/Application Support/Pahkat/config.json");
-                    let config = StoreConfig::load(&config_path).unwrap();
-                    let repo = Repository::from_url(&config.url).unwrap();
-
-                    let package = match repo.packages().get(package_id) {
+                    let store = MacOSPackageStore::new(repos, config);
+                    let package = match store.find_package(package_id) {
                         Some(v) => v,
                         None => {
                             println!("{}: No package found", &package_id);
                             return;
                         }
                     };
-                    let store = MacOSPackageStore::new(&repo, &config);
-                    let status = store.status(&package, MacOSInstallTarget::User);
+                    let target = match is_user {
+                        true => MacOSInstallTarget::User,
+                        false => MacOSInstallTarget::System
+                    };
+                    
+                    let status = store.status(&package, target);
 
                     match status {
                         Ok(v) => println!("{}: {}", &package_id, v),
@@ -256,15 +262,17 @@ fn main() {
                     };
                 },
                 ("uninstall", Some(matches)) => {
-                    let package_id = matches.value_of("package-id").unwrap();
+                    let package_id = matches.value_of("package-id").expect("package-id to always exist");
                     let is_user = matches.is_present("user-target");
+                    
+                    let config = StoreConfig::load_or_default();
+                    let repos = config.repo_urls()
+                        .iter()
+                        .map(|url| Repository::from_url(url).unwrap())
+                        .collect::<Vec<_>>();
 
-                    let config_path = env::home_dir().unwrap()
-                        .join("Library/Application Support/Pahkat/config.json");
-                    let config = StoreConfig::load(&config_path).unwrap();
-                    let repo = Repository::from_url(&config.url).unwrap();
-
-                    let package = match repo.packages().get(package_id) {
+                    let store = MacOSPackageStore::new(repos, config);
+                    let package = match store.find_package(package_id) {
                         Some(v) => v,
                         None => {
                             println!("{}: No package found", &package_id);
@@ -272,7 +280,6 @@ fn main() {
                         }
                     };
 
-                    let store = MacOSPackageStore::new(&repo, &config);
                     let target = match is_user {
                         true => MacOSInstallTarget::User,
                         false => MacOSInstallTarget::System
@@ -295,39 +302,32 @@ fn main() {
                     }
                 }
                 ("install", Some(matches)) => {
-                    let package_id = matches.value_of("package-id").unwrap();
+                    let package_id = matches.value_of("package-id").expect("package-id to always exist");
                     let is_user = matches.is_present("user-target");
+                    
+                    let config = StoreConfig::load_or_default();
+                    let repos = config.repo_urls()
+                        .iter()
+                        .map(|url| Repository::from_url(url).unwrap())
+                        .collect::<Vec<_>>();
 
-                    let config_path = env::home_dir().unwrap()
-                        .join("Library/Application Support/Pahkat/config.json");
-                    let config = StoreConfig::load(&config_path).unwrap();
-                    let repo = Repository::from_url(&config.url).unwrap();
-
-                    let package = match repo.packages().get(package_id) {
+                    let store = MacOSPackageStore::new(repos, config);
+                    let package = match store.find_package(package_id) {
                         Some(v) => v,
                         None => {
                             println!("{}: No package found", &package_id);
                             return;
                         }
                     };
-
-                    let store = MacOSPackageStore::new(&repo, &config);
                     let target = match is_user {
                         true => MacOSInstallTarget::User,
                         false => MacOSInstallTarget::System
                     };
-                    
-                    // TODO: the config is responsible for creating this.
-                    let package_cache = store.download_path(&package);
-                    if !package_cache.exists() {
-                        fs::create_dir_all(&package_cache).unwrap();
-                    }
 
                     let status = store.status(&package, target);
                     match status {
                         Ok(PackageStatus::NotInstalled) | Ok(PackageStatus::RequiresUpdate) => {
-                            let _pkg_path = package.download(&package_cache,
-                                Some(|cur, max| println!("{}/{}", cur, max))).unwrap();
+                            let _pkg_path = store.download(&package, Some(|cur, max| println!("{}/{}", cur, max))).unwrap();
                             let _res = store.install(package, target).unwrap();
 
                             // match res {
@@ -342,24 +342,36 @@ fn main() {
                     }
                 },
                 ("init", Some(matches)) => {
-                    let url = matches.value_of("url").unwrap();
-                    let cache_dir = matches.value_of("cache-dir").unwrap();
+                    let urls = matches.values_of("url").unwrap();
+                    let store = StoreConfig::load_or_default();
+                    
+                    match matches.value_of("cache-dir") {
+                        Some(v) => store.set_cache_path(std::path::PathBuf::from(v)),
+                        None => {}
+                    };
 
-                    macos::init(&url, &cache_dir);
+                    for url in urls {
+                        store.add_repo_url(url.to_string());
+                    }
                 },
                 ("list", Some(_matches)) => {
-                    let config_path = env::home_dir().unwrap()
-                        .join("Library/Application Support/Pahkat/config.json");
-                    let config = StoreConfig::load(&config_path).unwrap();
-                    let repo = Repository::from_url(&config.url).unwrap();
-                    let mut packages: Vec<&Package> = repo.packages().values().collect();
-                    packages.sort_unstable_by(|a, b| a.id.cmp(&b.id));
-                    for pkg in packages {
-                        println!("{} {} ({}) — {}", pkg.id,
-                            pkg.version,
-                            pkg.name.get("en").unwrap_or(&"???".to_owned()),
-                            pkg.description.get("en").unwrap_or(&"???".to_owned())
-                        );
+                    let config = StoreConfig::load_or_default();
+                    let repos = config.repo_urls()
+                        .iter()
+                        .map(|url| Repository::from_url(url).unwrap())
+                        .collect::<Vec<_>>();
+                        
+                    for (n, repo) in repos.iter().enumerate() {
+                        println!("== Repository {}: {} ==", n, repo.meta().name.get("en").unwrap_or(&String::from("")));
+                        let mut packages: Vec<&Package> = repo.packages().values().collect();
+                        packages.sort_unstable_by(|a, b| a.id.cmp(&b.id));
+                        for pkg in packages {
+                            println!("{} {} ({}) — {}", pkg.id,
+                                pkg.version,
+                                pkg.name.get("en").unwrap_or(&"???".to_owned()),
+                                pkg.description.get("en").unwrap_or(&"???".to_owned())
+                            );
+                        }
                     }
                 },
                 _ => {}
