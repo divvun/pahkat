@@ -236,9 +236,9 @@ fn main() {
                     let is_user = matches.is_present("user-target");
                     
                     let config = StoreConfig::load_or_default();
-                    let repos = config.repo_urls()
+                    let repos = config.repos()
                         .iter()
-                        .map(|url| Repository::from_url(url).unwrap())
+                        .map(|record| Repository::from_url(&record.url).unwrap())
                         .collect::<Vec<_>>();
 
                     let store = MacOSPackageStore::new(repos, config);
@@ -266,9 +266,9 @@ fn main() {
                     let is_user = matches.is_present("user-target");
                     
                     let config = StoreConfig::load_or_default();
-                    let repos = config.repo_urls()
+                    let repos = config.repos()
                         .iter()
-                        .map(|url| Repository::from_url(url).unwrap())
+                        .map(|record| Repository::from_url(&record.url).unwrap())
                         .collect::<Vec<_>>();
 
                     let store = MacOSPackageStore::new(repos, config);
@@ -306,9 +306,9 @@ fn main() {
                     let is_user = matches.is_present("user-target");
                     
                     let config = StoreConfig::load_or_default();
-                    let repos = config.repo_urls()
+                    let repos = config.repos()
                         .iter()
-                        .map(|url| Repository::from_url(url).unwrap())
+                        .map(|record| Repository::from_url(&record.url).unwrap())
                         .collect::<Vec<_>>();
 
                     let store = MacOSPackageStore::new(repos, config);
@@ -346,19 +346,19 @@ fn main() {
                     let store = StoreConfig::load_or_default();
                     
                     match matches.value_of("cache-dir") {
-                        Some(v) => store.set_cache_path(std::path::PathBuf::from(v)),
+                        Some(v) => { store.set_cache_path(std::path::PathBuf::from(v)).expect("set cache path"); },
                         None => {}
                     };
 
                     for url in urls {
-                        store.add_repo_url(url.to_string());
+                        store.add_repo(RepoRecord { url: url.to_string(), channel: "stable".into() }).expect("add repo");
                     }
                 },
                 ("list", Some(_matches)) => {
                     let config = StoreConfig::load_or_default();
-                    let repos = config.repo_urls()
+                    let repos = config.repos()
                         .iter()
-                        .map(|url| Repository::from_url(url).unwrap())
+                        .map(|record| Repository::from_url(&record.url).unwrap())
                         .collect::<Vec<_>>();
                         
                     for (n, repo) in repos.iter().enumerate() {

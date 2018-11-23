@@ -14,8 +14,8 @@ pub struct PackageStatusResponse {
     pub target: MacOSInstallTarget
 }
 
-fn parse_target(number: u8) -> MacOSInstallTarget {
-	if number == 0 {
+fn parse_target(target: String) -> MacOSInstallTarget {
+	if target == "system" {
 		MacOSInstallTarget::System
 	} else {
 		MacOSInstallTarget::User
@@ -46,7 +46,7 @@ impl Rpc for RpcImpl {
 		Ok(repo)
 	}
 
-	fn status(&self, repo_id: String, package_id: String, target: u8) -> Result<PackageStatus> {
+	fn status(&self, repo_id: String, package_id: String, target: String) -> Result<PackageStatus> {
 		let repo = repo_check(&self, repo_id)?;
 		let package = parse_package(&repo, &package_id)?;
 		let target = parse_target(target);
@@ -108,7 +108,7 @@ impl Rpc for RpcImpl {
 		Ok(map)
 	}
 
-	fn install(&self, repo_id: String, package_id: String, target: u8) -> Result<PackageStatus> {
+	fn install(&self, repo_id: String, package_id: String, target: String) -> Result<PackageStatus> {
 		let repo = repo_check(&self, repo_id)?;
 		let package = parse_package(&repo, &package_id)?;
 		let target = parse_target(target);
@@ -133,7 +133,7 @@ impl Rpc for RpcImpl {
 		})
 	}
 
-	fn uninstall(&self, repo_id: String, package_id: String, target: u8) -> Result<PackageStatus> {
+	fn uninstall(&self, repo_id: String, package_id: String, target: String) -> Result<PackageStatus> {
 		let repo = repo_check(&self, repo_id)?;
 		let package = parse_package(&repo, &package_id)?;
 		let target = parse_target(target);
@@ -160,7 +160,7 @@ impl Rpc for RpcImpl {
 		})
 	}
 
-	fn download_subscribe(&self, _meta: Self::Metadata, subscriber: pubsub::Subscriber<[usize; 2]>, repo_id: String, package_id: String, target: u8) {
+	fn download_subscribe(&self, _meta: Self::Metadata, subscriber: pubsub::Subscriber<[usize; 2]>, repo_id: String, package_id: String, target: String) {
 		let repo = match repo_check(&self, repo_id) {
 			Ok(v) => v,
 			Err(e) => {

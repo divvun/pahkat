@@ -4,8 +4,8 @@ version = "0.1.0"
 authors = ["Brendan Molloy <brendan@bbqsrc.net>"]
 edition = "2018"
 
-# [lib]
-# crate-type = ["staticlib"]
+[lib]
+crate-type = ["staticlib", "dylib"]
 
 [[bin]]
 name = "pahkatc"

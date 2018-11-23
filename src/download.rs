@@ -5,12 +5,12 @@ use std::fs::File;
 
 pub trait Download {
     fn download<F>(&self, dir_path: &Path, progress: Option<F>) -> Result<PathBuf, DownloadError>
-            where F: Fn(usize, usize) -> ();
+            where F: Fn(u64, u64) -> ();
 }
 
 impl Download for Package {
     fn download<F>(&self, dir_path: &Path, progress: Option<F>) -> Result<PathBuf, DownloadError>
-            where F: Fn(usize, usize) -> () {
+            where F: Fn(u64, u64) -> () {
         use reqwest::header::CONTENT_LENGTH;
 
         let installer = match self.installer() {
@@ -42,8 +42,8 @@ impl Download for Package {
             Some(cb) => {
                 let len = {
                     res.headers().get(CONTENT_LENGTH)
-                        .map(|ct_len| ct_len.to_str().unwrap_or("").parse::<usize>().unwrap_or(0usize))
-                        .unwrap_or(0usize)
+                        .map(|ct_len| ct_len.to_str().unwrap_or("").parse::<u64>().unwrap_or(0u64))
+                        .unwrap_or(0u64)
                 };
                 res.copy_to(&mut ProgressWriter::new(buf_writer, len, cb))
             },
@@ -68,18 +68,18 @@ pub enum DownloadError {
 }
 
 struct ProgressWriter<W: Write, F>
-    where F: Fn(usize, usize) -> ()
+    where F: Fn(u64, u64) -> ()
 {
     writer: W,
     callback: F,
-    max_count: usize,
-    cur_count: usize
+    max_count: u64,
+    cur_count: u64
 }
 
 impl<W: Write, F> ProgressWriter<W, F>
-    where F: Fn(usize, usize) -> ()
+    where F: Fn(u64, u64) -> ()
 {
-    fn new(writer: W, max_count: usize, callback: F) -> ProgressWriter<W, F> {
+    fn new(writer: W, max_count: u64, callback: F) -> ProgressWriter<W, F> {
         (callback)(0, max_count);
 
         ProgressWriter {
@@ -92,12 +92,12 @@ impl<W: Write, F> ProgressWriter<W, F>
 }
 
 impl<W: Write, F> Write for ProgressWriter<W, F>
-    where F: Fn(usize, usize) -> ()
+    where F: Fn(u64, u64) -> ()
 {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         use std::cmp;
         
-        let new_count = self.cur_count + buf.len();
+        let new_count = self.cur_count + buf.len() as u64;
         self.cur_count = cmp::min(new_count, self.max_count);
         (self.callback)(self.cur_count, self.max_count);
         self.writer.write(buf)

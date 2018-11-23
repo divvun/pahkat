@@ -45,6 +45,7 @@ use std::path::{Path, PathBuf};
 use std::fs::{create_dir_all, File};
 use std::fmt;
 use std::cell::{Ref, RefCell};
+use std::collections::HashMap;
 
 #[cfg(windows)]
 pub mod windows;
@@ -52,6 +53,7 @@ pub mod windows;
 pub mod macos;
 pub mod tarball;
 
+pub mod ffi;
 mod download;
 mod repo;
 pub use self::download::Download;
@@ -62,7 +64,8 @@ pub use self::repo::Repository;
 pub enum PackageStatus {
     NotInstalled,
     UpToDate,
-    RequiresUpdate
+    RequiresUpdate,
+    Skipped
 }
 
 impl fmt::Display for PackageStatus {
@@ -70,7 +73,8 @@ impl fmt::Display for PackageStatus {
         write!(f, "{}", match *self {
             PackageStatus::NotInstalled => "Not installed",
             PackageStatus::UpToDate => "Up to date",
-            PackageStatus::RequiresUpdate => "Requires update"
+            PackageStatus::RequiresUpdate => "Requires update",
+            PackageStatus::Skipped => "Skipped"
         })
     }
 }
@@ -127,11 +131,32 @@ pub fn default_cache_path() -> PathBuf {
     dirs::home_dir().unwrap().join(r#"AppData\Local\Pahkat\packages"#)
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+pub struct RepoRecord {
+    pub url: String,
+    pub channel: String
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+pub struct AbsolutePackageKey {
+    pub url: String,
+    pub id: String,
+    pub channel: String
+}
+
+impl AbsolutePackageKey {
+    pub fn to_string(&self) -> String {
+        format!("{}packages/{}#{}", self.url, self.id, self.channel)
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct RawStoreConfig {
     #[serde(default = "Vec::new")]
-    pub repo_urls: Vec<String>,
+    pub repos: Vec<RepoRecord>,
+    #[serde(default = "HashMap::new")]
+    pub skipped_packages: HashMap<AbsolutePackageKey, String>,
     #[serde(default = "default_cache_path")]
     pub cache_path: PathBuf
 }
@@ -139,7 +164,8 @@ struct RawStoreConfig {
 impl std::default::Default for RawStoreConfig {
     fn default() -> RawStoreConfig {
         RawStoreConfig {
-            repo_urls: vec![],
+            repos: vec![],
+            skipped_packages: HashMap::new(),
             cache_path: default_cache_path()
         }
     }
@@ -199,31 +225,50 @@ impl StoreConfig {
         Ok(())
     }
 
+    pub fn skipped_package(&self, key: &AbsolutePackageKey) -> Option<String> {
+        self.data.borrow().skipped_packages.get(key).map(|x| x.to_string())
+    }
+
+    pub fn remove_skipped_package(&self, key: &AbsolutePackageKey) -> Result<(), ()> {
+        self.data.borrow_mut().skipped_packages.remove(key);
+        self.save()
+    }
+
+    pub fn add_skipped_package(&self, key: AbsolutePackageKey, version: String) -> Result<(), ()> {
+        self.data.borrow_mut().skipped_packages.insert(key, version);
+        self.save()
+    }
+
     pub fn cache_path(&self) -> Ref<PathBuf> {
         Ref::map(self.data.borrow(), |x| &x.cache_path)
     }
 
-    pub fn set_cache_path(&self, cache_path: PathBuf) {
+    pub fn set_cache_path(&self, cache_path: PathBuf) -> Result<(), ()> {
         self.data.borrow_mut().cache_path = cache_path;
-        self.save();
+        self.save()
     }
 
-    pub fn repo_urls(&self) -> Ref<Vec<String>> {
-        Ref::map(self.data.borrow(), |x| &x.repo_urls)
+    pub fn repos(&self) -> Ref<Vec<RepoRecord>> {
+        Ref::map(self.data.borrow(), |x| &x.repos)
     }
 
-    pub fn add_repo_url(&self, repo_url: String) {
-        self.data.borrow_mut().repo_urls.push(repo_url);
-        self.save();
+    pub fn add_repo(&self, repo_record: RepoRecord) -> Result<(), ()> {
+        self.data.borrow_mut().repos.push(repo_record);
+        self.save()
     }
 
-    pub fn remove_repo_url(&self, repo_url: &str) {
-        match self.data.borrow().repo_urls.iter().position(|r| r == repo_url) {
+    pub fn remove_repo(&self, repo_record: RepoRecord) -> Result<(), ()> {
+        match self.data.borrow().repos.iter().position(|r| r == &repo_record) {
             Some(index) => {
-                self.data.borrow_mut().repo_urls.remove(index);
-                self.save();
+                self.data.borrow_mut().repos.remove(index);
+                self.save()
             },
-            None => {}
+            None => Ok(())
         }
+    }
+
+    pub fn update_repo(&self, index: usize, repo_record: RepoRecord) -> Result<(), ()> {
+        self.data.borrow_mut().repos[index] = repo_record;
+        self.save()
     }
 }

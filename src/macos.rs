@@ -1,12 +1,18 @@
-use pahkat::types::*;
+use pahkat::types::{
+    MacOSInstallTarget,
+    MacOSInstaller,
+    Installer,
+    Package,
+    Downloadable
+};
 use std::path::{Path, PathBuf};
 use std::fs::{remove_file, remove_dir};
 use std::fmt::Display;
 use std::str::FromStr;
 use std::process;
 use std::process::Command;
-use std::collections::BTreeMap;
-use crate::repo::Repository;
+use std::collections::{HashMap, BTreeMap};
+use crate::repo::{Repository, PackageRecord};
 use dirs;
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
@@ -14,6 +20,7 @@ use crypto::sha2::Sha256;
 use serde::de::{self, Deserialize, Deserializer};
 use plist::serde::{deserialize as deserialize_plist};
 
+use crate::{RepoRecord};
 use crate::*;
 
 fn from_str<'de, T, D>(deserializer: D) -> Result<T, D::Error>
@@ -62,13 +69,20 @@ pub enum MacOSUninstallError {
 }
 
 pub struct MacOSPackageStore {
-    repos: Vec<Repository>,
+    repos: RefCell<HashMap<RepoRecord, Repository>>,
     config: StoreConfig
 }
 
 impl MacOSPackageStore {
-    pub fn new(repos: Vec<Repository>, config: StoreConfig) -> MacOSPackageStore {
-        MacOSPackageStore { repos: repos, config: config }
+    pub fn new(config: StoreConfig) -> MacOSPackageStore {
+        let store = MacOSPackageStore {
+            repos: RefCell::new(HashMap::new()),
+            config
+        };
+
+        store.refresh_repos();
+
+        store
     }
 
     fn download_path(&self, url: &str) -> PathBuf {
@@ -79,22 +93,61 @@ impl MacOSPackageStore {
         self.config.cache_path().join(hash_id)
     }
 
-    pub fn find_package(&self, package_id: &str) -> Option<&Package> {
-        self.repos.iter().find_map(|repo| repo.packages().get(package_id))
+    pub fn refresh_repos(&self) {
+        let mut repos = HashMap::new();
+
+        for record in self.config.repos().iter() {
+            if let Ok(repo) = Repository::from_url(&record.url) {
+                repos.insert(record.clone(), repo);
+            }
+        }
+
+        *self.repos.borrow_mut() = repos;
     }
 
-    pub fn download<F>(&self, package: &Package, progress: Option<F>) -> Result<PathBuf, crate::download::DownloadError>
-            where F: Fn(usize, usize) -> () {
-        let installer = match package.installer() {
+    pub fn config(&self) -> &StoreConfig {
+        &self.config
+    }
+
+    pub fn add_repo(&self, url: String, channel: String) -> Result<(), ()> {
+        self.config().add_repo(RepoRecord { url, channel })?;
+        self.refresh_repos();
+        Ok(())
+    }
+
+    pub fn remove_repo(&self, url: String, channel: String) -> Result<(), ()> {
+        self.config().remove_repo(RepoRecord { url, channel })?;
+        self.refresh_repos();
+        Ok(())
+    }
+
+    pub fn update_repo(&self, index: usize, url: String, channel: String) -> Result<(), ()> {
+        self.config().update_repo(index, RepoRecord { url, channel })?;
+        self.refresh_repos();
+        Ok(())
+    }
+
+    pub fn find_package(&self, package_id: &str) -> Option<PackageRecord> {
+        self.repos.borrow().iter()
+            .find_map(|(key, repo)| {
+                repo.packages()
+                    .get(package_id)
+                    .map(|x| PackageRecord::new(repo.meta(), &key.channel, x.to_owned()))
+            })
+    }
+
+    pub fn download<F>(&self, record: &PackageRecord, progress: Option<F>) -> Result<PathBuf, crate::download::DownloadError>
+            where F: Fn(u64, u64) -> () {
+        let installer = match record.package().installer() {
             None => return Err(crate::download::DownloadError::NoUrl),
             Some(v) => v
         };
 
-        package.download(&self.download_path(&installer.url()), progress)
+        record.package().download(&self.download_path(&installer.url()), progress)
     }
 
-    pub fn install(&self, package: &Package, target: MacOSInstallTarget) -> Result<PackageStatus, MacOSInstallError> {
-        let installer = match package.installer() {
+    pub fn install(&self, record: &PackageRecord, target: MacOSInstallTarget) -> Result<PackageStatus, MacOSInstallError> {
+        let installer = match record.package().installer() {
             None => return Err(MacOSInstallError::NoInstaller),
             Some(v) => v
         };
@@ -118,11 +171,11 @@ impl MacOSPackageStore {
             _ => {}
         };
 
-        Ok(self.status_impl(&installer, package, target).unwrap())
+        Ok(self.status_impl(&installer, record, target).unwrap())
     }
 
-    pub fn uninstall(&self, package: &Package, target: MacOSInstallTarget) -> Result<PackageStatus, MacOSUninstallError> {
-        let installer = match package.installer() {
+    pub fn uninstall(&self, record: &PackageRecord, target: MacOSInstallTarget) -> Result<PackageStatus, MacOSUninstallError> {
+        let installer = match record.package().installer() {
             None => return Err(MacOSUninstallError::NoInstaller),
             Some(v) => v
         };
@@ -137,11 +190,11 @@ impl MacOSPackageStore {
             _ => {}
         };
 
-        Ok(self.status_impl(installer, package, target).unwrap())
+        Ok(self.status_impl(installer, record, target).unwrap())
     }
 
-    pub fn status(&self, package: &Package, target: MacOSInstallTarget) -> Result<PackageStatus, PackageStatusError> {
-        let installer = match package.installer() {
+    pub fn status(&self, record: &PackageRecord, target: MacOSInstallTarget) -> Result<PackageStatus, PackageStatusError> {
+        let installer = match record.package().installer() {
             None => return Err(PackageStatusError::NoInstaller),
             Some(v) => v
         };
@@ -151,10 +204,10 @@ impl MacOSPackageStore {
             _ => return Err(PackageStatusError::WrongInstallerType)
         };
 
-        self.status_impl(installer, package, target)
+        self.status_impl(installer, record, target)
     }
 
-    fn status_impl(&self, installer: &MacOSInstaller, package: &Package, target: MacOSInstallTarget) -> Result<PackageStatus, PackageStatusError> {
+    fn status_impl(&self, installer: &MacOSInstaller, record: &PackageRecord, target: MacOSInstallTarget) -> Result<PackageStatus, PackageStatusError> {
         let pkg_info = match get_package_info(&installer.pkg_id, target) {
             Ok(v) => v,
             Err(e) => {
@@ -169,17 +222,27 @@ impl MacOSPackageStore {
             }
         };
 
-        // TODO: handle skipped versions
-
         let installed_version = match semver::Version::parse(&pkg_info.pkg_version) {
             Err(_) => return Err(PackageStatusError::ParsingVersion),
             Ok(v) => v
         };
 
-        let candidate_version = match semver::Version::parse(&package.version) {
+        let candidate_version = match semver::Version::parse(&record.package().version) {
             Err(_) => return Err(PackageStatusError::ParsingVersion),
             Ok(v) => v
         };
+
+        // TODO: handle skipped versions
+        if let Some(skipped_version) = self.config().skipped_package(record.id()) {
+            match semver::Version::parse(&skipped_version) {
+                Err(_) => {}, // No point giving up now
+                Ok(v) => {
+                    if candidate_version <= v {
+                        return Ok(PackageStatus::Skipped)
+                    }
+                }
+            }
+        }
 
         if candidate_version > installed_version {
             Ok(PackageStatus::RequiresUpdate)

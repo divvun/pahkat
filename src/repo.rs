@@ -9,6 +9,7 @@ use pahkat::types::{
     VirtualRefMap,
     Repository as RepositoryMeta
 };
+use crate::AbsolutePackageKey;
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -77,6 +78,34 @@ impl Repository {
 
     pub fn hash_id(&self) -> &str {
         &self.hash_id
+    }
+}
+
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PackageRecord {
+    id: AbsolutePackageKey,
+    package: Package
+}
+
+impl PackageRecord {
+    pub fn new(repo: &RepositoryMeta, channel: &str, package: Package) -> PackageRecord {
+        PackageRecord {
+            id: AbsolutePackageKey {
+                url: repo.base.to_string(),
+                id: package.id.to_string(),
+                channel: channel.to_string()
+            },
+            package
+        }
+    }
+
+    pub fn id(&self) -> &AbsolutePackageKey {
+        &self.id
+    }
+
+    pub fn package(&self) -> &Package {
+        &self.package
     }
 }
 

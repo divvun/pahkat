@@ -53,17 +53,17 @@ build_rpc_trait! {
 		fn repository_statuses(&self, String) -> Result<BTreeMap<String, PackageStatusResponse>>;
 
 		#[rpc(name = "status")]
-		fn status(&self, String, String, u8) -> Result<PackageStatus>;
+		fn status(&self, String, String, String) -> Result<PackageStatus>;
 
 		#[rpc(name = "install")]
-		fn install(&self, String, String, u8) -> Result<PackageStatus>;
+		fn install(&self, String, String, String) -> Result<PackageStatus>;
 
 		#[rpc(name = "uninstall")]
-		fn uninstall(&self, String, String, u8) -> Result<PackageStatus>;
+		fn uninstall(&self, String, String, String) -> Result<PackageStatus>;
 
 		#[pubsub(name = "download")] {
 			#[rpc(name = "download_subscribe")]
-			fn download_subscribe(&self, Self::Metadata, pubsub::Subscriber<[usize; 2]>, String, String, u8);
+			fn download_subscribe(&self, Self::Metadata, pubsub::Subscriber<[usize; 2]>, String, String, String);
 
 			#[rpc(name = "download_unsubscribe")]
 			fn download_unsubscribe(&self, SubscriptionId) -> Result<bool>;
