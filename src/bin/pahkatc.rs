@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use pahkat::types::{Package, MacOSInstallTarget};
 use pahkat_client::*;
 use sentry::integrations::panic::register_panic_handler;
+use std::sync::Arc;
 
 #[cfg(prefix)]
 use pahkat_client::tarball::*;
@@ -65,6 +66,7 @@ fn main() {
                 .arg(Arg::with_name("package-id")
                     .value_name("PKGID")
                     .help("The package identifier to install")
+                    .multiple(true)
                     .required(true))
                 .arg(Arg::with_name("user-target")
                     .help("Install into user target")
@@ -241,7 +243,7 @@ fn main() {
                         .map(|record| Repository::from_url(&record.url).unwrap())
                         .collect::<Vec<_>>();
 
-                    let store = MacOSPackageStore::new(repos, config);
+                    let store = MacOSPackageStore::new(config);
                     let package = match store.find_package(package_id) {
                         Some(v) => v,
                         None => {
@@ -271,7 +273,7 @@ fn main() {
                         .map(|record| Repository::from_url(&record.url).unwrap())
                         .collect::<Vec<_>>();
 
-                    let store = MacOSPackageStore::new(repos, config);
+                    let store = MacOSPackageStore::new(config);
                     let package = match store.find_package(package_id) {
                         Some(v) => v,
                         None => {
@@ -288,12 +290,12 @@ fn main() {
                     let status = store.status(&package, target);
                     match status {
                         Ok(PackageStatus::UpToDate) | Ok(PackageStatus::RequiresUpdate) => {
-                            let _res = store.uninstall(package, target).unwrap();
+                            let res = store.uninstall(&package, target);
 
-                            // match res {
-                            //     Ok(v) => println!("{}: {:?}", &package_id, v),
-                            //     Err(e) => println!("{}: error - {:?}", &package_id, e)
-                            // };
+                            match res {
+                                Ok(v) => println!("{}: {}", &package_id, v),
+                                Err(e) => println!("{}: error - {:?}", &package_id, e)
+                            };
                         },
                         _ => {
                             println!("Nothing to do for identifier {}", package_id);
@@ -302,7 +304,9 @@ fn main() {
                     }
                 }
                 ("install", Some(matches)) => {
-                    let package_id = matches.value_of("package-id").expect("package-id to always exist");
+                    use pahkat_client::repo::PackageRecord;
+
+                    let package_ids = matches.values_of("package-id").expect("package-id to always exist");
                     let is_user = matches.is_present("user-target");
                     
                     let config = StoreConfig::load_or_default();
@@ -311,35 +315,109 @@ fn main() {
                         .map(|record| Repository::from_url(&record.url).unwrap())
                         .collect::<Vec<_>>();
 
-                    let store = MacOSPackageStore::new(repos, config);
-                    let package = match store.find_package(package_id) {
-                        Some(v) => v,
-                        None => {
-                            println!("{}: No package found", &package_id);
-                            return;
-                        }
-                    };
+                    let store = MacOSPackageStore::new(config);
                     let target = match is_user {
                         true => MacOSInstallTarget::User,
                         false => MacOSInstallTarget::System
                     };
 
-                    let status = store.status(&package, target);
-                    match status {
-                        Ok(PackageStatus::NotInstalled) | Ok(PackageStatus::RequiresUpdate) => {
-                            let _pkg_path = store.download(&package, Some(|cur, max| println!("{}/{}", cur, max))).unwrap();
-                            let _res = store.install(package, target).unwrap();
+                    let mut packages = vec![];
+                    let mut errors = vec![];
 
-                            // match res {
-                            //     Ok(v) => println!("{}: {:?}", &package_id, v),
-                            //     Err(e) => println!("{}: error - {:?}", &package_id, e)
-                            // };
-                        },
-                        _ => {
-                            println!("Nothing to do for identifier {}", package_id);
-                            return;
-                        }
+                    for id in package_ids {
+                        match store.find_package(id) {
+                            Some(v) => packages.push(v),
+                            None => errors.push(id)
+                        };
                     }
+
+                    if errors.len() > 0 {
+                        println!("No packages found for: {}", errors.join(", "));
+                        return;
+                    }
+
+                    let actions = packages.into_iter().filter(|p| {
+                        match store.status(&p, target) {
+                            Ok(PackageStatus::NotInstalled) | Ok(PackageStatus::RequiresUpdate) => true,
+                            _ => {
+                                println!("{} already installed; skipping.", p.id().id);
+                                false
+                            }
+                        }
+                    }).map(|p| {
+                        PackageAction {
+                            package: p,
+                            action: PackageActionType::Install,
+                            target
+                        }
+                    }).collect::<Vec<_>>();
+
+                    for action in actions.iter() {
+                        let pb = indicatif::ProgressBar::new(0);
+                        pb.set_style(indicatif::ProgressStyle::default_bar()
+                            .template("{spinner:.green} {prefix} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+                            .progress_chars("#>-"));
+                        pb.set_prefix(&action.package.id().id);
+                        
+                        let progress = move |cur, max| {
+                            pb.set_length(max);
+                            pb.set_position(cur);
+
+                            if cur >= max {
+                                pb.finish_and_clear();
+                            }
+                        };
+                        let _pkg_path = store.download(&action.package, progress).unwrap();
+                    }
+
+                    let mut tx = PackageTransaction::new(Arc::new(store), actions);
+                    tx.process(|key, event| {
+                        println!("{}: {:?}", key.id, event);
+                    });
+
+                    // impl PackageTransaction {
+                    // pub fn new(
+                    //     store: Arc<MacOSPackageStore>,
+                    //     actions: Vec<PackageAction>
+
+                    // let package = match store.find_package(package_id) {
+                    //     Some(v) => v,
+                    //     None => {
+                    //         println!("{}: No package found", &package_id);
+                    //         return;
+                    //     }
+                    // };
+
+                    // let status = store.status(&package, target);
+                    // match status {
+                    //     Ok(PackageStatus::NotInstalled) | Ok(PackageStatus::RequiresUpdate) => {
+                    //         let pb = indicatif::ProgressBar::new(0);
+                    //         pb.set_style(indicatif::ProgressStyle::default_bar()
+                    //             .template("{spinner:.green} {prefix} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+                    //             .progress_chars("#>-"));
+                    //         pb.set_prefix(&package_id);
+                            
+                    //         let progress = move |cur, max| {
+                    //             pb.set_length(max);
+                    //             pb.set_position(cur);
+
+                    //             if cur >= max {
+                    //                 pb.finish_and_clear();
+                    //             }
+                    //         };
+                    //         let _pkg_path = store.download(&package, progress).unwrap();
+                    //         let res = store.install(&package, target);
+
+                    //         match res {
+                    //             Ok(v) => println!("{}: {}", &package_id, v),
+                    //             Err(e) => println!("{}: error - {:?}", &package_id, e)
+                    //         };
+                    //     },
+                    //     _ => {
+                    //         println!("Nothing to do for identifier {}", package_id);
+                    //         return;
+                    //     }
+                    // }
                 },
                 ("init", Some(matches)) => {
                     let urls = matches.values_of("url").unwrap();
@@ -351,7 +429,10 @@ fn main() {
                     };
 
                     for url in urls {
-                        store.add_repo(RepoRecord { url: url.to_string(), channel: "stable".into() }).expect("add repo");
+                        store.add_repo(RepoRecord {
+                            url: url::Url::parse(url).unwrap(),
+                            channel: "stable".into()
+                        }).expect("add repo");
                     }
                 },
                 ("list", Some(_matches)) => {

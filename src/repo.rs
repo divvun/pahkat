@@ -9,6 +9,7 @@ use pahkat::types::{
     VirtualRefMap,
     Repository as RepositoryMeta
 };
+use url::Url;
 use crate::AbsolutePackageKey;
 
 #[derive(Debug, Serialize, Clone)]
@@ -18,12 +19,14 @@ pub struct Repository {
     packages: Packages,
     virtuals: Virtuals,
 
+    channel: String,
+
     #[serde(skip_serializing)]
     hash_id: String
 }
 
 impl Repository {
-    pub fn from_url(url: &str) -> Result<Repository, RepoDownloadError> {
+    pub fn from_url(url: &Url, channel: String) -> Result<Repository, RepoDownloadError> {
         let client = reqwest::Client::new();
 
         let mut meta_res = client.get(&format!("{}/index.json", url)).send()
@@ -52,9 +55,10 @@ impl Repository {
         let hash_id = sha.result_str();
 
         Ok(Repository {
-            meta: meta,
-            packages: packages,
-            virtuals: virtuals,
+            meta,
+            packages,
+            virtuals,
+            channel,
             hash_id
         })
     }
@@ -92,7 +96,7 @@ impl PackageRecord {
     pub fn new(repo: &RepositoryMeta, channel: &str, package: Package) -> PackageRecord {
         PackageRecord {
             id: AbsolutePackageKey {
-                url: repo.base.to_string(),
+                url: Url::parse(&repo.base).expect("repo base url must be valid"),
                 id: package.id.to_string(),
                 channel: channel.to_string()
             },

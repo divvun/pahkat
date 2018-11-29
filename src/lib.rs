@@ -8,7 +8,6 @@ extern crate serde;
 extern crate serde_derive;
 extern crate semver;
 extern crate tempdir;
-extern crate url;
 extern crate dirs;
 
 #[cfg(feature = "prefix")]
@@ -46,6 +45,8 @@ use std::fs::{create_dir_all, File};
 use std::fmt;
 use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
+use url::Url;
+use std::sync::{Arc, RwLock};
 
 #[cfg(windows)]
 pub mod windows;
@@ -55,7 +56,7 @@ pub mod tarball;
 
 pub mod ffi;
 mod download;
-mod repo;
+pub mod repo;
 pub use self::download::Download;
 pub use self::repo::Repository;
 
@@ -66,6 +67,17 @@ pub enum PackageStatus {
     UpToDate,
     RequiresUpdate,
     Skipped
+}
+
+impl PackageStatus {
+    fn to_u8(&self) -> u8 {
+        match self {
+            PackageStatus::NotInstalled => 0,
+            PackageStatus::UpToDate => 1,
+            PackageStatus::RequiresUpdate => 2,
+            PackageStatus::Skipped => 3
+        }
+    }
 }
 
 impl fmt::Display for PackageStatus {
@@ -133,20 +145,37 @@ pub fn default_cache_path() -> PathBuf {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct RepoRecord {
-    pub url: String,
+    #[serde(with = "url_serde")]
+    pub url: Url,
     pub channel: String
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct AbsolutePackageKey {
-    pub url: String,
+    #[serde(with = "url_serde")]
+    pub url: Url,
     pub id: String,
     pub channel: String
 }
 
 impl AbsolutePackageKey {
+    // TODO impl From trait.
     pub fn to_string(&self) -> String {
         format!("{}packages/{}#{}", self.url, self.id, self.channel)
+    }
+
+    pub fn from_string(url: &str) -> Result<AbsolutePackageKey, ()> {
+        let url = Url::parse(url).unwrap();
+
+        let channel = url.fragment().unwrap().to_string();
+        let base = url.join("..").unwrap();
+        let id = url.path_segments().unwrap().last().unwrap().to_string();
+
+        Ok(AbsolutePackageKey {
+            url: base,
+            channel,
+            id
+        })
     }
 }
 
@@ -175,14 +204,14 @@ impl std::default::Default for RawStoreConfig {
 pub struct StoreConfig {
     /// A reference to the path for this StoreConfig
     config_path: PathBuf,
-    data: RefCell<RawStoreConfig>
+    data: Arc<RwLock<RawStoreConfig>>
 }
 
 impl std::default::Default for StoreConfig {
     fn default() -> StoreConfig {
         StoreConfig {
             config_path: default_config_path(),
-            data: RefCell::new(RawStoreConfig::default())
+            data: Arc::new(RwLock::new(RawStoreConfig::default()))
         }
     }
 }
@@ -210,12 +239,12 @@ impl StoreConfig {
 
         Ok(StoreConfig {
             config_path: config_path.to_owned(),
-            data: RefCell::new(data)
+            data: Arc::new(RwLock::new(data))
         })
     }
 
     pub fn save(&self) -> Result<(), ()> { 
-        let cfg_str = serde_json::to_string_pretty(&self.data).unwrap();
+        let cfg_str = serde_json::to_string_pretty(&*self.data.read().unwrap()).unwrap();
         {
             create_dir_all(self.config_path.parent().unwrap()).unwrap();
             let mut file = File::create(&self.config_path).unwrap();
@@ -226,41 +255,41 @@ impl StoreConfig {
     }
 
     pub fn skipped_package(&self, key: &AbsolutePackageKey) -> Option<String> {
-        self.data.borrow().skipped_packages.get(key).map(|x| x.to_string())
+        self.data.read().unwrap().skipped_packages.get(key).map(|x| x.to_string())
     }
 
     pub fn remove_skipped_package(&self, key: &AbsolutePackageKey) -> Result<(), ()> {
-        self.data.borrow_mut().skipped_packages.remove(key);
+        self.data.write().unwrap().skipped_packages.remove(key);
         self.save()
     }
 
     pub fn add_skipped_package(&self, key: AbsolutePackageKey, version: String) -> Result<(), ()> {
-        self.data.borrow_mut().skipped_packages.insert(key, version);
+        self.data.write().unwrap().skipped_packages.insert(key, version);
         self.save()
     }
 
-    pub fn cache_path(&self) -> Ref<PathBuf> {
-        Ref::map(self.data.borrow(), |x| &x.cache_path)
+    pub fn cache_path(&self) -> PathBuf {
+        self.data.read().unwrap().cache_path.clone()
     }
 
     pub fn set_cache_path(&self, cache_path: PathBuf) -> Result<(), ()> {
-        self.data.borrow_mut().cache_path = cache_path;
+        self.data.write().unwrap().cache_path = cache_path;
         self.save()
     }
 
-    pub fn repos(&self) -> Ref<Vec<RepoRecord>> {
-        Ref::map(self.data.borrow(), |x| &x.repos)
+    pub fn repos(&self) -> Vec<RepoRecord> {
+        self.data.read().unwrap().repos.clone()
     }
 
     pub fn add_repo(&self, repo_record: RepoRecord) -> Result<(), ()> {
-        self.data.borrow_mut().repos.push(repo_record);
+        self.data.write().unwrap().repos.push(repo_record);
         self.save()
     }
 
     pub fn remove_repo(&self, repo_record: RepoRecord) -> Result<(), ()> {
-        match self.data.borrow().repos.iter().position(|r| r == &repo_record) {
+        match self.data.read().unwrap().repos.iter().position(|r| r == &repo_record) {
             Some(index) => {
-                self.data.borrow_mut().repos.remove(index);
+                self.data.write().unwrap().repos.remove(index);
                 self.save()
             },
             None => Ok(())
@@ -268,7 +297,7 @@ impl StoreConfig {
     }
 
     pub fn update_repo(&self, index: usize, repo_record: RepoRecord) -> Result<(), ()> {
-        self.data.borrow_mut().repos[index] = repo_record;
+        self.data.write().unwrap().repos[index] = repo_record;
         self.save()
     }
 }
