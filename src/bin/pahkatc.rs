@@ -240,7 +240,7 @@ fn main() {
                     let config = StoreConfig::load_or_default();
                     let repos = config.repos()
                         .iter()
-                        .map(|record| Repository::from_url(&record.url).unwrap())
+                        .map(|record| Repository::from_url(&record.url, record.channel.clone()).unwrap())
                         .collect::<Vec<_>>();
 
                     let store = MacOSPackageStore::new(config);
@@ -270,7 +270,7 @@ fn main() {
                     let config = StoreConfig::load_or_default();
                     let repos = config.repos()
                         .iter()
-                        .map(|record| Repository::from_url(&record.url).unwrap())
+                        .map(|record| Repository::from_url(&record.url, record.channel.clone()).unwrap())
                         .collect::<Vec<_>>();
 
                     let store = MacOSPackageStore::new(config);
@@ -312,7 +312,7 @@ fn main() {
                     let config = StoreConfig::load_or_default();
                     let repos = config.repos()
                         .iter()
-                        .map(|record| Repository::from_url(&record.url).unwrap())
+                        .map(|record| Repository::from_url(&record.url, record.channel.clone()).unwrap())
                         .collect::<Vec<_>>();
 
                     let store = MacOSPackageStore::new(config);
@@ -439,7 +439,7 @@ fn main() {
                     let config = StoreConfig::load_or_default();
                     let repos = config.repos()
                         .iter()
-                        .map(|record| Repository::from_url(&record.url).unwrap())
+                        .map(|record| Repository::from_url(&record.url, record.channel.clone()).unwrap())
                         .collect::<Vec<_>>();
                         
                     for (n, repo) in repos.iter().enumerate() {
