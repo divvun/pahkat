@@ -331,14 +331,12 @@ impl MacOSPackageStore {
             // todo: what install target to use when listing dependencies?
             // let package_status = self.status(record: &PackageRecord, target: MacOSInstallTarget)
     pub fn find_package_dependencies(&self, record: &PackageRecord) -> Result<Vec<PackageDependency>, PackageDependencyError> {
-        Ok(self.find_package_dependencies_impl(record, 0)?)
+        let mut resolved = Vec::<String>::new();
+        Ok(self.find_package_dependencies_impl(record, 0, &mut resolved)?)
     }
 
-    fn find_package_dependencies_impl(&self, record: &PackageRecord, level: u8) -> Result<Vec<PackageDependency>, PackageDependencyError> {
+    fn find_package_dependencies_impl(&self, record: &PackageRecord, level: u8, resolved: &mut Vec<String>) -> Result<Vec<PackageDependency>, PackageDependencyError> {
         let mut result = Vec::<PackageDependency>::new();
-
-        // todo: replace all panic!s with error return
-        // todo: avoid never-ending loops, due to circular deps
 
         fn push_if_not_exists(dependency: PackageDependency, result: &mut Vec<PackageDependency>) {
             if result.iter().filter(|d| d.id.to_string() == dependency.id.to_string()).count() == 0 {
@@ -347,11 +345,18 @@ impl MacOSPackageStore {
         }
 
         for (package_id, version) in record.package().dependencies.iter() {
+            // avoid circular references by keeping
+            // track of package ids that have already been processed
+            if resolved.contains(package_id) {
+                continue;
+            }
+            resolved.push(package_id.clone());
+
             match self.find_package(package_id.as_str()) {
                 Some(ref dependency_record) => {
                     // add all the dependencies of the dependency
                     // to the list result first
-                    for dependency in self.find_package_dependencies_impl(dependency_record, level + 1)? {
+                    for dependency in self.find_package_dependencies_impl(dependency_record, level + 1, resolved)? {
                         push_if_not_exists(dependency, &mut result);
                     }
 
