@@ -301,3 +301,16 @@ impl StoreConfig {
         self.save()
     }
 }
+
+#[derive(Debug, Clone, Copy)]
+pub enum PackageDependencyError {
+    PackageNotFound,
+    VersionNotFound
+}
+
+#[derive(Debug)]
+pub struct PackageDependency {
+    pub id: AbsolutePackageKey,
+    pub version: String,
+    pub level: u8
+}

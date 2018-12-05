@@ -162,6 +162,14 @@ impl PackageTransaction {
     }
 
     pub fn validate(&self) -> bool {
+        // todo: package dependency logic here
+        // self.store.find_package_dependencies(record: &PackageRecord)
+        // self.
+        // let dependency_list = PackageDependencyList::build();
+        // dependency_list.validate();
+        // match self.store.find_package("mypkg") {
+        //     Some(ref package) => package.package().dependencies
+        // }
         true
     }
 
@@ -318,8 +326,55 @@ impl MacOSPackageStore {
     }
 
     /// Get the dependencies for a given package
-    pub fn find_package_dependencies(&self, record: &PackageRecord) -> HashMap<AbsolutePackageKey, PackageStatus> {
-        unimplemented!()
+    /// should return Result<(absolutekey, version, level), Vec not hashmap
+    // original signature: pub fn find_package_dependencies(&self, record: &PackageRecord) -> HashMap<AbsolutePackageKey, PackageStatus> {
+            // todo: what install target to use when listing dependencies?
+            // let package_status = self.status(record: &PackageRecord, target: MacOSInstallTarget)
+    pub fn find_package_dependencies(&self, record: &PackageRecord) -> Result<Vec<PackageDependency>, PackageDependencyError> {
+        Ok(self.find_package_dependencies_impl(record, 0)?)
+    }
+
+    fn find_package_dependencies_impl(&self, record: &PackageRecord, level: u8) -> Result<Vec<PackageDependency>, PackageDependencyError> {
+        let mut result = Vec::<PackageDependency>::new();
+
+        // todo: replace all panic!s with error return
+        // todo: avoid never-ending loops, due to circular deps
+
+        fn push_if_not_exists(dependency: PackageDependency, result: &mut Vec<PackageDependency>) {
+            if result.iter().filter(|d| d.id.to_string() == dependency.id.to_string()).count() == 0 {
+                result.push(dependency);
+            }
+        }
+
+        for (package_id, version) in record.package().dependencies.iter() {
+            match self.find_package(package_id.as_str()) {
+                Some(ref dependency_record) => {
+                    // add all the dependencies of the dependency
+                    // to the list result first
+                    for dependency in self.find_package_dependencies_impl(dependency_record, level + 1)? {
+                        push_if_not_exists(dependency, &mut result);
+                    }
+
+                    // make sure the version requirement is correct
+                    if dependency_record.package().version.as_str() != version {
+                        return Err(PackageDependencyError::VersionNotFound);
+                    }
+
+                    let dependency = PackageDependency {
+                        id: dependency_record.id().clone(),
+                        version: version.clone(),
+                        level
+                    };
+                    push_if_not_exists(dependency, &mut result);
+                },
+                None => {
+                    // the given package id does not exist
+                    return Err(PackageDependencyError::PackageNotFound);
+                }
+            }
+        }
+
+        return Ok(result);
     }
 
     // pub fn find_virtual_dependencies(&self, record: &PackageRecord) -> HashMap<AbsoluteVirtualKey, PackageStatus> {
