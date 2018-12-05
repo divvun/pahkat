@@ -162,14 +162,6 @@ impl PackageTransaction {
     }
 
     pub fn validate(&self) -> bool {
-        // todo: package dependency logic here
-        // self.store.find_package_dependencies(record: &PackageRecord)
-        // self.
-        // let dependency_list = PackageDependencyList::build();
-        // dependency_list.validate();
-        // match self.store.find_package("mypkg") {
-        //     Some(ref package) => package.package().dependencies
-        // }
         true
     }
 
@@ -340,7 +332,7 @@ impl MacOSPackageStore {
         let mut result = Vec::<PackageDependency>::new();
 
         fn push_if_not_exists(dependency: PackageDependency, result: &mut Vec<PackageDependency>) {
-            if result.iter().filter(|d| d.id.to_string() == dependency.id.to_string()).count() == 0 {
+            if result.iter().filter(|d| d.id == dependency.id).count() == 0 {
                 result.push(dependency);
             }
         }
