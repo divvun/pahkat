@@ -305,12 +305,24 @@ impl StoreConfig {
 #[derive(Debug, Clone, Copy)]
 pub enum PackageDependencyError {
     PackageNotFound,
-    VersionNotFound
+    VersionNotFound,
+    PackageStatusError(PackageStatusError)
+}
+
+impl fmt::Display for PackageDependencyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+       match *self {
+            PackageDependencyError::PackageNotFound => write!(f, "Error: Package not found"),
+            PackageDependencyError::VersionNotFound => write!(f, "Error: Package version not found"),
+            PackageDependencyError::PackageStatusError(e) => write!(f, "{}", e),
+        }
+    }
 }
 
 #[derive(Debug)]
 pub struct PackageDependency {
     pub id: AbsolutePackageKey,
     pub version: String,
-    pub level: u8
+    pub level: u8,
+    pub status: PackageStatus
 }

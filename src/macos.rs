@@ -326,16 +326,17 @@ impl MacOSPackageStore {
     }
 
     /// Get the dependencies for a given package
-    /// should return Result<(absolutekey, version, level), Vec not hashmap
-    // original signature: pub fn find_package_dependencies(&self, record: &PackageRecord) -> HashMap<AbsolutePackageKey, PackageStatus> {
-            // todo: what install target to use when listing dependencies?
-            // let package_status = self.status(record: &PackageRecord, target: MacOSInstallTarget)
-    pub fn find_package_dependencies(&self, record: &PackageRecord) -> Result<Vec<PackageDependency>, PackageDependencyError> {
+    pub fn find_package_dependencies(&self, record: &PackageRecord, target: MacOSInstallTarget) -> Result<Vec<PackageDependency>, PackageDependencyError> {
         let mut resolved = Vec::<String>::new();
-        Ok(self.find_package_dependencies_impl(record, 0, &mut resolved)?)
+        Ok(self.find_package_dependencies_impl(record, target, 0, &mut resolved)?)
     }
 
-    fn find_package_dependencies_impl(&self, record: &PackageRecord, level: u8, resolved: &mut Vec<String>) -> Result<Vec<PackageDependency>, PackageDependencyError> {
+    fn find_package_dependencies_impl(
+        &self, record: &PackageRecord,
+        target: MacOSInstallTarget,
+        level: u8,
+        resolved: &mut Vec<String>) -> Result<Vec<PackageDependency>, PackageDependencyError> {
+
         let mut result = Vec::<PackageDependency>::new();
 
         fn push_if_not_exists(dependency: PackageDependency, result: &mut Vec<PackageDependency>) {
@@ -356,7 +357,7 @@ impl MacOSPackageStore {
                 Some(ref dependency_record) => {
                     // add all the dependencies of the dependency
                     // to the list result first
-                    for dependency in self.find_package_dependencies_impl(dependency_record, level + 1, resolved)? {
+                    for dependency in self.find_package_dependencies_impl(dependency_record, target, level + 1, resolved)? {
                         push_if_not_exists(dependency, &mut result);
                     }
 
@@ -365,12 +366,18 @@ impl MacOSPackageStore {
                         return Err(PackageDependencyError::VersionNotFound);
                     }
 
-                    let dependency = PackageDependency {
-                        id: dependency_record.id().clone(),
-                        version: version.clone(),
-                        level
-                    };
-                    push_if_not_exists(dependency, &mut result);
+                    match self.status(dependency_record, target) {
+                        Err(error) => return Err(PackageDependencyError::PackageStatusError(error)),
+                        Ok(status) => {
+                            let dependency = PackageDependency {
+                                id: dependency_record.id().clone(),
+                                version: version.clone(),
+                                level,
+                                status
+                            };
+                            push_if_not_exists(dependency, &mut result);
+                        }
+                    }
                 },
                 None => {
                     // the given package id does not exist
