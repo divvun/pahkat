@@ -321,12 +321,29 @@ fn main() {
                         false => MacOSInstallTarget::System
                     };
 
-                    let mut packages = vec![];
+                    let mut packages: Vec<PackageRecord> = vec![];
                     let mut errors = vec![];
 
                     for id in package_ids {
                         match store.find_package(id) {
-                            Some(v) => packages.push(v),
+                            Some(v) => {
+                                match store.find_package_dependencies(&v, target) {
+                                    Ok(dependencies) => {
+                                        for dependency in dependencies {
+                                            if packages.iter().filter(|p| p.id() == &dependency.id).count() == 0 {
+                                                packages.push(store.find_package(&dependency.id.id).unwrap());
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        println!("Failed to find package dependencies for: {} {}", id, e);
+                                        return;
+                                    }
+                                }
+                                if packages.iter().filter(|p| p.id() == v.id()).count() == 0 {
+                                    packages.push(v);
+                                }
+                            }
                             None => errors.push(id)
                         };
                     }
