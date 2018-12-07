@@ -375,10 +375,10 @@ extern fn pahkat_run_package_transaction(
 
 enum ErrorCode {
     None,
-    PackageResolveError,
+    PackageDownloadError,
     PackageDependencyError,
     PackageActionContradiction,
-    PackageDownloadError,
+    PackageResolveError,
     PackageKeyError
 }
 
