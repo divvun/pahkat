@@ -288,7 +288,8 @@ extern fn pahkat_create_package_transaction<'a>(
     }
 
     let tx = PackageTransaction::new(store.clone(), actions);
-    let _ = Arc::into_raw(store);
+    let store = Arc::into_raw(store);
+    std::mem::forget(store);
 
     Box::into_raw(Box::from(tx))
 }

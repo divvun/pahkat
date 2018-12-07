@@ -267,13 +267,14 @@ impl MacOSPackageStore {
         let mut repos = HashMap::new();
         let config = self.config.read().unwrap();
         for record in config.repos().iter() {
-            if let Ok(repo) = Repository::from_cache_or_url(
+            match Repository::from_cache_or_url(
                 &record.url,
                 record.channel.clone(),
                 &config.repo_cache_path()
             ) {
-                repos.insert(record.clone(), repo);
-            }
+                Ok(repo) => { repos.insert(record.clone(), repo); },
+                Err(e) => { println!("{:?}", e); }
+            };
         }
 
         *self.repos.write().unwrap() = repos;
@@ -298,6 +299,11 @@ impl MacOSPackageStore {
     }
 
     pub fn resolve_package(&self, package_key: &AbsolutePackageKey) -> Option<PackageRecord> {
+        println!("Resolving package: url: {}, channel: {}", &package_key.url, &package_key.channel);
+        for k in self.repos.read().unwrap().keys() {
+            println!("{:?}", k);
+        }
+
         self.repos.read().unwrap()
             .get(&RepoRecord {
                 url: package_key.url.clone(),
@@ -305,10 +311,17 @@ impl MacOSPackageStore {
             })
             .and_then(|r| {
                 println!("Got repo: {:?}", r);
-                match r.packages().get(&package_key.id) {
+                for k in r.packages().keys() {
+                    println!("Pkg id: {}, {}", &k, k == &package_key.id);
+                }
+
+                println!("My pkg id: {}", &package_key.id);
+                let pkg = match r.packages().get(&package_key.id) {
                     Some(x) => Some(PackageRecord::new(r.meta(), &package_key.channel, x.to_owned())),
                     None => None
-                }
+                };
+                println!("Found pkg: {:?}", &pkg);
+                pkg
             })
     }
 
