@@ -221,7 +221,12 @@ extern fn pahkat_create_action(action: u8, target: u8, package_key: *const c_cha
 // }
 
 #[no_mangle]
-extern fn pahkat_create_package_transaction<'a>(handle: *const MacOSPackageStore, action_count: u32, c_actions: *const CPackageAction) -> *const PackageTransaction {
+extern fn pahkat_create_package_transaction<'a>(
+    handle: *const MacOSPackageStore,
+    action_count: u32,
+    c_actions: *const CPackageAction,
+    error: *mut *const PahkatError
+) -> *const PackageTransaction {
     let store = unsafe { Arc::from_raw(handle) };
     let mut actions = Vec::<PackageAction>::new();
 
@@ -236,7 +241,13 @@ extern fn pahkat_create_package_transaction<'a>(handle: *const MacOSPackageStore
 
         let package_record = match store.resolve_package(&package_key) {
             Some(p) => p,
-            None => panic!("{:?}", package_key.to_string())
+            None => {
+                set_error(error,
+                    ErrorCode::PackageResolveError.to_u32(),
+                    &format!("Unable to resolve package {:?}", package_key.to_string())
+                );
+                return std::ptr::null()
+            }
         };
 
         let action = PackageAction {
@@ -246,9 +257,16 @@ extern fn pahkat_create_package_transaction<'a>(handle: *const MacOSPackageStore
         };
 
         if action.action == PackageActionType::Install {
-            let dependencies = store
-                .find_package_dependencies(&action.package, action.target)
-                .expect("Failed to find package dependencies");
+            let dependencies = match store.find_package_dependencies(&action.package, action.target) {
+                Ok(d) => d,
+                Err(_) => {
+                    set_error(error,
+                        ErrorCode::PackageDependencyError.to_u32(),
+                        "Failed to find package dependencies"
+                    );
+                    return std::ptr::null();
+                }
+            };
 
             for dependency in dependencies {
                 let dependency_action = PackageAction {
@@ -256,11 +274,17 @@ extern fn pahkat_create_package_transaction<'a>(handle: *const MacOSPackageStore
                     action: PackageActionType::Install,
                     target: action.target
                 };
-                add_package_transaction_action(dependency_action, &mut actions);
+                if let Err((code, message)) = add_package_transaction_action(dependency_action, &mut actions) {
+                    set_error(error, code.to_u32(), &message);
+                    return std::ptr::null();
+                }
             }
         }
 
-        add_package_transaction_action(action, &mut actions);
+        if let Err((code, message)) = add_package_transaction_action(action, &mut actions) {
+            set_error(error, code.to_u32(), &message);
+            return std::ptr::null();
+        }
     }
 
     let tx = PackageTransaction::new(store.clone(), actions);
@@ -269,15 +293,22 @@ extern fn pahkat_create_package_transaction<'a>(handle: *const MacOSPackageStore
     Box::into_raw(Box::from(tx))
 }
 
-fn add_package_transaction_action(new_action: PackageAction, actions: &mut Vec<PackageAction>) {
+fn add_package_transaction_action(
+    new_action: PackageAction,
+    actions: &mut Vec<PackageAction>
+) -> Result<(), (ErrorCode, String)> {
     match actions.iter().find(|a| a.package.id() == new_action.package.id()) {
         Some(a) => {
             if a.action != new_action.action {
-                panic!("This package has already been added but with the contradicting action");
+                return Err((
+                    ErrorCode::PackageActionContradiction,
+                    format!("The package {} has already been added but with the contradicting action", new_action.package.id().to_string()).to_string()
+                ))
             }
         }
         None => actions.push(new_action),
-    }    
+    }
+    Ok(())
 }
 
 // extern pahkat_transaction_t*
@@ -291,7 +322,7 @@ fn add_package_transaction_action(new_action: PackageAction, actions: &mut Vec<P
 #[derive(Debug)]
 struct PahkatError {
     pub code: u32,
-    pub message: *const c_char
+    pub message: CString
 }
 
 #[no_mangle]
@@ -325,3 +356,35 @@ extern fn pahkat_run_package_transaction(
 //     pahkat_transaction_t* _Nonnull transaction,
 //     void (*progress)(const char* /* package_id */, uint32_t /* action */)
 // );
+
+enum ErrorCode {
+    None,
+    PackageResolveError,
+    PackageDependencyError,
+    PackageActionContradiction
+}
+
+impl ErrorCode {
+    fn to_u32(&self) -> u32 {
+        match self {
+            ErrorCode::None => 0,
+            ErrorCode::PackageResolveError => 1,
+            ErrorCode::PackageDependencyError => 2,
+            ErrorCode::PackageActionContradiction => 3
+        }
+    }
+}
+
+fn set_error(error: *mut *const PahkatError, code: u32, message: &str) {
+    let c_message = match CString::new(message) {
+        Ok(s) => s,
+        Err(_) => CString::new("Failed to create CString representation").unwrap(),
+    };
+
+    unsafe {
+        *error = Box::into_raw(Box::new(PahkatError {
+            code,
+            message: c_message
+        }));
+    }
+}

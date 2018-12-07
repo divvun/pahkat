@@ -30,6 +30,12 @@ typedef struct pahkat_action_s {
 
 typedef struct pahkat_transaction_s pahkat_transaction_t;
 
+enum {
+    pahkat_success = 0,
+    pahkat_package_resolve_error,
+    pahkat_package_dependency_error
+};
+
 extern pahkat_client_t* _Nonnull
 pahkat_client_new();
 
@@ -86,7 +92,8 @@ extern pahkat_transaction_t* _Nonnull
 pahkat_create_package_transaction(
     const pahkat_client_t* _Nonnull handle,
     const uint32_t action_count,
-    const pahkat_action_t* _Nonnull actions
+    const pahkat_action_t* _Nonnull actions,
+    pahkat_error_t** error
 );
 
 extern uint32_t
