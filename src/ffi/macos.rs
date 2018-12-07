@@ -402,9 +402,13 @@ fn set_error(error: *mut *const PahkatError, code: u32, message: &str) {
     };
 
     unsafe {
-        *error = Box::into_raw(Box::new(PahkatError {
-            code,
-            message: c_message
-        }));
+        if error.is_null() {
+            eprintln!("{}", message);
+        } else {
+            *error = Box::into_raw(Box::new(PahkatError {
+                code,
+                message: c_message
+            }));
+        }
     }
 }
