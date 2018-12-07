@@ -223,7 +223,7 @@ extern fn pahkat_create_action(action: u8, target: u8, package_key: *const c_cha
 #[no_mangle]
 extern fn pahkat_create_package_transaction<'a>(handle: *const MacOSPackageStore, action_count: u32, c_actions: *const CPackageAction) -> *const PackageTransaction {
     let store = unsafe { Arc::from_raw(handle) };
-    let mut actions = vec![];
+    let mut actions = Vec::<PackageAction>::new();
 
     for i in 0..action_count as isize {
         let ptr = unsafe { c_actions.offset(i) };
@@ -239,17 +239,45 @@ extern fn pahkat_create_package_transaction<'a>(handle: *const MacOSPackageStore
             None => panic!("{:?}", package_key.to_string())
         };
 
-        actions.push(PackageAction {
+        let action = PackageAction {
             package: package_record,
             action: PackageActionType::from_u8(c_action.action),
             target: if c_action.target == 0 { MacOSInstallTarget::System } else { MacOSInstallTarget::User }
-        });
+        };
+
+        if action.action == PackageActionType::Install {
+            let dependencies = store
+                .find_package_dependencies(&action.package, action.target)
+                .expect("Failed to find package dependencies");
+
+            for dependency in dependencies {
+                let dependency_action = PackageAction {
+                    package: store.find_package(&dependency.id.to_string()).unwrap(),
+                    action: PackageActionType::Install,
+                    target: action.target
+                };
+                add_package_transaction_action(dependency_action, &mut actions);
+            }
+        }
+
+        add_package_transaction_action(action, &mut actions);
     }
 
     let tx = PackageTransaction::new(store.clone(), actions);
     let _ = Arc::into_raw(store);
 
     Box::into_raw(Box::from(tx))
+}
+
+fn add_package_transaction_action(new_action: PackageAction, actions: &mut Vec<PackageAction>) {
+    match actions.iter().find(|a| a.package.id() == new_action.package.id()) {
+        Some(a) => {
+            if a.action != new_action.action {
+                panic!("This package has already been added but with the contradicting action");
+            }
+        }
+        None => actions.push(new_action),
+    }    
 }
 
 // extern pahkat_transaction_t*
