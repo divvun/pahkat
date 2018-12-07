@@ -32,8 +32,11 @@ typedef struct pahkat_transaction_s pahkat_transaction_t;
 
 enum {
     pahkat_success = 0,
+    pahkat_package_download_error,
+    pahkat_package_dependency_error,
+    pahkat_package_action_contradiction,
     pahkat_package_resolve_error,
-    pahkat_package_dependency_error
+    pahkat_package_key_error
 };
 
 extern pahkat_client_t* _Nonnull
@@ -86,7 +89,9 @@ pahkat_download_package(
     const pahkat_client_t* _Nonnull handle,
     const char* _Nonnull package_key,
     uint8_t target,
-    void (*progress)(const char* /* package_id */, uint64_t /* cur */, uint64_t /* max */));
+    void (*progress)(const char* /* package_id */, uint64_t /* cur */, uint64_t /* max */),
+    pahkat_error_t** error
+);
 
 extern pahkat_transaction_t* _Nonnull
 pahkat_create_package_transaction(
@@ -100,7 +105,7 @@ extern uint32_t
 pahkat_validate_package_transaction(
     const pahkat_client_t* _Nonnull handle,
     const pahkat_transaction_t* _Nonnull transaction,
-    pahkat_error_t** errors
+    pahkat_error_t** error
 );
 
 extern uint32_t
@@ -108,7 +113,8 @@ pahkat_run_package_transaction(
     const pahkat_client_t* _Nonnull handle,
     pahkat_transaction_t* _Nonnull transaction,
     uint32_t tx_id,
-    void (*progress)(uint32_t, const char* /* package_id */, uint32_t /* action */)
+    void (*progress)(uint32_t, const char* /* package_id */, uint32_t /* action */),
+    pahkat_error_t** error
 );
 
 // extern uint32_t /* error */

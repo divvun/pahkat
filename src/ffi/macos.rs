@@ -93,13 +93,16 @@ extern fn pahkat_download_package(
     handle: *const MacOSPackageStore,
     package_key: *const c_char,
     target: u8,
-    progress: extern fn(*const c_char, u64, u64) -> ()
+    progress: extern fn(*const c_char, u64, u64) -> (),
+    error: *mut *const PahkatError
 ) -> u32 {
     println!("Called into FFI");
     let store = safe_handle!(handle);
 
     if package_key.is_null() {
-        panic!("package_key must not be null");
+        let code = ErrorCode::PackageKeyError.to_u32();
+        set_error(error, code, "Package key must not be null");
+        return code;
     }
 
     let package_id = unsafe { CStr::from_ptr(package_key) }.to_string_lossy();
@@ -108,7 +111,12 @@ extern fn pahkat_download_package(
     let package = match store.resolve_package(&package_id) {
         Some(v) => v,
         None => {
-            return 4;
+            let code = ErrorCode::PackageResolveError.to_u32();
+            set_error(error,
+                code,
+                &format!("Unable to resolve package {:?}", package_id.to_string())
+            );
+            return code;
         }
     };
 
@@ -120,8 +128,14 @@ extern fn pahkat_download_package(
         progress(download_package_key.0, cur, max);
     }) {
         Ok(_) => 0,
-        // TODO: make real errors
-        Err(e) => 1
+        Err(e) => {
+            let code = ErrorCode::PackageDownloadError.to_u32();
+            set_error(error,
+                code,
+                &format!("Unable to download package {:?}", package_id.to_string())
+            );
+            code
+        }
     }
 }
 
@@ -329,7 +343,7 @@ struct PahkatError {
 extern fn pahkat_validate_package_transaction(
     handle: *const MacOSPackageStore,
     transaction: *const PackageTransaction,
-    errors: *mut *const PahkatError
+    error: *mut *const PahkatError
 ) -> u32 {
     0
 }
@@ -339,7 +353,8 @@ extern fn pahkat_run_package_transaction(
     handle: *const MacOSPackageStore,
     transaction: *mut PackageTransaction,
     tx_id: u32,
-    progress: extern fn(u32, *const c_char, u32)
+    progress: extern fn(u32, *const c_char, u32),
+    error: *mut *const PahkatError
 ) -> u32 {
     let store = unsafe { Arc::from_raw(handle) };
     let mut transaction = safe_handle_mut!(transaction);
@@ -361,16 +376,20 @@ enum ErrorCode {
     None,
     PackageResolveError,
     PackageDependencyError,
-    PackageActionContradiction
+    PackageActionContradiction,
+    PackageDownloadError,
+    PackageKeyError
 }
 
 impl ErrorCode {
     fn to_u32(&self) -> u32 {
         match self {
             ErrorCode::None => 0,
-            ErrorCode::PackageResolveError => 1,
+            ErrorCode::PackageDownloadError => 1,
             ErrorCode::PackageDependencyError => 2,
-            ErrorCode::PackageActionContradiction => 3
+            ErrorCode::PackageActionContradiction => 3,
+            ErrorCode::PackageResolveError => 4,
+            ErrorCode::PackageKeyError => 5
         }
     }
 }
