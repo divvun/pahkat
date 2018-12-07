@@ -194,7 +194,7 @@ pub struct StoreConfig {
 impl std::default::Default for StoreConfig {
     fn default() -> StoreConfig {
         StoreConfig {
-            config_path: default_config_path(),
+            config_path: default_config_path().join("config.json"),
             data: Arc::new(RwLock::new(RawStoreConfig::default()))
         }
     }
