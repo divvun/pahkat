@@ -41,7 +41,7 @@ extern crate sentry;
 
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::fs::{create_dir_all, File};
+use std::fs::{self, create_dir_all, File};
 use std::fmt;
 use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
@@ -59,6 +59,8 @@ mod download;
 pub mod repo;
 pub use self::download::Download;
 pub use self::repo::Repository;
+
+use directories::BaseDirs;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -112,35 +114,14 @@ impl fmt::Display for PackageStatusError {
     }
 }
 
-// TODO Use directories crate
-#[cfg(target_os = "macos")]
 pub fn default_config_path() -> PathBuf {
-    dirs::home_dir().unwrap().join("Library/Application Support/Pahkat/config.json")
+    BaseDirs::new().expect("base directories must be known")
+        .config_dir().join("Pahkat")
 }
 
-#[cfg(target_os = "linux")]
-pub fn default_config_path() -> PathBuf {
-    dirs::home_dir().unwrap().join(".config/pahkat/config.json")
-}
-
-#[cfg(windows)]
-pub fn default_config_path() -> PathBuf {
-    dirs::home_dir().unwrap().join(r#"AppData\Roaming\Pahkat\config.json"#)
-}
-
-#[cfg(target_os = "macos")]
 pub fn default_cache_path() -> PathBuf {
-    dirs::home_dir().unwrap().join("Library/Caches/Pahkat/packages")
-}
-
-#[cfg(target_os = "linux")]
-pub fn default_cache_path() -> PathBuf {
-    dirs::home_dir().unwrap().join(".cache/pahkat/packages")
-}
-
-#[cfg(windows)]
-pub fn default_cache_path() -> PathBuf {
-    dirs::home_dir().unwrap().join(r#"AppData\Local\Pahkat\packages"#)
+    BaseDirs::new().expect("base directories must be known")
+        .cache_dir().join("Pahkat")
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
@@ -187,7 +168,9 @@ struct RawStoreConfig {
     #[serde(default = "HashMap::new")]
     pub skipped_packages: HashMap<AbsolutePackageKey, String>,
     #[serde(default = "default_cache_path")]
-    pub cache_path: PathBuf
+    pub cache_path: PathBuf,
+    #[serde(default = "HashMap::new")]
+    pub ui: HashMap<String, String>
 }
 
 impl std::default::Default for RawStoreConfig {
@@ -195,7 +178,8 @@ impl std::default::Default for RawStoreConfig {
         RawStoreConfig {
             repos: vec![],
             skipped_packages: HashMap::new(),
-            cache_path: default_cache_path()
+            cache_path: default_cache_path(),
+            ui: HashMap::new()
         }
     }
 }
@@ -219,15 +203,19 @@ impl std::default::Default for StoreConfig {
 // TODO no unwrap
 impl StoreConfig {
     pub fn load_or_default() -> StoreConfig {
-        let res = StoreConfig::load(&default_config_path());
+        let res = StoreConfig::load(&default_config_path().join("config.json"));
         
         let config = match res {
             Ok(v) => v,
             Err(_) => StoreConfig::default()
         };
 
-        if !config.cache_path().exists() {
-            std::fs::create_dir_all(&*config.cache_path()).unwrap();
+        if !config.package_cache_path().exists() {
+            std::fs::create_dir_all(&*config.package_cache_path()).unwrap();
+        }
+
+        if !config.repo_cache_path().exists() {
+            std::fs::create_dir_all(&*config.repo_cache_path()).unwrap();
         }
 
         config
@@ -268,11 +256,15 @@ impl StoreConfig {
         self.save()
     }
 
-    pub fn cache_path(&self) -> PathBuf {
-        self.data.read().unwrap().cache_path.clone()
+    pub fn package_cache_path(&self) -> PathBuf {
+        self.data.read().unwrap().cache_path.join("packages")
     }
 
-    pub fn set_cache_path(&self, cache_path: PathBuf) -> Result<(), ()> {
+    pub fn repo_cache_path(&self) -> PathBuf {
+        self.data.read().unwrap().cache_path.join("repos")
+    }
+
+    pub fn set_cache_base_path(&self, cache_path: PathBuf) -> Result<(), ()> {
         self.data.write().unwrap().cache_path = cache_path;
         self.save()
     }
@@ -290,6 +282,12 @@ impl StoreConfig {
         match self.data.read().unwrap().repos.iter().position(|r| r == &repo_record) {
             Some(index) => {
                 self.data.write().unwrap().repos.remove(index);
+                
+                let hash_id = Repository::path_hash(&repo_record.url, &repo_record.channel);
+                let cache_path = self.repo_cache_path().join(hash_id);
+                if cache_path.exists() {
+                    fs::remove_dir_all(cache_path).expect("cache dir deleted");
+                }
                 self.save()
             },
             None => Ok(())
@@ -299,6 +297,15 @@ impl StoreConfig {
     pub fn update_repo(&self, index: usize, repo_record: RepoRecord) -> Result<(), ()> {
         self.data.write().unwrap().repos[index] = repo_record;
         self.save()
+    }
+
+    pub fn set_ui_setting(&self, key: String, value: String) -> Result<(), ()> {
+        self.data.write().unwrap().ui.insert(key, value);
+        self.save()
+    }
+
+    pub fn ui_setting(&self, key: &str) -> Option<String> {
+        self.data.read().unwrap().ui.get(key).map(|x| x.to_string())
     }
 }
 

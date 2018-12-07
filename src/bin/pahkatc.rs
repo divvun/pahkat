@@ -441,7 +441,7 @@ fn main() {
                     let store = StoreConfig::load_or_default();
                     
                     match matches.value_of("cache-dir") {
-                        Some(v) => { store.set_cache_path(std::path::PathBuf::from(v)).expect("set cache path"); },
+                        Some(v) => { store.set_cache_base_path(std::path::PathBuf::from(v)).expect("set cache path"); },
                         None => {}
                     };
 

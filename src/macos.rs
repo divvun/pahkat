@@ -265,9 +265,13 @@ impl MacOSPackageStore {
 
     pub fn refresh_repos(&self) {
         let mut repos = HashMap::new();
-
-        for record in self.config.read().unwrap().repos().iter() {
-            if let Ok(repo) = Repository::from_url(&record.url, record.channel.clone()) {
+        let config = self.config.read().unwrap();
+        for record in config.repos().iter() {
+            if let Ok(repo) = Repository::from_cache_or_url(
+                &record.url,
+                record.channel.clone(),
+                &config.repo_cache_path()
+            ) {
                 repos.insert(record.clone(), repo);
             }
         }
@@ -463,7 +467,7 @@ impl MacOSPackageStore {
         sha.input_str(url);
         let hash_id = sha.result_str();
         
-        self.config.read().unwrap().cache_path().join(hash_id)
+        self.config.read().unwrap().package_cache_path().join(hash_id)
     }
 
     fn status_impl(&self, installer: &MacOSInstaller, record: &PackageRecord, target: MacOSInstallTarget) -> Result<PackageStatus, PackageStatusError> {

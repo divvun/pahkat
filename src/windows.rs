@@ -17,7 +17,7 @@ pub fn init(url: &str, cache_dir: &str) {
         cache_dir: cache_dir.to_owned()
     };
     
-    let config_path = ::default_config_path();
+    let config_path = ::default_config_path().join("config.json");
         
     if config_path.exists() {
         println!("Path already exists; aborting.");
@@ -142,9 +142,9 @@ impl<'a> WindowsPackageStore<'a> {
     }
     
     // TODO: review if there is a better place to put this function...
-    pub fn download_path(&self, _package: &Package) -> PathBuf {
-        return Path::new(&self.config.cache_dir).join(self.repo.hash_id())
-    }
+    // pub fn download_path(&self, _package: &Package) -> PathBuf {
+    //     return Path::new(&self.config.cache_dir).join(self.repo.hash_id())
+    // }
 
     pub fn status(&self, package: &'a Package) -> Result<PackageStatus, PackageStatusError> {
         let installer = installer(&package)?;
