@@ -156,11 +156,6 @@ extern fn pahkat_refresh_repos(handle: *const MacOSPackageStore) {
     let store = safe_handle!(handle);
     store.refresh_repos();
 }
-// extern uint32_t /* error */
-// pahkat_download_package(const pahkat_client_t* _Nonnull handle,
-//     const char* package_key,
-//     uint8_t target,
-//     void (*progress)(const char* /* package_id */, uint64_t /* cur */, uint64_t /* max */));
 
 struct DownloadPackageKey(*const c_char);
 unsafe impl Send for DownloadPackageKey {}
@@ -173,7 +168,6 @@ extern fn pahkat_download_package(
     progress: extern fn(*const c_char, u64, u64) -> (),
     error: *mut *const PahkatError
 ) -> u32 {
-    println!("Called into FFI");
     let store = safe_handle!(handle);
 
     if package_key.is_null() {
@@ -184,7 +178,6 @@ extern fn pahkat_download_package(
 
     let package_id = unsafe { CStr::from_ptr(package_key) }.to_string_lossy();
     let package_id = AbsolutePackageKey::from_string(&package_id).unwrap();
-    println!("Package id: {:?}", package_id);
     let package = match store.resolve_package(&package_id) {
         Some(v) => v,
         None => {
@@ -197,11 +190,9 @@ extern fn pahkat_download_package(
         }
     };
 
-    println!("Gonna download");
     let download_package_key = DownloadPackageKey(package_key);
 
     match store.download(&package, move |cur, max| {
-        println!("{}/{}", cur, max);
         progress(download_package_key.0, cur, max);
     }) {
         Ok(_) => 0,
@@ -278,13 +269,6 @@ extern fn pahkat_status(handle: *const MacOSPackageStore, package_id: *const c_c
 
     make_json(pkg_status, MacOSInstallTarget::User)
 }
-// typedef struct pahkat_action_s {
-//     const uint8_t action;
-//     const uint8_t target;
-//     const char* _Nonnull package_key;
-// } pahkat_action_t;
-// extern pahkat_action_t*
-// pahkat_create_action(uint8_t action, uint8_t target, const char* _Nonnull package_key);
 
 #[repr(C)]
 struct CPackageAction {
@@ -312,13 +296,6 @@ extern fn pahkat_create_action(action: u8, target: u8, package_key: *const c_cha
     Box::into_raw(Box::new(CPackageAction::new(action, target, package_key)))
 }
 
-
-// struct PackageAction {
-//     package: PackageRecord,
-//     action: PackageActionType,
-//     target: MacOSInstallTarget
-// }
-
 #[no_mangle]
 extern fn pahkat_create_package_transaction<'a>(
     handle: *const MacOSPackageStore,
@@ -326,24 +303,16 @@ extern fn pahkat_create_package_transaction<'a>(
     c_actions: *const CPackageAction,
     error: *mut *const PahkatError
 ) -> *const PackageTransaction {
-    println!("Action count: {}", action_count);
-
     let store = unsafe { Arc::from_raw(handle) };
     let mut actions = Vec::<PackageAction>::new();
 
     for i in 0..action_count as isize {
-        println!("Action item: {}", i);
-
         let ptr = unsafe { c_actions.offset(i) };
         let c_action = unsafe { &*ptr };
         
-        println!("Get package key as C string");
         let package_key = unsafe { CStr::from_ptr(c_action.package_key) }.to_string_lossy();
-        println!("HERP DERP: {}", &package_key);
         let package_key = AbsolutePackageKey::from_string(&package_key).unwrap();
-        println!("HERP DERP?: {:?}", package_key);
 
-        println!("Resolving packages");
         let package_record = match store.resolve_package(&package_key) {
             Some(p) => p,
             None => {
@@ -356,7 +325,6 @@ extern fn pahkat_create_package_transaction<'a>(
                 return std::ptr::null()
             }
         };
-        println!("Resolved package record");
 
         let action = PackageAction {
             package: package_record,
@@ -364,7 +332,6 @@ extern fn pahkat_create_package_transaction<'a>(
             target: if c_action.target == 0 { MacOSInstallTarget::System } else { MacOSInstallTarget::User }
         };
 
-        println!("Finding deps");
         if action.action == PackageActionType::Install {
             let dependencies = match store.find_package_dependencies(&action.package, action.target) {
                 Ok(d) => d,
@@ -390,14 +357,11 @@ extern fn pahkat_create_package_transaction<'a>(
             }
         }
 
-        println!("Found deps");
         if let Err((code, message)) = add_package_transaction_action(action, &mut actions) {
             set_error(error, code.to_u32(), &message);
             return std::ptr::null();
         }
     }
-
-    println!("Doing the package doneness");
 
     let tx = PackageTransaction::new(store.clone(), actions);
     let store = Arc::into_raw(store);
@@ -424,13 +388,6 @@ fn add_package_transaction_action(
     Ok(())
 }
 
-// extern pahkat_transaction_t*
-// pahkat_create_package_transaction(
-//     const pahkat_client_t* _Nonnull handle,
-//     const uint32_t action_count,
-//     const pahkat_action_t** _Nonnull actions
-// );
-
 #[repr(C)]
 #[derive(Debug)]
 struct PahkatError {
@@ -455,7 +412,6 @@ extern fn pahkat_run_package_transaction(
     progress: extern fn(u32, *const c_char, u32),
     error: *mut *const PahkatError
 ) -> u32 {
-    // let store = unsafe { Arc::from_raw(handle) };
     let transaction = safe_handle_mut!(transaction);
 
     transaction.process(move |key, event| {
@@ -464,12 +420,6 @@ extern fn pahkat_run_package_transaction(
 
     0
 }
-// extern uint32_t
-// pahkat_run_package_transaction(
-//     const pahkat_client_t* _Nonnull handle,
-//     pahkat_transaction_t* _Nonnull transaction,
-//     void (*progress)(const char* /* package_id */, uint32_t /* action */)
-// );
 
 enum ErrorCode {
     None,
