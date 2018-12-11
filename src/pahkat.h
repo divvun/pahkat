@@ -39,8 +39,29 @@ enum {
     pahkat_package_key_error
 };
 
-extern pahkat_client_t* _Nonnull
-pahkat_client_new();
+extern pahkat_client_t*
+pahkat_client_new(const char* config_path);
+
+extern const char* _Nonnull
+pahkat_config_path(pahkat_client_t* _Nonnull handle);
+
+extern const char*
+pahkat_config_ui_get(pahkat_client_t* _Nonnull handle, const char* _Nonnull key);
+
+extern void
+pahkat_config_ui_set(pahkat_client_t* _Nonnull handle, const char* _Nonnull key, const char* value);
+
+extern const char* _Nonnull
+pahkat_config_repos(pahkat_client_t* _Nonnull handle);
+
+extern void
+pahkat_config_set_repos(pahkat_client_t* _Nonnull handle, const char* repos);
+
+extern void
+pahkat_refresh_repos(pahkat_client_t* _Nonnull handle);
+
+// extern void
+// pahkat_config_add_repo()
 
 extern void
 pahkat_client_free(pahkat_client_t* _Nonnull handle);

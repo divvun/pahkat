@@ -241,18 +241,26 @@ impl StoreConfig {
 
         Ok(())
     }
+    
+    pub fn config_path(&self) -> &Path {
+        &self.config_path
+    }
 
     pub fn skipped_package(&self, key: &AbsolutePackageKey) -> Option<String> {
         self.data.read().unwrap().skipped_packages.get(key).map(|x| x.to_string())
     }
 
     pub fn remove_skipped_package(&self, key: &AbsolutePackageKey) -> Result<(), ()> {
-        self.data.write().unwrap().skipped_packages.remove(key);
+        {
+            self.data.write().unwrap().skipped_packages.remove(key);
+        }
         self.save()
     }
 
     pub fn add_skipped_package(&self, key: AbsolutePackageKey, version: String) -> Result<(), ()> {
-        self.data.write().unwrap().skipped_packages.insert(key, version);
+        {
+            self.data.write().unwrap().skipped_packages.insert(key, version);
+        }
         self.save()
     }
 
@@ -265,7 +273,9 @@ impl StoreConfig {
     }
 
     pub fn set_cache_base_path(&self, cache_path: PathBuf) -> Result<(), ()> {
-        self.data.write().unwrap().cache_path = cache_path;
+        {
+            self.data.write().unwrap().cache_path = cache_path;
+        }
         self.save()
     }
 
@@ -273,8 +283,18 @@ impl StoreConfig {
         self.data.read().unwrap().repos.clone()
     }
 
+    pub fn set_repos(&self, repos: Vec<RepoRecord>) -> Result<(), ()> {
+        {
+            self.data.write().unwrap().repos = repos
+        }
+
+        self.save()
+    }
+
     pub fn add_repo(&self, repo_record: RepoRecord) -> Result<(), ()> {
-        self.data.write().unwrap().repos.push(repo_record);
+        {
+            self.data.write().unwrap().repos.push(repo_record);
+        }
         self.save()
     }
 
@@ -295,12 +315,21 @@ impl StoreConfig {
     }
 
     pub fn update_repo(&self, index: usize, repo_record: RepoRecord) -> Result<(), ()> {
-        self.data.write().unwrap().repos[index] = repo_record;
+        {
+            self.data.write().unwrap().repos[index] = repo_record;
+        }
         self.save()
     }
 
-    pub fn set_ui_setting(&self, key: String, value: String) -> Result<(), ()> {
-        self.data.write().unwrap().ui.insert(key, value);
+    pub fn set_ui_setting(&self, key: &str, value: Option<String>) -> Result<(), ()> {
+        println!("Set UI setting: {} -> {:?}", key, &value);
+        {
+            let mut lock = self.data.write().expect("write lock");
+            match value {
+                Some(v) => lock.ui.insert(key.to_string(), v),
+                None => lock.ui.remove(key)
+            };
+        }
         self.save()
     }
 

@@ -13,6 +13,7 @@ use serde_json::json;
 use crate::macos::MacOSPackageStore;
 use crate::macos::PackageTransaction;
 use crate::StoreConfig;
+use crate::RepoRecord;
 use crate::repo::{PackageRecord, Repository};
 use crate::PackageStatus;
 use crate::AbsolutePackageKey;
@@ -47,25 +48,96 @@ macro_rules! safe_handle {
 }
 
 #[no_mangle]
-extern fn pahkat_client_new() -> *const MacOSPackageStore {
-    let config = StoreConfig::load_or_default();
+extern fn pahkat_client_new(config_path: *const c_char) -> *const MacOSPackageStore {
+    let config = if config_path.is_null() {
+        Ok(StoreConfig::load_or_default())
+    } else {
+        let config_path = unsafe { CStr::from_ptr(config_path) }.to_string_lossy();
+        StoreConfig::load(std::path::Path::new(&*config_path))
+    };
+
+    match config {
+        Ok(v) => {
+            let store = Arc::new(MacOSPackageStore::new(v));
+            Arc::into_raw(store)
+        }
+        Err(_) => std::ptr::null()
+    }
+
     // let repos = config.repos()
     //     .iter()
     //     .map(|record| Repository::from_url(&record.url).unwrap())
     //     .collect::<Vec<_>>();
+}
 
-    let store = Arc::new(MacOSPackageStore::new(config));
+#[no_mangle]
+extern fn pahkat_config_path(handle: *const MacOSPackageStore) -> *const c_char {
+    let store = safe_handle!(handle);
+    let c_str = CString::new(&*store.config().config_path().to_string_lossy()).unwrap();
+    CString::into_raw(c_str)
+}
 
-    Arc::into_raw(store)
+#[no_mangle]
+extern fn pahkat_config_ui_set(handle: *const MacOSPackageStore, key: *const c_char, value: *const c_char) {
+    let store = safe_handle!(handle);
+    if key.is_null() {
+        return;
+    }
+
+    let key = unsafe { CStr::from_ptr(key).to_string_lossy() };
+    let value = if value.is_null() {
+        None
+    } else {
+        Some(unsafe { CStr::from_ptr(value).to_string_lossy() })
+    };
+
+    store.config().set_ui_setting(&*key, value.map(|x| x.to_string())).unwrap();
+}
+
+#[no_mangle]
+extern fn pahkat_config_ui_get(handle: *const MacOSPackageStore, key: *const c_char) -> *const c_char {
+    let store = safe_handle!(handle);
+    if key.is_null() {
+        return std::ptr::null();
+    }
+
+    let key = unsafe { CStr::from_ptr(key).to_string_lossy() };
+
+    store.config().ui_setting(&*key).map_or_else(|| std::ptr::null(), |x| {
+        CString::new(x).unwrap().into_raw()
+    })
+}
+
+#[no_mangle]
+extern fn pahkat_config_repos(handle: *const MacOSPackageStore) -> *const c_char {
+    let store = safe_handle!(handle);
+    let it = serde_json::to_string(&store.config().repos()).unwrap();
+    CString::new(it).unwrap().into_raw()
+}
+
+#[no_mangle]
+extern fn pahkat_config_set_repos(handle: *const MacOSPackageStore, repos: *const c_char) {
+    let store = safe_handle!(handle);
+    let repos = unsafe { CStr::from_ptr(repos).to_string_lossy() };
+    let repos: Vec<RepoRecord> = serde_json::from_str(&repos).unwrap();
+    store.config().set_repos(repos);
 }
 
 #[no_mangle]
 extern fn pahkat_client_free(handle: *const MacOSPackageStore) {
+    if handle.is_null() {
+        return;
+    }
+    
     unsafe { Arc::from_raw(safe_handle!(handle)); }
 }
 
 #[no_mangle]
 extern fn pahkat_str_free(handle: *mut c_char) {
+    if handle.is_null() {
+        return;
+    }
+
     unsafe { CString::from_raw(safe_handle_mut!(handle)); }
 }
 
@@ -79,6 +151,11 @@ extern fn pahkat_repos_json(handle: *const MacOSPackageStore) -> *const c_char {
     s
 }
 
+#[no_mangle]
+extern fn pahkat_refresh_repos(handle: *const MacOSPackageStore) {
+    let store = safe_handle!(handle);
+    store.refresh_repos();
+}
 // extern uint32_t /* error */
 // pahkat_download_package(const pahkat_client_t* _Nonnull handle,
 //     const char* package_key,
@@ -213,11 +290,19 @@ extern fn pahkat_status(handle: *const MacOSPackageStore, package_id: *const c_c
 struct CPackageAction {
     pub action: u8,
     pub target: u8,
-    pub package_key: *const c_char
+    pub package_key: *mut c_char
 }
+
+impl Drop for CPackageAction {
+    fn drop(&mut self) {
+        unsafe { CString::from_raw(self.package_key) };
+    }
+}
+
 
 impl CPackageAction {
     pub fn new(action: u8, target: u8, package_key: *const c_char) -> CPackageAction {
+        let package_key = unsafe { CString::from(CStr::from_ptr(package_key)).into_raw() };
         CPackageAction { action, target, package_key }
     }
 }
@@ -241,28 +326,37 @@ extern fn pahkat_create_package_transaction<'a>(
     c_actions: *const CPackageAction,
     error: *mut *const PahkatError
 ) -> *const PackageTransaction {
+    println!("Action count: {}", action_count);
+
     let store = unsafe { Arc::from_raw(handle) };
     let mut actions = Vec::<PackageAction>::new();
 
     for i in 0..action_count as isize {
+        println!("Action item: {}", i);
+
         let ptr = unsafe { c_actions.offset(i) };
         let c_action = unsafe { &*ptr };
         
-        let package_key = c_action.package_key;
-        let package_key = unsafe { CStr::from_ptr(package_key) }.to_string_lossy();
+        println!("Get package key as C string");
+        let package_key = unsafe { CStr::from_ptr(c_action.package_key) }.to_string_lossy();
         println!("HERP DERP: {}", &package_key);
         let package_key = AbsolutePackageKey::from_string(&package_key).unwrap();
+        println!("HERP DERP?: {:?}", package_key);
 
+        println!("Resolving packages");
         let package_record = match store.resolve_package(&package_key) {
             Some(p) => p,
             None => {
+                let msg = format!("Unable to resolve package {:?}", package_key.to_string());
+                eprintln!("{}", &msg);
                 set_error(error,
                     ErrorCode::PackageResolveError.to_u32(),
-                    &format!("Unable to resolve package {:?}", package_key.to_string())
+                    &msg
                 );
                 return std::ptr::null()
             }
         };
+        println!("Resolved package record");
 
         let action = PackageAction {
             package: package_record,
@@ -270,6 +364,7 @@ extern fn pahkat_create_package_transaction<'a>(
             target: if c_action.target == 0 { MacOSInstallTarget::System } else { MacOSInstallTarget::User }
         };
 
+        println!("Finding deps");
         if action.action == PackageActionType::Install {
             let dependencies = match store.find_package_dependencies(&action.package, action.target) {
                 Ok(d) => d,
@@ -295,11 +390,14 @@ extern fn pahkat_create_package_transaction<'a>(
             }
         }
 
+        println!("Found deps");
         if let Err((code, message)) = add_package_transaction_action(action, &mut actions) {
             set_error(error, code.to_u32(), &message);
             return std::ptr::null();
         }
     }
+
+    println!("Doing the package doneness");
 
     let tx = PackageTransaction::new(store.clone(), actions);
     let store = Arc::into_raw(store);
@@ -357,8 +455,8 @@ extern fn pahkat_run_package_transaction(
     progress: extern fn(u32, *const c_char, u32),
     error: *mut *const PahkatError
 ) -> u32 {
-    let store = unsafe { Arc::from_raw(handle) };
-    let mut transaction = safe_handle_mut!(transaction);
+    // let store = unsafe { Arc::from_raw(handle) };
+    let transaction = safe_handle_mut!(transaction);
 
     transaction.process(move |key, event| {
         progress(tx_id, CString::new(key.to_string()).unwrap().into_raw(), event.to_u32())

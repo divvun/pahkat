@@ -47,14 +47,17 @@ impl Repository {
     }
 
     pub fn from_cache_or_url(url: &Url, channel: String, cache_path: &Path) -> Result<Repository, RepoDownloadError> {
+        println!("{}, {}, {:?}", url, &channel, cache_path);
         let hash_id = Repository::path_hash(url, &channel);
 
         let repo_cache_path = cache_path.join(&hash_id);
 
         if !repo_cache_path.exists() {
+            println!("Cache does not exist, creating");
             let repo = Repository::from_url(url, channel)?;
             repo.save_to_cache(cache_path)
                 .map_err(|e| RepoDownloadError::IoError(e))?;
+            println!("Save repo");
             return Ok(repo);
         }
 
@@ -68,8 +71,10 @@ impl Repository {
         };
 
         if is_cache_valid {
-            Repository::from_directory(&repo_cache_path, hash_id) 
+            println!("Loading from cache");
+            Repository::from_directory(cache_path, hash_id) 
         } else {
+            println!("loading from web");
             let repo = Repository::from_url(url, channel)?;
             repo.save_to_cache(cache_path)
                 .map_err(|e| RepoDownloadError::IoError(e))?;
@@ -111,10 +116,7 @@ impl Repository {
 
     pub fn from_url(url: &Url, channel: String) -> Result<Repository, RepoDownloadError> {
         let client = reqwest::Client::new();
-
-        let mut sha = Sha256::new();
-        sha.input_str(&format!("{}#{}", &url, &channel));
-        let hash_id = sha.result_str();
+        let hash_id = Repository::path_hash(url, &channel);
 
         let mut meta_res = client.get(&format!("{}/index.json", url)).send()
             .map_err(|e| RepoDownloadError::ReqwestError(e))?;
