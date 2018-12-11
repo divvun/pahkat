@@ -392,7 +392,13 @@ fn add_package_transaction_action(
 #[derive(Debug)]
 struct PahkatError {
     pub code: u32,
-    pub message: CString
+    pub message: *const c_char
+}
+
+impl Drop for PahkatError {
+    fn drop(&mut self) {
+        unsafe { CString::from_raw(self.message as *mut _) };
+    }
 }
 
 #[no_mangle]
@@ -455,7 +461,7 @@ fn set_error(error: *mut *const PahkatError, code: u32, message: &str) {
         } else {
             *error = Box::into_raw(Box::new(PahkatError {
                 code,
-                message: c_message
+                message: c_message.into_raw()
             }));
         }
     }
