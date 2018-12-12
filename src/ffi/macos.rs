@@ -49,6 +49,7 @@ macro_rules! safe_handle {
 
 #[no_mangle]
 extern fn pahkat_client_new(config_path: *const c_char) -> *const MacOSPackageStore {
+    println!("pahkat_client_new");
     let config = if config_path.is_null() {
         Ok(StoreConfig::load_or_default())
     } else {
@@ -68,6 +69,12 @@ extern fn pahkat_client_new(config_path: *const c_char) -> *const MacOSPackageSt
     //     .iter()
     //     .map(|record| Repository::from_url(&record.url).unwrap())
     //     .collect::<Vec<_>>();
+}
+
+#[no_mangle]
+extern fn pahkat_error_free(error: *const *mut PahkatError) {
+    println!("pahkat_error_free");
+    unsafe { Box::from_raw(*error) };
 }
 
 #[no_mangle]
@@ -163,36 +170,38 @@ unsafe impl Send for DownloadPackageKey {}
 #[no_mangle]
 extern fn pahkat_download_package(
     handle: *const MacOSPackageStore,
-    package_key: *const c_char,
+    raw_package_key: *const c_char,
     target: u8,
     progress: extern fn(*const c_char, u64, u64) -> (),
     error: *mut *const PahkatError
 ) -> u32 {
+    println!("pahkat_download_package");
     let store = safe_handle!(handle);
 
-    if package_key.is_null() {
+    if raw_package_key.is_null() {
         let code = ErrorCode::PackageKeyError.to_u32();
         set_error(error, code, "Package key must not be null");
         return code;
     }
 
-    let package_id = unsafe { CStr::from_ptr(package_key) }.to_string_lossy();
-    let package_id = AbsolutePackageKey::from_string(&package_id).unwrap();
-    let package = match store.resolve_package(&package_id) {
+    let package_key = unsafe { CStr::from_ptr(raw_package_key) }.to_string_lossy();
+    let package_key = AbsolutePackageKey::from_string(&package_key).unwrap();
+    let package = match store.resolve_package(&package_key) {
         Some(v) => v,
         None => {
+            eprintln!("Resolve package error");
             let code = ErrorCode::PackageResolveError.to_u32();
             set_error(error,
                 code,
-                &format!("Unable to resolve package {:?}", package_id.to_string())
+                &format!("Unable to resolve package {:?}", package_key.to_string())
             );
             return code;
         }
     };
 
-    let download_package_key = DownloadPackageKey(package_key);
+    let download_package_key = DownloadPackageKey(raw_package_key);
 
-    match store.download(&package, move |cur, max| {
+    match store.download(&package_key, move |cur, max| {
         progress(download_package_key.0, cur, max);
     }) {
         Ok(_) => 0,
@@ -200,7 +209,7 @@ extern fn pahkat_download_package(
             let code = ErrorCode::PackageDownloadError.to_u32();
             set_error(error,
                 code,
-                &format!("Unable to download package {:?}", package_id.to_string())
+                &format!("Unable to download package {:?}", package_key.to_string())
             );
             code
         }
@@ -208,7 +217,7 @@ extern fn pahkat_download_package(
 }
 
 #[no_mangle]
-extern fn pahkat_status(handle: *const MacOSPackageStore, package_id: *const c_char, error: *mut u32) -> *const c_char {
+extern fn pahkat_status(handle: *const MacOSPackageStore, package_key: *const c_char, error: *mut u32) -> *const c_char {
     // This one is nullable if there's an error.
     let store = safe_handle!(handle);
 
@@ -229,22 +238,24 @@ extern fn pahkat_status(handle: *const MacOSPackageStore, package_id: *const c_c
             .into_raw()
     }
 
-    if package_id.is_null() {
+    if package_key.is_null() {
         unsafe { *error = 1; }
         return null();
     }
 
-    let package_id = unsafe { CStr::from_ptr(package_id) }.to_string_lossy();
-    // TODO use package key
-    let package = match store.find_package(&package_id) {
-        Some(v) => v,
-        None => {
-            unsafe { *error = 4; }
-            return null();
-        }
-    };
+    let package_key = unsafe { CStr::from_ptr(package_key) }.to_string_lossy();
+    let package_key = AbsolutePackageKey::from_string(&package_key).unwrap();
 
-    let pkg_status = match store.status(&package, MacOSInstallTarget::System) {
+    // TODO use package key
+    // let package = match store.resolve_package(&package_key) {
+    //     Some(v) => v,
+    //     None => {
+    //         unsafe { *error = 4; }
+    //         return null();
+    //     }
+    // };
+
+    let pkg_status = match store.status(&package_key, MacOSInstallTarget::System) {
         Ok(v) => v,
         Err(e) => {
             unsafe { *error = 10; }
@@ -259,7 +270,7 @@ extern fn pahkat_status(handle: *const MacOSPackageStore, package_id: *const c_c
         }
     };
 
-    let pkg_status = match store.status(&package, MacOSInstallTarget::User) {
+    let pkg_status = match store.status(&package_key, MacOSInstallTarget::User) {
         Ok(v) => v,
         Err(e) => {
             unsafe { *error = 10; }
@@ -270,122 +281,47 @@ extern fn pahkat_status(handle: *const MacOSPackageStore, package_id: *const c_c
     make_json(pkg_status, MacOSInstallTarget::User)
 }
 
-#[repr(C)]
-struct CPackageAction {
-    pub action: u8,
-    pub target: u8,
-    pub package_key: *mut c_char
-}
-
-impl Drop for CPackageAction {
-    fn drop(&mut self) {
-        unsafe { CString::from_raw(self.package_key) };
-    }
-}
-
-
-impl CPackageAction {
-    pub fn new(action: u8, target: u8, package_key: *const c_char) -> CPackageAction {
-        let package_key = unsafe { CString::from(CStr::from_ptr(package_key)).into_raw() };
-        CPackageAction { action, target, package_key }
-    }
-}
-
 #[no_mangle]
-extern fn pahkat_create_action(action: u8, target: u8, package_key: *const c_char) -> *mut CPackageAction {
-    Box::into_raw(Box::new(CPackageAction::new(action, target, package_key)))
+extern fn pahkat_create_action(action: u8, target: u8, package_key: *const c_char) -> *mut PackageAction {
+    Box::into_raw(Box::new(PackageAction {
+        id: AbsolutePackageKey::from_string(&*unsafe { CStr::from_ptr(package_key) }.to_string_lossy()).unwrap(),
+        action: PackageActionType::from_u8(action),
+        target: if target == 0 { MacOSInstallTarget::System } else { MacOSInstallTarget::User }
+    }))
 }
 
 #[no_mangle]
 extern fn pahkat_create_package_transaction<'a>(
     handle: *const MacOSPackageStore,
     action_count: u32,
-    c_actions: *const CPackageAction,
+    c_actions: *const *const PackageAction,
     error: *mut *const PahkatError
 ) -> *const PackageTransaction {
+    println!("pahkat_create_package_transaction");
     let store = unsafe { Arc::from_raw(handle) };
     let mut actions = Vec::<PackageAction>::new();
 
+    println!("pahkat_create_package_transaction 2");
     for i in 0..action_count as isize {
-        let ptr = unsafe { c_actions.offset(i) };
-        let c_action = unsafe { &*ptr };
-        
-        let package_key = unsafe { CStr::from_ptr(c_action.package_key) }.to_string_lossy();
-        let package_key = AbsolutePackageKey::from_string(&package_key).unwrap();
-
-        let package_record = match store.resolve_package(&package_key) {
-            Some(p) => p,
-            None => {
-                let msg = format!("Unable to resolve package {:?}", package_key.to_string());
-                eprintln!("{}", &msg);
-                set_error(error,
-                    ErrorCode::PackageResolveError.to_u32(),
-                    &msg
-                );
-                return std::ptr::null()
-            }
-        };
-
-        let action = PackageAction {
-            package: package_record,
-            action: PackageActionType::from_u8(c_action.action),
-            target: if c_action.target == 0 { MacOSInstallTarget::System } else { MacOSInstallTarget::User }
-        };
-
-        if action.action == PackageActionType::Install {
-            let dependencies = match store.find_package_dependencies(&action.package, action.target) {
-                Ok(d) => d,
-                Err(_) => {
-                    set_error(error,
-                        ErrorCode::PackageDependencyError.to_u32(),
-                        "Failed to find package dependencies"
-                    );
-                    return std::ptr::null();
-                }
-            };
-
-            for dependency in dependencies {
-                let dependency_action = PackageAction {
-                    package: store.find_package(&dependency.id.to_string()).unwrap(),
-                    action: PackageActionType::Install,
-                    target: action.target
-                };
-                if let Err((code, message)) = add_package_transaction_action(dependency_action, &mut actions) {
-                    set_error(error, code.to_u32(), &message);
-                    return std::ptr::null();
-                }
-            }
-        }
-
-        if let Err((code, message)) = add_package_transaction_action(action, &mut actions) {
-            set_error(error, code.to_u32(), &message);
-            return std::ptr::null();
-        }
+        println!("pahkat_create_package_transaction 2q");
+        let ptr = unsafe { *c_actions.offset(i) };
+        println!("pahkat_create_package_transaction 2-");
+        let action = unsafe { &*ptr }.to_owned();
+        println!("pahkat_create_package_transaction 2s");
+        actions.push(action);
+        println!("pahkat_create_package_transaction 2d");
     }
 
-    let tx = PackageTransaction::new(store.clone(), actions);
+    println!("pahkat_create_package_transaction 3");
+    let tx = match PackageTransaction::new(store.clone(), actions) {
+        Ok(v) => v,
+        Err(e) => panic!(e) // TODO: hand back to client
+    };
     let store = Arc::into_raw(store);
     std::mem::forget(store);
 
+    println!("pahkat_create_package_transaction 4");
     Box::into_raw(Box::from(tx))
-}
-
-fn add_package_transaction_action(
-    new_action: PackageAction,
-    actions: &mut Vec<PackageAction>
-) -> Result<(), (ErrorCode, String)> {
-    match actions.iter().find(|a| a.package.id() == new_action.package.id()) {
-        Some(a) => {
-            if a.action != new_action.action {
-                return Err((
-                    ErrorCode::PackageActionContradiction,
-                    format!("The package {} has already been added but with the contradicting action", new_action.package.id().to_string()).to_string()
-                ))
-            }
-        }
-        None => actions.push(new_action),
-    }
-    Ok(())
 }
 
 #[repr(C)]
@@ -418,8 +354,10 @@ extern fn pahkat_run_package_transaction(
     progress: extern fn(u32, *const c_char, u32),
     error: *mut *const PahkatError
 ) -> u32 {
+    println!("pahkat_run_package_transaction");
     let transaction = safe_handle_mut!(transaction);
 
+    // TODO: package transaction should also return index of package and total package numbers...
     transaction.process(move |key, event| {
         progress(tx_id, CString::new(key.to_string()).unwrap().into_raw(), event.to_u32())
     });
@@ -428,14 +366,14 @@ extern fn pahkat_run_package_transaction(
 }
 
 #[no_mangle]
-extern fn pahkat_package_transaction_packages(
+extern fn pahkat_package_transaction_actions(
     handle: *const MacOSPackageStore,
     transaction: *const PackageTransaction,
     error: *mut *const PahkatError
 ) -> *const c_char {
     let transaction = safe_handle!(transaction);
-    let keys = transaction.list_package_keys(PackageActionType::Install);
-    let json = serde_json::to_string(&keys).expect("serialization issue");
+    
+    let json = serde_json::to_string(&*transaction.actions()).expect("serialization issue");
     CString::new(json)
         .unwrap()
         .into_raw()

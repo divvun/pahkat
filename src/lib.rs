@@ -59,8 +59,32 @@ mod download;
 pub mod repo;
 pub use self::download::Download;
 pub use self::repo::Repository;
+use pahkat::types::{
+    Repository as RepositoryMeta
+};
 
 use directories::BaseDirs;
+
+use serde::ser::{Serialize, Serializer};
+use serde::de::{self, Visitor, Deserialize, Deserializer};
+
+struct AbsolutePackageKeyVisitor;
+
+impl<'de> Visitor<'de> for AbsolutePackageKeyVisitor {
+    type Value = AbsolutePackageKey;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("an AbsolutePackageKey as a URL string")
+    }
+
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        AbsolutePackageKey::from_string(value).map_err(|_| E::custom("Invalid value"))
+    }
+}
+
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -85,6 +109,7 @@ impl PackageStatus {
 impl fmt::Display for PackageStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", match *self {
+            // PackageStatus::NoPackage => "No package",
             PackageStatus::NotInstalled => "Not installed",
             PackageStatus::UpToDate => "Up to date",
             PackageStatus::RequiresUpdate => "Requires update",
@@ -95,6 +120,7 @@ impl fmt::Display for PackageStatus {
 
 #[derive(Debug, Clone, Copy)]
 pub enum PackageStatusError {
+    NoPackage,
     NoInstaller,
     WrongInstallerType,
     ParsingVersion,
@@ -105,6 +131,7 @@ pub enum PackageStatusError {
 impl fmt::Display for PackageStatusError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "Error: {}", match *self {
+            PackageStatusError::NoPackage => "No package",
             PackageStatusError::NoInstaller => "No installer",
             PackageStatusError::WrongInstallerType => "Wrong installer type",
             PackageStatusError::ParsingVersion => "Could not parse version",
@@ -131,15 +158,40 @@ pub struct RepoRecord {
     pub channel: String
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AbsolutePackageKey {
-    #[serde(with = "url_serde")]
     pub url: Url,
     pub id: String,
     pub channel: String
 }
 
+impl Serialize for AbsolutePackageKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&*self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for AbsolutePackageKey {
+    fn deserialize<D>(deserializer: D) -> Result<AbsolutePackageKey, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_str(AbsolutePackageKeyVisitor)
+    }
+}
+
 impl AbsolutePackageKey {
+    pub fn new(repo: &RepositoryMeta, channel: &str, package_id: &str) -> AbsolutePackageKey {
+        AbsolutePackageKey {
+            url: Url::parse(&repo.base).expect("repo base url must be valid"),
+            id: package_id.to_string(),
+            channel: channel.to_string()
+        }
+    }
+    
     // TODO impl From trait.
     pub fn to_string(&self) -> String {
         format!("{}packages/{}#{}", self.url, self.id, self.channel)

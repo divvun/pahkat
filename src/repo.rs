@@ -183,14 +183,11 @@ pub struct PackageRecord {
     package: Package
 }
 
+/// Deprecated into submission
 impl PackageRecord {
     pub fn new(repo: &RepositoryMeta, channel: &str, package: Package) -> PackageRecord {
         PackageRecord {
-            id: AbsolutePackageKey {
-                url: Url::parse(&repo.base).expect("repo base url must be valid"),
-                id: package.id.to_string(),
-                channel: channel.to_string()
-            },
+            id: AbsolutePackageKey::new(repo, channel, &package.id),
             package
         }
     }

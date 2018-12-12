@@ -241,76 +241,76 @@ fn main() {
         #[cfg(target_os="macos")]
         ("macos", Some(matches)) => {
             match matches.subcommand() {
-                ("status", Some(matches)) => {
-                    let package_id = matches.value_of("package-id").expect("package-id to always exist");
-                    let is_user = matches.is_present("user-target");
+                // ("status", Some(matches)) => {
+                //     let package_id = matches.value_of("package-id").expect("package-id to always exist");
+                //     let is_user = matches.is_present("user-target");
                     
-                    let config = StoreConfig::load_or_default();
-                    let repos = config.repos()
-                        .iter()
-                        .map(|record| Repository::from_url(&record.url, record.channel.clone()).unwrap())
-                        .collect::<Vec<_>>();
+                //     let config = StoreConfig::load_or_default();
+                //     let repos = config.repos()
+                //         .iter()
+                //         .map(|record| Repository::from_url(&record.url, record.channel.clone()).unwrap())
+                //         .collect::<Vec<_>>();
 
-                    let store = MacOSPackageStore::new(config);
-                    let package = match store.find_package(package_id) {
-                        Some(v) => v,
-                        None => {
-                            println!("{}: No package found", &package_id);
-                            return;
-                        }
-                    };
-                    let target = match is_user {
-                        true => MacOSInstallTarget::User,
-                        false => MacOSInstallTarget::System
-                    };
+                //     let store = MacOSPackageStore::new(config);
+                //     let (key, package) = match store.find_package(package_id) {
+                //         Some(v) => v,
+                //         None => {
+                //             println!("{}: No package found", &package_id);
+                //             return;
+                //         }
+                //     };
+                //     let target = match is_user {
+                //         true => MacOSInstallTarget::User,
+                //         false => MacOSInstallTarget::System
+                //     };
                     
-                    let status = store.status(&package, target);
+                //     let status = store.status(&key, target);
 
-                    match status {
-                        Ok(v) => println!("{}: {}", &package_id, v),
-                        Err(e) => println!("{}: {}", &package_id, e)
-                    };
-                },
-                ("uninstall", Some(matches)) => {
-                    let package_id = matches.value_of("package-id").expect("package-id to always exist");
-                    let is_user = matches.is_present("user-target");
+                //     match status {
+                //         Ok(v) => println!("{}: {}", &package_id, v),
+                //         Err(e) => println!("{}: {}", &package_id, e)
+                //     };
+                // },
+                // ("uninstall", Some(matches)) => {
+                //     let package_id = matches.value_of("package-id").expect("package-id to always exist");
+                //     let is_user = matches.is_present("user-target");
                     
-                    let config = StoreConfig::load_or_default();
-                    let repos = config.repos()
-                        .iter()
-                        .map(|record| Repository::from_url(&record.url, record.channel.clone()).unwrap())
-                        .collect::<Vec<_>>();
+                //     let config = StoreConfig::load_or_default();
+                //     let repos = config.repos()
+                //         .iter()
+                //         .map(|record| Repository::from_url(&record.url, record.channel.clone()).unwrap())
+                //         .collect::<Vec<_>>();
 
-                    let store = MacOSPackageStore::new(config);
-                    let package = match store.find_package(package_id) {
-                        Some(v) => v,
-                        None => {
-                            println!("{}: No package found", &package_id);
-                            return;
-                        }
-                    };
+                //     let store = MacOSPackageStore::new(config);
+                //     let (key, package) = match store.find_package(package_id) {
+                //         Some(v) => v,
+                //         None => {
+                //             println!("{}: No package found", &package_id);
+                //             return;
+                //         }
+                //     };
 
-                    let target = match is_user {
-                        true => MacOSInstallTarget::User,
-                        false => MacOSInstallTarget::System
-                    };
+                //     let target = match is_user {
+                //         true => MacOSInstallTarget::User,
+                //         false => MacOSInstallTarget::System
+                //     };
 
-                    let status = store.status(&package, target);
-                    match status {
-                        Ok(PackageStatus::UpToDate) | Ok(PackageStatus::RequiresUpdate) => {
-                            let res = store.uninstall(&package, target);
+                //     let status = store.status(&package, target);
+                //     match status {
+                //         Ok(PackageStatus::UpToDate) | Ok(PackageStatus::RequiresUpdate) => {
+                //             let res = store.uninstall(&package, target);
 
-                            match res {
-                                Ok(v) => println!("{}: {}", &package_id, v),
-                                Err(e) => println!("{}: error - {:?}", &package_id, e)
-                            };
-                        },
-                        _ => {
-                            println!("Nothing to do for identifier {}", package_id);
-                            return;
-                        }
-                    }
-                }
+                //             match res {
+                //                 Ok(v) => println!("{}: {}", &package_id, v),
+                //                 Err(e) => println!("{}: error - {:?}", &package_id, e)
+                //             };
+                //         },
+                //         _ => {
+                //             println!("Nothing to do for identifier {}", package_id);
+                //             return;
+                //         }
+                //     }
+                // }
                 ("install", Some(matches)) => {
                     use pahkat_client::repo::PackageRecord;
 
@@ -323,66 +323,43 @@ fn main() {
                         .map(|record| Repository::from_url(&record.url, record.channel.clone()).unwrap())
                         .collect::<Vec<_>>();
 
-                    let store = MacOSPackageStore::new(config);
+                    let store = Arc::new(MacOSPackageStore::new(config));
                     let target = match is_user {
                         true => MacOSInstallTarget::User,
                         false => MacOSInstallTarget::System
                     };
 
-                    let mut packages: Vec<PackageRecord> = vec![];
-                    let mut errors = vec![];
-
-                    for id in package_ids {
+                    let mut keys = vec![];
+                    for id in package_ids.into_iter() {
                         match store.find_package(id) {
-                            Some(v) => {
-                                match store.find_package_dependencies(&v, target) {
-                                    Ok(dependencies) => {
-                                        for dependency in dependencies {
-                                            if packages.iter().filter(|p| p.id() == &dependency.id).count() == 0 {
-                                                packages.push(store.find_package(&dependency.id.id).unwrap());
-                                            }
-                                        }
-                                    }
-                                    Err(e) => {
-                                        println!("Failed to find package dependencies for: {} {}", id, e);
-                                        return;
-                                    }
-                                }
-                                if packages.iter().filter(|p| p.id() == v.id()).count() == 0 {
-                                    packages.push(v);
-                                }
-                            }
-                            None => errors.push(id)
-                        };
-                    }
-
-                    if errors.len() > 0 {
-                        println!("No packages found for: {}", errors.join(", "));
-                        return;
-                    }
-
-                    let actions = packages.into_iter().filter(|p| {
-                        match store.status(&p, target) {
-                            Ok(PackageStatus::NotInstalled) | Ok(PackageStatus::RequiresUpdate) => true,
-                            _ => {
-                                println!("{} already installed; skipping.", p.id().id);
-                                false
+                            Some(v) => keys.push(v.0),
+                            None => {
+                                eprintln!("No package found with id: {}", id);
+                                return;
                             }
                         }
-                    }).map(|p| {
-                        PackageAction {
-                            package: p,
-                            action: PackageActionType::Install,
-                            target
-                        }
+                    }
+                    let actions = keys.into_iter().map(|k| PackageAction {
+                        id: k,
+                        action: PackageActionType::Install,
+                        target
                     }).collect::<Vec<_>>();
 
-                    for action in actions.iter() {
+                    let mut transaction = match PackageTransaction::new(store.clone(), actions) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            eprintln!("{:?}", e);
+                            return;
+                        }
+                    };
+
+                    // Download all of the things
+                    for action in transaction.actions().iter() {
                         let pb = indicatif::ProgressBar::new(0);
                         pb.set_style(indicatif::ProgressStyle::default_bar()
                             .template("{spinner:.green} {prefix} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
                             .progress_chars("#>-"));
-                        pb.set_prefix(&action.package.id().id);
+                        pb.set_prefix(&action.id.id);
                         
                         let progress = move |cur, max| {
                             pb.set_length(max);
@@ -392,57 +369,12 @@ fn main() {
                                 pb.finish_and_clear();
                             }
                         };
-                        let _pkg_path = store.download(&action.package, progress).unwrap();
+                        let _pkg_path = store.clone().download(&action.id, progress).unwrap();
                     }
 
-                    let mut tx = PackageTransaction::new(Arc::new(store), actions);
-                    tx.process(|key, event| {
+                    transaction.process(|key, event| {
                         println!("{}: {:?}", key.id, event);
                     });
-
-                    // impl PackageTransaction {
-                    // pub fn new(
-                    //     store: Arc<MacOSPackageStore>,
-                    //     actions: Vec<PackageAction>
-
-                    // let package = match store.find_package(package_id) {
-                    //     Some(v) => v,
-                    //     None => {
-                    //         println!("{}: No package found", &package_id);
-                    //         return;
-                    //     }
-                    // };
-
-                    // let status = store.status(&package, target);
-                    // match status {
-                    //     Ok(PackageStatus::NotInstalled) | Ok(PackageStatus::RequiresUpdate) => {
-                    //         let pb = indicatif::ProgressBar::new(0);
-                    //         pb.set_style(indicatif::ProgressStyle::default_bar()
-                    //             .template("{spinner:.green} {prefix} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
-                    //             .progress_chars("#>-"));
-                    //         pb.set_prefix(&package_id);
-                            
-                    //         let progress = move |cur, max| {
-                    //             pb.set_length(max);
-                    //             pb.set_position(cur);
-
-                    //             if cur >= max {
-                    //                 pb.finish_and_clear();
-                    //             }
-                    //         };
-                    //         let _pkg_path = store.download(&package, progress).unwrap();
-                    //         let res = store.install(&package, target);
-
-                    //         match res {
-                    //             Ok(v) => println!("{}: {}", &package_id, v),
-                    //             Err(e) => println!("{}: error - {:?}", &package_id, e)
-                    //         };
-                    //     },
-                    //     _ => {
-                    //         println!("Nothing to do for identifier {}", package_id);
-                    //         return;
-                    //     }
-                    // }
                 },
                 ("init", Some(matches)) => {
                     let urls = matches.values_of("url").unwrap();
@@ -479,72 +411,6 @@ fn main() {
                             );
                         }
                     }
-                },
-                ("list-dependencies", Some(matches)) => {
-                    use pahkat_client::repo::PackageRecord;
-
-                    let package_id = matches.value_of("package-id").expect("package-id to always exist");
-                    let is_user = matches.is_present("user-target");
-                    
-                    let config = StoreConfig::load_or_default();
-                    let repos = config.repos()
-                        .iter()
-                        .map(|record| Repository::from_url(&record.url, record.channel.clone()).unwrap())
-                        .collect::<Vec<_>>();
-
-                    let store = MacOSPackageStore::new(config);
-                    let target = match is_user {
-                        true => MacOSInstallTarget::User,
-                        false => MacOSInstallTarget::System
-                    };
-
-                    let mut packages: Vec<PackageRecord> = vec![];
-
-                    match store.find_package(&package_id) {
-                        Some(v) => {
-                            match store.find_package_dependencies(&v, target) {
-                                Ok(dependencies) => {
-                                    for dependency in dependencies {
-                                        if packages.iter().filter(|p| p.id() == &dependency.id).count() == 0 {
-                                            packages.push(store.find_package(&dependency.id.id).unwrap());
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    println!("Failed to find package dependencies for: {} {}", package_id, e);
-                                    return;
-                                }
-                            }
-                            if packages.iter().filter(|p| p.id() == v.id()).count() == 0 {
-                                packages.push(v);
-                            }
-                        }
-                        None => {
-                            println!("No package found for: {}", package_id);
-                        }
-                    }
-
-                    let actions = packages.into_iter().filter(|p| {
-                        match store.status(&p, target) {
-                            Ok(PackageStatus::NotInstalled) | Ok(PackageStatus::RequiresUpdate) => true,
-                            _ => {
-                                println!("{} already installed; skipping.", p.id().id);
-                                false
-                            }
-                        }
-                    }).map(|p| {
-                        PackageAction {
-                            package: p,
-                            action: PackageActionType::Install,
-                            target
-                        }
-                    }).collect::<Vec<_>>();
-
-                    let transaction = PackageTransaction::new(Arc::new(store), actions);
-                    let package_ids = transaction.list_package_keys(PackageActionType::Install);
-                    for id in package_ids.iter() {
-                        println!("{}", id.to_string());
-                    };
                 },
                 _ => {}
             }

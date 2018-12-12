@@ -58,6 +58,7 @@ fn test_bundle_plist() {
 
 #[derive(Debug)]
 pub enum MacOSInstallError {
+    NoPackage,
     NoInstaller,
     WrongInstallerType,
     InvalidFileType,
@@ -68,6 +69,7 @@ pub enum MacOSInstallError {
 
 #[derive(Debug)]
 pub enum MacOSUninstallError {
+    NoPackage,
     NoInstaller,
     WrongInstallerType,
     PkgutilFailure(ProcessError)
@@ -83,7 +85,8 @@ pub enum MacOSUninstallError {
 //     }
 // }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum PackageActionType {
     Install,
     Uninstall
@@ -97,11 +100,19 @@ impl PackageActionType {
             _ => panic!("Invalid package action type: {}", x)
         }
     }
+
+    pub fn to_u8(&self) -> u8 {
+        match self {
+            PackageActionType::Install => 0,
+            PackageActionType::Uninstall => 1
+        }
+    }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
+// TODO: this piece of shit doesn't serialize properly
 pub struct PackageAction {
-    pub package: PackageRecord,
+    pub id: AbsolutePackageKey,
     pub action: PackageActionType,
     pub target: MacOSInstallTarget
 }
@@ -111,16 +122,6 @@ pub struct TransactionDisposable {
     // result: Option<Result<PathBuf, DownloadError>>,
     // handle: Option<JoinHandle<Result<PathBuf, DownloadError>>>
 }
-
-// impl TransactionDisposable {
-//     fn cancel(&self) {
-
-//     }
-
-//     fn wait(&self) {
-
-//     }
-// }
 
 pub struct PackageTransaction {
     store: Arc<MacOSPackageStore>,
@@ -149,16 +150,66 @@ impl TransactionEvent {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum PackageTransactionError {
+    NoPackage(String),
+    Deps(PackageDependencyError),
+    ActionContradiction(String)
+}
+
 impl PackageTransaction {
     pub fn new(
         store: Arc<MacOSPackageStore>,
         actions: Vec<PackageAction>
-    ) -> PackageTransaction {
-        PackageTransaction {
-            store,
-            actions: Arc::new(actions),
-            is_cancelled: Arc::new(AtomicBool::new(false))
+    ) -> Result<PackageTransaction, PackageTransactionError> {
+        let mut new_actions = vec![];
+
+        for action in actions.iter() {
+            let package_key = &action.id;
+
+            let package = match store.resolve_package(&package_key) {
+                Some(p) => p,
+                None => {
+                    return Err(PackageTransactionError::NoPackage(package_key.to_string()));
+                }
+            };
+
+            if action.action == PackageActionType::Install {
+                let dependencies = match store.find_package_dependencies(&action.id, &package, action.target) {
+                    Ok(d) => d,
+                    Err(e) => return Err(PackageTransactionError::Deps(e))
+                };
+
+                for dependency in dependencies.into_iter() {
+                    let contradiction = actions.iter().find(|action| {
+                        dependency.id == action.id &&
+                            action.action == PackageActionType::Uninstall
+                    });
+                    match contradiction {
+                        Some(a) => {
+                            return Err(PackageTransactionError::ActionContradiction(package_key.to_string()))
+                        },
+                        None => new_actions.push(PackageAction {
+                            id: dependency.id,
+                            action: PackageActionType::Install,
+                            target: action.target
+                        })
+                    }
+                }
+            }
+
+            new_actions.push(action.clone());
         }
+
+        Ok(PackageTransaction {
+            store,
+            actions: Arc::new(new_actions),
+            is_cancelled: Arc::new(AtomicBool::new(false))
+        })
+    }
+
+    pub fn actions(&self) -> Arc<Vec<PackageAction>> {
+        self.actions.clone()
     }
 
     pub fn validate(&self) -> bool {
@@ -207,17 +258,17 @@ impl PackageTransaction {
 
                 match action.action {
                     PackageActionType::Install => {
-                        progress(action.package.id().clone(), TransactionEvent::Installing);
-                        match store.install(&action.package, action.target) {
-                            Ok(_) => progress(action.package.id().clone(), TransactionEvent::Completed),
-                            Err(_) => progress(action.package.id().clone(), TransactionEvent::Error)
+                        progress(action.id.clone(), TransactionEvent::Installing);
+                        match store.install(&action.id, action.target) {
+                            Ok(_) => progress(action.id.clone(), TransactionEvent::Completed),
+                            Err(_) => progress(action.id.clone(), TransactionEvent::Error)
                         };
                     },
                     PackageActionType::Uninstall => {
-                        progress(action.package.id().clone(), TransactionEvent::Uninstalling);
-                        match store.uninstall(&action.package, action.target) {
-                            Ok(_) => progress(action.package.id().clone(), TransactionEvent::Completed),
-                            Err(_) => progress(action.package.id().clone(), TransactionEvent::Error)
+                        progress(action.id.clone(), TransactionEvent::Uninstalling);
+                        match store.uninstall(&action.id, action.target) {
+                            Ok(_) => progress(action.id.clone(), TransactionEvent::Completed),
+                            Err(_) => progress(action.id.clone(), TransactionEvent::Error)
                         };
                     }
                 }
@@ -234,14 +285,6 @@ impl PackageTransaction {
         // *self.is_cancelled.write().unwrap() = true;
         // prev_value
         unimplemented!()
-    }
-
-    pub fn list_package_keys(&self, action_type: PackageActionType) -> Vec<AbsolutePackageKey> {
-        self.actions
-            .iter()
-            .filter(|action| action.action == action_type)
-            .map(|action| action.package.id().clone())
-            .collect()
     }
 }
 
@@ -306,7 +349,7 @@ impl MacOSPackageStore {
         Ok(())
     }
 
-    pub fn resolve_package(&self, package_key: &AbsolutePackageKey) -> Option<PackageRecord> {
+    pub fn resolve_package(&self, package_key: &AbsolutePackageKey) -> Option<Package> {
         println!("Resolving package: url: {}, channel: {}", &package_key.url, &package_key.channel);
         for k in self.repos.read().unwrap().keys() {
             println!("{:?}", k);
@@ -325,7 +368,7 @@ impl MacOSPackageStore {
 
                 println!("My pkg id: {}", &package_key.id);
                 let pkg = match r.packages().get(&package_key.id) {
-                    Some(x) => Some(PackageRecord::new(r.meta(), &package_key.channel, x.to_owned())),
+                    Some(x) => Some(x.to_owned()),
                     None => None
                 };
                 println!("Found pkg: {:?}", &pkg);
@@ -333,36 +376,38 @@ impl MacOSPackageStore {
             })
     }
 
-    pub fn find_package(&self, package_id: &str) -> Option<PackageRecord> {
+    pub fn find_package(&self, package_id: &str) -> Option<(AbsolutePackageKey, Package)> {
         self.repos.read().unwrap().iter()
             .find_map(|(key, repo)| {
                 repo.packages()
                     .get(package_id)
-                    .map(|x| PackageRecord::new(repo.meta(), &key.channel, x.to_owned()))
+                    .map(|x| (AbsolutePackageKey::new(repo.meta(), &key.channel, package_id), x.to_owned()))
             })
     }
 
     /// Get the dependencies for a given package
-    pub fn find_package_dependencies(&self, record: &PackageRecord, target: MacOSInstallTarget) -> Result<Vec<PackageDependency>, PackageDependencyError> {
+    pub fn find_package_dependencies(&self, key: &AbsolutePackageKey, package: &Package, target: MacOSInstallTarget) -> Result<Vec<PackageDependency>, PackageDependencyError> {
         let mut resolved = Vec::<String>::new();
-        Ok(self.find_package_dependencies_impl(record, target, 0, &mut resolved)?)
+        Ok(self.find_package_dependencies_impl(key, package, target, 0, &mut resolved)?)
     }
 
     fn find_package_dependencies_impl(
-        &self, record: &PackageRecord,
+        &self,
+        key: &AbsolutePackageKey,
+        package: &Package,
         target: MacOSInstallTarget,
         level: u8,
-        resolved: &mut Vec<String>) -> Result<Vec<PackageDependency>, PackageDependencyError> {
-
-        let mut result = Vec::<PackageDependency>::new();
-
+        resolved: &mut Vec<String>
+    ) -> Result<Vec<PackageDependency>, PackageDependencyError> {
         fn push_if_not_exists(dependency: PackageDependency, result: &mut Vec<PackageDependency>) {
             if result.iter().filter(|d| d.id == dependency.id).count() == 0 {
                 result.push(dependency);
             }
         }
 
-        for (package_id, version) in record.package().dependencies.iter() {
+        let mut result = Vec::<PackageDependency>::new();
+
+        for (package_id, version) in package.dependencies.iter() {
             // avoid circular references by keeping
             // track of package ids that have already been processed
             if resolved.contains(package_id) {
@@ -371,32 +416,39 @@ impl MacOSPackageStore {
             resolved.push(package_id.clone());
 
             match self.find_package(package_id.as_str()) {
-                Some(ref dependency_record) => {
+                Some((ref key, ref package)) => {
                     // add all the dependencies of the dependency
                     // to the list result first
-                    for dependency in self.find_package_dependencies_impl(dependency_record, target, level + 1, resolved)? {
+                    for dependency in self.find_package_dependencies_impl(key, package, target, level + 1, resolved)? {
                         push_if_not_exists(dependency, &mut result);
                     }
 
                     // make sure the version requirement is correct
-                    if dependency_record.package().version.as_str() != version {
-                        return Err(PackageDependencyError::VersionNotFound);
-                    }
+                    // TODO: equality isn't how version comparisons work.
+                    // if package.version.as_str() != version {
+                    //     return Err(PackageDependencyError::VersionNotFound);
+                    // }
 
-                    match self.status(dependency_record, target) {
+                    match self.status(key, target) {
                         Err(error) => return Err(PackageDependencyError::PackageStatusError(error)),
                         Ok(status) => {
-                            let dependency = PackageDependency {
-                                id: dependency_record.id().clone(),
-                                version: version.clone(),
-                                level,
-                                status
-                            };
-                            push_if_not_exists(dependency, &mut result);
+                            match status {
+                                PackageStatus::UpToDate => {},
+                                _ => {
+                                    let dependency = PackageDependency {
+                                        id: key.clone(),
+                                        version: version.clone(),
+                                        level,
+                                        status
+                                    };
+                                    push_if_not_exists(dependency, &mut result);
+                                }
+                            }
+                            
                         }
                     }
                 },
-                None => {
+                _ => {
                     // the given package id does not exist
                     return Err(PackageDependencyError::PackageNotFound);
                 }
@@ -410,20 +462,34 @@ impl MacOSPackageStore {
     //     unimplemented!()
     // }
 
-    pub fn download<F>(&self, record: &PackageRecord, progress: F) -> Result<PathBuf, crate::download::DownloadError>
+    pub fn download<F>(&self, key: &AbsolutePackageKey, progress: F) -> Result<PathBuf, crate::download::DownloadError>
             where F: Fn(u64, u64) -> () + Send + 'static {
-        let installer = match record.package().installer() {
+        let package = match self.resolve_package(key) {
+            Some(v) => v,
+            None => {
+                return Err(crate::download::DownloadError::NoUrl);
+            }
+        };
+
+        let installer = match package.installer() {
             None => return Err(crate::download::DownloadError::NoUrl),
             Some(v) => v
         };
 
-        let mut disposable = record.package().download(&self.download_path(&installer.url()), Some(progress)).unwrap();
+        let mut disposable = package.download(&self.download_path(&installer.url()), Some(progress)).unwrap();
         let v = disposable.wait();
         Ok(v.unwrap())
     }
 
-    pub fn install(&self, record: &PackageRecord, target: MacOSInstallTarget) -> Result<PackageStatus, MacOSInstallError> {
-        let installer = match record.package().installer() {
+    pub fn install(&self, key: &AbsolutePackageKey, target: MacOSInstallTarget) -> Result<PackageStatus, MacOSInstallError> {
+        let package = match self.resolve_package(key) {
+            Some(v) => v,
+            None => {
+                return Err(MacOSInstallError::NoPackage);
+            }
+        };
+
+        let installer = match package.installer() {
             None => return Err(MacOSInstallError::NoInstaller),
             Some(v) => v
         };
@@ -447,11 +513,18 @@ impl MacOSPackageStore {
             _ => {}
         };
 
-        Ok(self.status_impl(&installer, record, target).unwrap())
+        Ok(self.status_impl(&installer, key, &package, target).unwrap())
     }
 
-    pub fn uninstall(&self, record: &PackageRecord, target: MacOSInstallTarget) -> Result<PackageStatus, MacOSUninstallError> {
-        let installer = match record.package().installer() {
+    pub fn uninstall(&self, key: &AbsolutePackageKey, target: MacOSInstallTarget) -> Result<PackageStatus, MacOSUninstallError> {
+        let package = match self.resolve_package(key) {
+            Some(v) => v,
+            None => {
+                return Err(MacOSUninstallError::NoPackage);
+            }
+        };
+
+        let installer = match package.installer() {
             None => return Err(MacOSUninstallError::NoInstaller),
             Some(v) => v
         };
@@ -466,11 +539,18 @@ impl MacOSPackageStore {
             _ => {}
         };
 
-        Ok(self.status_impl(installer, record, target).unwrap())
+        Ok(self.status_impl(installer, key, &package, target).unwrap())
     }
 
-    pub fn status(&self, record: &PackageRecord, target: MacOSInstallTarget) -> Result<PackageStatus, PackageStatusError> {
-        let installer = match record.package().installer() {
+    pub fn status(&self, key: &AbsolutePackageKey, target: MacOSInstallTarget) -> Result<PackageStatus, PackageStatusError> {
+         let package = match self.resolve_package(key) {
+            Some(v) => v,
+            None => {
+                return Err(PackageStatusError::NoPackage);
+            }
+        };
+
+        let installer = match package.installer() {
             None => return Err(PackageStatusError::NoInstaller),
             Some(v) => v
         };
@@ -480,7 +560,7 @@ impl MacOSPackageStore {
             _ => return Err(PackageStatusError::WrongInstallerType)
         };
 
-        self.status_impl(installer, record, target)
+        self.status_impl(installer, key, &package, target)
     }
 
     fn download_path(&self, url: &str) -> PathBuf {
@@ -491,7 +571,7 @@ impl MacOSPackageStore {
         self.config.read().unwrap().package_cache_path().join(hash_id)
     }
 
-    fn status_impl(&self, installer: &MacOSInstaller, record: &PackageRecord, target: MacOSInstallTarget) -> Result<PackageStatus, PackageStatusError> {
+    fn status_impl(&self, installer: &MacOSInstaller, id: &AbsolutePackageKey, package: &Package, target: MacOSInstallTarget) -> Result<PackageStatus, PackageStatusError> {
         let pkg_info = match get_package_info(&installer.pkg_id, target) {
             Ok(v) => v,
             Err(e) => {
@@ -511,13 +591,13 @@ impl MacOSPackageStore {
             Ok(v) => v
         };
 
-        let candidate_version = match semver::Version::parse(&record.package().version) {
+        let candidate_version = match semver::Version::parse(&package.version) {
             Err(_) => return Err(PackageStatusError::ParsingVersion),
             Ok(v) => v
         };
 
         // TODO: handle skipped versions
-        if let Some(skipped_version) = self.config().skipped_package(record.id()) {
+        if let Some(skipped_version) = self.config().skipped_package(id) {
             match semver::Version::parse(&skipped_version) {
                 Err(_) => {}, // No point giving up now
                 Ok(v) => {

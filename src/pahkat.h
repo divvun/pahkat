@@ -22,13 +22,8 @@ typedef struct pahkat_error_s {
     const char* message;
 } pahkat_error_t;
 
-typedef struct pahkat_action_s {
-    const uint8_t action;
-    const uint8_t target;
-    const char* _Nonnull package_key;
-} pahkat_action_t;
-
-typedef struct pahkat_transaction_s pahkat_transaction_t;
+typedef void pahkat_action_t;
+typedef void pahkat_transaction_t;
 
 enum {
     pahkat_success = 0,
@@ -79,7 +74,7 @@ extern void
 pahkat_str_free(const char* _Nonnull str);
 
 extern void
-pahkat_error_free(pahkat_error_t* _Nonnull error);
+pahkat_error_free(pahkat_error_t** _Nonnull error);
 
 // extern void
 // pahkat_add_repo(const pahkat_client_t* _Nonnull handle, const char* repo_url);
@@ -139,7 +134,7 @@ pahkat_run_package_transaction(
 );
 
 extern const char* _Nonnull
-pahkat_package_transaction_packages(
+pahkat_package_transaction_actions(
     const pahkat_client_t* _Nonnull handle,
     const pahkat_transaction_t* _Nonnull transaction,
     pahkat_error_t** error
