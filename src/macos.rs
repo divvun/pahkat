@@ -235,6 +235,14 @@ impl PackageTransaction {
         // prev_value
         unimplemented!()
     }
+
+    pub fn list_package_keys(&self, action_type: PackageActionType) -> Vec<AbsolutePackageKey> {
+        self.actions
+            .iter()
+            .filter(|action| action.action == action_type)
+            .map(|action| action.package.id().clone())
+            .collect()
+    }
 }
 
 

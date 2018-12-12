@@ -138,6 +138,14 @@ pahkat_run_package_transaction(
     pahkat_error_t** error
 );
 
+extern const char* _Nonnull
+pahkat_package_transaction_packages(
+    const pahkat_client_t* _Nonnull handle,
+    const pahkat_transaction_t _Nonnull transaction,
+    uint8_t action_type,
+    pahkat_error_t** error
+);
+
 // extern uint32_t /* error */
 // pakhat_install_package(const pahkat_client_t* _Nonnull handle,
 //     const char* package_key,
