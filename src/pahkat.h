@@ -141,7 +141,7 @@ pahkat_run_package_transaction(
 extern const char* _Nonnull
 pahkat_package_transaction_packages(
     const pahkat_client_t* _Nonnull handle,
-    const pahkat_transaction_t _Nonnull transaction,
+    const pahkat_transaction_t* _Nonnull transaction,
     pahkat_error_t** error
 );
 
