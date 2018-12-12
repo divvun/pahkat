@@ -431,11 +431,10 @@ extern fn pahkat_run_package_transaction(
 extern fn pahkat_package_transaction_packages(
     handle: *const MacOSPackageStore,
     transaction: *const PackageTransaction,
-    action_type: u8,
     error: *mut *const PahkatError
 ) -> *const c_char {
     let transaction = safe_handle!(transaction);
-    let keys = transaction.list_package_keys(PackageActionType::from_u8(action_type));
+    let keys = transaction.list_package_keys(PackageActionType::Install);
     let json = serde_json::to_string(&keys).expect("serialization issue");
     CString::new(json)
         .unwrap()

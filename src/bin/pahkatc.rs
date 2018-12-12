@@ -97,6 +97,14 @@ fn main() {
                     .short("u")
                     .long("user"))
             )
+            .subcommand(
+                SubCommand::with_name("list-dependencies")
+                .about("List dependencies for a package.")
+                .arg(Arg::with_name("package-id")
+                    .value_name("PKGID")
+                    .help("The package identifier to install")
+                    .required(true))
+            )
         );
     }
 
@@ -471,6 +479,72 @@ fn main() {
                             );
                         }
                     }
+                },
+                ("list-dependencies", Some(matches)) => {
+                    use pahkat_client::repo::PackageRecord;
+
+                    let package_id = matches.value_of("package-id").expect("package-id to always exist");
+                    let is_user = matches.is_present("user-target");
+                    
+                    let config = StoreConfig::load_or_default();
+                    let repos = config.repos()
+                        .iter()
+                        .map(|record| Repository::from_url(&record.url, record.channel.clone()).unwrap())
+                        .collect::<Vec<_>>();
+
+                    let store = MacOSPackageStore::new(config);
+                    let target = match is_user {
+                        true => MacOSInstallTarget::User,
+                        false => MacOSInstallTarget::System
+                    };
+
+                    let mut packages: Vec<PackageRecord> = vec![];
+
+                    match store.find_package(&package_id) {
+                        Some(v) => {
+                            match store.find_package_dependencies(&v, target) {
+                                Ok(dependencies) => {
+                                    for dependency in dependencies {
+                                        if packages.iter().filter(|p| p.id() == &dependency.id).count() == 0 {
+                                            packages.push(store.find_package(&dependency.id.id).unwrap());
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    println!("Failed to find package dependencies for: {} {}", package_id, e);
+                                    return;
+                                }
+                            }
+                            if packages.iter().filter(|p| p.id() == v.id()).count() == 0 {
+                                packages.push(v);
+                            }
+                        }
+                        None => {
+                            println!("No package found for: {}", package_id);
+                        }
+                    }
+
+                    let actions = packages.into_iter().filter(|p| {
+                        match store.status(&p, target) {
+                            Ok(PackageStatus::NotInstalled) | Ok(PackageStatus::RequiresUpdate) => true,
+                            _ => {
+                                println!("{} already installed; skipping.", p.id().id);
+                                false
+                            }
+                        }
+                    }).map(|p| {
+                        PackageAction {
+                            package: p,
+                            action: PackageActionType::Install,
+                            target
+                        }
+                    }).collect::<Vec<_>>();
+
+                    let transaction = PackageTransaction::new(Arc::new(store), actions);
+                    let package_ids = transaction.list_package_keys(PackageActionType::Install);
+                    for id in package_ids.iter() {
+                        println!("{}", id.to_string());
+                    };
                 },
                 _ => {}
             }
