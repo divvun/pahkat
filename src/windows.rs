@@ -1,31 +1,40 @@
 #![cfg(windows)]
-use pahkat::types::*;
-use {Package, PackageStatus, PackageStatusError, Installer};
+use pahkat::types::{
+    WindowsInstaller,
+    Installer,
+    Package,
+    Downloadable
+};
+//use {Package, PackageStatus, PackageStatusError, Installer};
 use std::path::{PathBuf, Path};
 use winreg::RegKey;
 use winreg::enums::*;
 use semver;
 use std::io;
-use ::{Repository, StoreConfig};
+use super::{Repository, StoreConfig};
 use std::process::{self, Command};
 use std::ffi::{OsString};
 use url;
+use std::sync::{Arc, RwLock};
+use crypto::digest::Digest;
+use crypto::sha2::Sha256;
+use crate::*;
 
-pub fn init(url: &str, cache_dir: &str) {
-    let config = StoreConfig { 
-        url: url.to_owned(),
-        cache_dir: cache_dir.to_owned()
-    };
+// pub fn init(url: &str, cache_dir: &str) {
+//     let config = StoreConfig { 
+//         url: url.to_owned(),
+//         cache_dir: cache_dir.to_owned()
+//     };
     
-    let config_path = ::default_config_path().join("config.json");
+//     let config_path = ::default_config_path().join("config.json");
         
-    if config_path.exists() {
-        println!("Path already exists; aborting.");
-        return;
-    }
+//     if config_path.exists() {
+//         println!("Path already exists; aborting.");
+//         return;
+//     }
 
-    config.save(&config_path).unwrap();
-}
+//     config.save(&config_path).unwrap();
+// }
 
 
 mod sys {
@@ -142,9 +151,13 @@ impl<'a> WindowsPackageStore<'a> {
     }
     
     // TODO: review if there is a better place to put this function...
-    // pub fn download_path(&self, _package: &Package) -> PathBuf {
-    //     return Path::new(&self.config.cache_dir).join(self.repo.hash_id())
-    // }
+    fn download_path(&self, url: &str) -> PathBuf {
+        let mut sha = Sha256::new();
+        sha.input_str(url);
+        let hash_id = sha.result_str();
+        
+        self.config.package_cache_path().join(hash_id)
+    }
 
     pub fn status(&self, package: &'a Package) -> Result<PackageStatus, PackageStatusError> {
         let installer = installer(&package)?;
@@ -188,7 +201,7 @@ impl<'a> WindowsPackageStore<'a> {
         
         let url = url::Url::parse(&installer.url).unwrap();
         let filename = url.path_segments().unwrap().last().unwrap();
-        let pkg_path = self.download_path(&package).join(filename);
+        let pkg_path = self.download_path(&url.as_str()).join(filename);
 
         if !pkg_path.exists() {
             return Err(InstallError::PackageNotInCache)
