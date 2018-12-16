@@ -19,6 +19,7 @@ use crypto::sha2::Sha256;
 use std::sync::{Arc, RwLock};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
+use crate::{PackageActionType, PackageTransactionError, TransactionEvent};
 
 // use crossbeam::channel;
 
@@ -85,30 +86,6 @@ pub enum MacOSUninstallError {
 //     }
 // }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum PackageActionType {
-    Install,
-    Uninstall
-}
-
-impl PackageActionType {
-    pub fn from_u8(x: u8) -> PackageActionType {
-        match x {
-            0 => PackageActionType::Install,
-            1 => PackageActionType::Uninstall,
-            _ => panic!("Invalid package action type: {}", x)
-        }
-    }
-
-    pub fn to_u8(&self) -> u8 {
-        match self {
-            PackageActionType::Install => 0,
-            PackageActionType::Uninstall => 1
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize)]
 // TODO: this piece of shit doesn't serialize properly
 pub struct PackageAction {
@@ -129,33 +106,6 @@ pub struct PackageTransaction {
     is_cancelled: Arc<AtomicBool>
 }
 
-#[derive(Debug)]
-pub enum TransactionEvent {
-    NotStarted,
-    Uninstalling,
-    Installing,
-    Completed,
-    Error
-}
-
-impl TransactionEvent {
-    pub fn to_u32(&self) -> u32 {
-        match self {
-            TransactionEvent::NotStarted => 0,
-            TransactionEvent::Uninstalling => 1,
-            TransactionEvent::Installing => 2,
-            TransactionEvent::Completed => 3,
-            TransactionEvent::Error => 4
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum PackageTransactionError {
-    NoPackage(String),
-    Deps(PackageDependencyError),
-    ActionContradiction(String)
-}
 
 impl PackageTransaction {
     pub fn new(
@@ -215,29 +165,6 @@ impl PackageTransaction {
     pub fn validate(&self) -> bool {
         true
     }
-
-    // pub fn download<F>(&mut self, progress: F) where F: Fn(u64, u64) -> () {
-    //     if !self.validate() {
-    //         // TODO: early return
-    //         return;
-    //     }
-
-    //     let is_cancelled = self.is_cancelled.clone();
-    //     let store = self.store.clone();
-    //     let actions = self.actions.clone();
-
-    //     let handle = std::thread::spawn(move || {
-    //         for action in actions.iter().filter(|a| a.action == PackageActionType::Install) {
-    //             if is_cancelled.load(Ordering::Relaxed) == true {
-    //                 return;
-    //             }
-                
-                
-    //         }
-
-    //         ()
-    //     });
-    // }
 
     pub fn process<F>(&mut self, progress: F)
     where F: Fn(AbsolutePackageKey, TransactionEvent) -> () + 'static + Send {
@@ -476,9 +403,8 @@ impl MacOSPackageStore {
             Some(v) => v
         };
 
-        let mut disposable = package.download(&self.download_path(&installer.url()), Some(progress)).unwrap();
-        let v = disposable.wait();
-        Ok(v.unwrap())
+        let mut disposable = package.download(&self.download_path(&installer.url()), Some(progress))?;
+        disposable.wait()
     }
 
     pub fn install(&self, key: &AbsolutePackageKey, target: MacOSInstallTarget) -> Result<PackageStatus, MacOSInstallError> {

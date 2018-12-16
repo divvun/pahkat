@@ -297,22 +297,15 @@ extern fn pahkat_create_package_transaction<'a>(
     c_actions: *const *const PackageAction,
     error: *mut *const PahkatError
 ) -> *const PackageTransaction {
-    println!("pahkat_create_package_transaction");
     let store = unsafe { Arc::from_raw(handle) };
     let mut actions = Vec::<PackageAction>::new();
 
-    println!("pahkat_create_package_transaction 2");
     for i in 0..action_count as isize {
-        println!("pahkat_create_package_transaction 2q");
         let ptr = unsafe { *c_actions.offset(i) };
-        println!("pahkat_create_package_transaction 2-");
         let action = unsafe { &*ptr }.to_owned();
-        println!("pahkat_create_package_transaction 2s");
         actions.push(action);
-        println!("pahkat_create_package_transaction 2d");
     }
 
-    println!("pahkat_create_package_transaction 3");
     let tx = match PackageTransaction::new(store.clone(), actions) {
         Ok(v) => v,
         Err(e) => panic!(e) // TODO: hand back to client
@@ -320,7 +313,6 @@ extern fn pahkat_create_package_transaction<'a>(
     let store = Arc::into_raw(store);
     std::mem::forget(store);
 
-    println!("pahkat_create_package_transaction 4");
     Box::into_raw(Box::from(tx))
 }
 

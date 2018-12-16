@@ -71,7 +71,7 @@ impl Download for Package {
         };
 
         let url_str = installer.url();
-        let url = url::Url::parse(&url_str).unwrap();
+        let url = url::Url::parse(&url_str).map_err(|_| DownloadError::InvalidUrl)?;
         let mut cancel_token = disposable.cancel_token();
 
         let handle = std::thread::spawn(move || {

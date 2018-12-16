@@ -65,6 +65,58 @@ use pahkat::types::{
 
 use directories::BaseDirs;
 
+#[derive(Debug)]
+pub enum TransactionEvent {
+    NotStarted,
+    Uninstalling,
+    Installing,
+    Completed,
+    Error
+}
+
+impl TransactionEvent {
+    pub fn to_u32(&self) -> u32 {
+        match self {
+            TransactionEvent::NotStarted => 0,
+            TransactionEvent::Uninstalling => 1,
+            TransactionEvent::Installing => 2,
+            TransactionEvent::Completed => 3,
+            TransactionEvent::Error => 4
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum PackageTransactionError {
+    NoPackage(String),
+    Deps(PackageDependencyError),
+    ActionContradiction(String)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PackageActionType {
+    Install,
+    Uninstall
+}
+
+impl PackageActionType {
+    pub fn from_u8(x: u8) -> PackageActionType {
+        match x {
+            0 => PackageActionType::Install,
+            1 => PackageActionType::Uninstall,
+            _ => panic!("Invalid package action type: {}", x)
+        }
+    }
+
+    pub fn to_u8(&self) -> u8 {
+        match self {
+            PackageActionType::Install => 0,
+            PackageActionType::Uninstall => 1
+        }
+    }
+}
+
 use serde::ser::{Serialize, Serializer};
 use serde::de::{self, Visitor, Deserialize, Deserializer};
 
