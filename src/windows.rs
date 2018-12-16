@@ -268,9 +268,13 @@ pub enum ProcessError {
 fn uninstall_regkey(installer: &WindowsInstaller) -> Option<RegKey> {
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     let path = Path::new(Keys::UninstallPath).join(&installer.product_code);
-    
     match hklm.open_subkey(&path) {
-        Err(e) => None,
+        Err(e) => {
+            match hklm.open_subkey_with_flags(&path, KEY_READ | KEY_WOW64_64KEY) {
+                Err(e) => None,
+                Ok(v) => Some(v)
+            }
+        }
         Ok(v) => Some(v)
     }
 }
