@@ -112,7 +112,7 @@ impl PackageTransaction {
         store: Arc<MacOSPackageStore>,
         actions: Vec<PackageAction>
     ) -> Result<PackageTransaction, PackageTransactionError> {
-        let mut new_actions = vec![];
+        let mut new_actions: Vec<PackageAction> = vec![];
 
         for action in actions.iter() {
             let package_key = &action.id;
@@ -132,23 +132,27 @@ impl PackageTransaction {
 
                 for dependency in dependencies.into_iter() {
                     let contradiction = actions.iter().find(|action| {
-                        dependency.id == action.id &&
-                            action.action == PackageActionType::Uninstall
+                        dependency.id == action.id && action.action == PackageActionType::Uninstall
                     });
                     match contradiction {
                         Some(a) => {
                             return Err(PackageTransactionError::ActionContradiction(package_key.to_string()))
                         },
-                        None => new_actions.push(PackageAction {
-                            id: dependency.id,
-                            action: PackageActionType::Install,
-                            target: action.target
-                        })
+                        None => {
+                            if !new_actions.iter().any(|x| x.id == dependency.id) {
+                                new_actions.push(PackageAction {
+                                    id: dependency.id,
+                                    action: PackageActionType::Install,
+                                    target: action.target
+                                })
+                            }
+                        }
                     }
                 }
             }
-
-            new_actions.push(action.clone());
+            if !new_actions.iter().any(|x| x.id == action.id) {
+                new_actions.push(action.clone());
+            }
         }
 
         Ok(PackageTransaction {
