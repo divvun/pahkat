@@ -10,15 +10,21 @@ use serde_json::json;
 
 // TODO catch unwind!!
 
-use crate::macos::MacOSPackageStore;
-use crate::macos::PackageTransaction;
-use crate::StoreConfig;
-use crate::RepoRecord;
+use crate::macos::{
+    MacOSPackageStore,
+    PackageTransaction,
+    PackageAction
+};
 use crate::repo::{PackageRecord, Repository};
-use crate::PackageStatus;
-use crate::AbsolutePackageKey;
+use crate::{
+    PackageTransactionError,
+    StoreConfig,
+    RepoRecord,
+    PackageStatus,
+    AbsolutePackageKey,
+    PackageActionType
+};
 use pahkat::types::*;
-use crate::macos::{PackageAction, PackageActionType};
 use std::sync::Arc;
 
 #[repr(C)]
@@ -307,11 +313,38 @@ extern fn pahkat_create_package_transaction<'a>(
     }
 
     let tx = match PackageTransaction::new(store.clone(), actions) {
-        Ok(v) => v,
-        Err(e) => panic!(e) // TODO: hand back to client
+        Ok(v) => {
+            let store = Arc::into_raw(store);
+            std::mem::forget(store);
+            v
+        },
+        Err(e) => {
+            let c_error = match e {
+                PackageTransactionError::NoPackage(id) => {
+                    PahkatError {
+                        code: 1,
+                        message: CString::new(&*format!("No package with id: {}", id)).unwrap().into_raw()
+                    }
+                }
+                PackageTransactionError::Deps(dep_error) => {
+                    PahkatError {
+                        code: 2,
+                        message: CString::new(&*format!("{:?}", dep_error)).unwrap().into_raw()
+                    }
+                },
+                PackageTransactionError::ActionContradiction(id) => {
+                    PahkatError {
+                        code: 3,
+                        message: CString::new(&*format!("Package contradiction for: {}", id)).unwrap().into_raw()
+                    }
+                }
+            };
+            unsafe { *error = Box::into_raw(Box::new(c_error)) };
+            let store = Arc::into_raw(store);
+            std::mem::forget(store);
+            return std::ptr::null()
+        }
     };
-    let store = Arc::into_raw(store);
-    std::mem::forget(store);
 
     Box::into_raw(Box::from(tx))
 }
