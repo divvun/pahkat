@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 
-#ifndef _Nonnull
+#ifndef __APPLE__
 #define _Nonnull
 #endif
 
@@ -71,10 +71,10 @@ pahkat_status(
     uint32_t* error);
 
 extern void
-pahkat_str_free(const char* _Nonnull str);
+pahkat_str_free(const char* str);
 
 extern void
-pahkat_error_free(pahkat_error_t** _Nonnull error);
+pahkat_error_free(pahkat_error_t* error);
 
 // extern void
 // pahkat_add_repo(const pahkat_client_t* _Nonnull handle, const char* repo_url);
@@ -109,12 +109,12 @@ pahkat_download_package(
     pahkat_error_t** error
 );
 
-extern pahkat_transaction_t* _Nonnull
+extern pahkat_transaction_t*
 pahkat_create_package_transaction(
     const pahkat_client_t* _Nonnull handle,
     const uint32_t action_count,
     const pahkat_action_t* _Nonnull actions,
-    pahkat_error_t** error
+    pahkat_error_t** _Nullable error
 );
 
 extern uint32_t
