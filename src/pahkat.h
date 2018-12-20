@@ -35,7 +35,7 @@ enum {
 };
 
 extern pahkat_client_t*
-pahkat_client_new(const char* config_path);
+pahkat_client_new(const char* config_path, uint8_t save_changes);
 
 extern const char* _Nonnull
 pahkat_config_path(pahkat_client_t* _Nonnull handle);
@@ -51,6 +51,12 @@ pahkat_config_repos(pahkat_client_t* _Nonnull handle);
 
 extern void
 pahkat_config_set_repos(pahkat_client_t* _Nonnull handle, const char* repos);
+
+extern void
+pahkat_config_set_cache_path(pahkat_client_t* _Nonnull handle, const char* cache_path);
+
+extern const char* _Nonnull
+pahkat_config_cache_path(pahkat_client_t* _Nonnull handle);
 
 extern void
 pahkat_refresh_repos(pahkat_client_t* _Nonnull handle);

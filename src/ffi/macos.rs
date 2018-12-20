@@ -54,13 +54,13 @@ macro_rules! safe_handle {
 }
 
 #[no_mangle]
-extern fn pahkat_client_new(config_path: *const c_char) -> *const MacOSPackageStore {
+extern fn pahkat_client_new(config_path: *const c_char, save_changes: u8) -> *const MacOSPackageStore {
     println!("pahkat_client_new");
     let config = if config_path.is_null() {
-        Ok(StoreConfig::load_or_default())
+        Ok(StoreConfig::load_or_default(save_changes != 0))
     } else {
         let config_path = unsafe { CStr::from_ptr(config_path) }.to_string_lossy();
-        StoreConfig::load(std::path::Path::new(&*config_path))
+        StoreConfig::load(std::path::Path::new(&*config_path), save_changes != 0)
     };
 
     match config {
@@ -134,6 +134,19 @@ extern fn pahkat_config_set_repos(handle: *const MacOSPackageStore, repos: *cons
     let repos = unsafe { CStr::from_ptr(repos).to_string_lossy() };
     let repos: Vec<RepoRecord> = serde_json::from_str(&repos).unwrap();
     store.config().set_repos(repos);
+}
+
+#[no_mangle]
+extern fn pahkat_config_set_cache_path(handle: *const MacOSPackageStore, cache_path: *const c_char) {
+    let store = safe_handle!(handle);
+    let cache_path = unsafe { CStr::from_ptr(cache_path).to_string_lossy() };
+    store.config().set_cache_base_path(std::path::PathBuf::from(&*cache_path));
+}
+
+#[no_mangle]
+extern fn pahkat_config_cache_path(handle: *const MacOSPackageStore) -> *const c_char {
+    let store = safe_handle!(handle);
+    CString::new(&*store.config().cache_base_path().to_string_lossy()).unwrap().into_raw()
 }
 
 #[no_mangle]
@@ -384,6 +397,7 @@ extern fn pahkat_run_package_transaction(
 
     // TODO: package transaction should also return index of package and total package numbers...
     transaction.process(move |key, event| {
+        eprintln!("{:?}", event);
         progress(tx_id, CString::new(key.to_string()).unwrap().into_raw(), event.to_u32())
     });
 
