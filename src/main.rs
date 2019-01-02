@@ -435,8 +435,8 @@ fn package_macos_installer(file_path: &Path, version: &str, force_yes: bool, ins
     let meta = installer_file.metadata().unwrap();
     let installer_size = meta.len() as usize;
 
-    let target_results: Vec<Result<MacOSInstallTarget, &str>> = targets.iter()
-        .map(|x| x.parse::<MacOSInstallTarget>().map_err(|_| *x))
+    let target_results: Vec<Result<InstallTarget, &str>> = targets.iter()
+        .map(|x| x.parse::<InstallTarget>().map_err(|_| *x))
         .collect();
 
     let target_errors: Vec<&str> = target_results.iter().filter(|x| x.is_err()).map(|x| x.err().unwrap()).collect();
@@ -446,7 +446,7 @@ fn package_macos_installer(file_path: &Path, version: &str, force_yes: bool, ins
         return;
     }
 
-    let targets: std::collections::BTreeSet<MacOSInstallTarget> = target_results.iter()
+    let targets: std::collections::BTreeSet<InstallTarget> = target_results.iter()
         .filter(|x| x.is_ok())
         .map(|x| x.unwrap())
         .collect();

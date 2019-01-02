@@ -159,70 +159,70 @@ impl Downloadable for Installer {
 
 #[derive(Debug, Clone, Copy, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub enum MacOSInstallTarget {
+pub enum InstallTarget {
     System,
     User
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct ParseMacOSInstallTargetError;
+pub struct ParseInstallTargetError;
 
-impl std::error::Error for ParseMacOSInstallTargetError {
+impl std::error::Error for ParseInstallTargetError {
     fn description(&self) -> &str {
         "Invalid value passed"
     }
 }
-impl std::fmt::Display for ParseMacOSInstallTargetError {
+impl std::fmt::Display for ParseInstallTargetError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         use std::error::Error;
         write!(f, "{}", self.description())
     }
 }
 
-impl FromStr for MacOSInstallTarget {
-    type Err = ParseMacOSInstallTargetError;
+impl FromStr for InstallTarget {
+    type Err = ParseInstallTargetError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "system" => Ok(MacOSInstallTarget::System),
-            "user" => Ok(MacOSInstallTarget::User),
-            _ => Err(ParseMacOSInstallTargetError {})
+            "system" => Ok(InstallTarget::System),
+            "user" => Ok(InstallTarget::User),
+            _ => Err(ParseInstallTargetError {})
         }
     }
 }
 
-impl std::fmt::Display for MacOSInstallTarget {
+impl std::fmt::Display for InstallTarget {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", match *self {
-            MacOSInstallTarget::System => "system",
-            MacOSInstallTarget::User => "user"
+            InstallTarget::System => "system",
+            InstallTarget::User => "user"
         })
     }
 }
 
-impl PartialEq for MacOSInstallTarget {
-    fn eq(&self, other: &MacOSInstallTarget) -> bool {
+impl PartialEq for InstallTarget {
+    fn eq(&self, other: &InstallTarget) -> bool {
         match (*self, *other) {
-            (MacOSInstallTarget::System, MacOSInstallTarget::System) => true,
-            (MacOSInstallTarget::User, MacOSInstallTarget::User) => true,
+            (InstallTarget::System, InstallTarget::System) => true,
+            (InstallTarget::User, InstallTarget::User) => true,
             _ => false
         }
     }
 }
 
-impl PartialOrd for MacOSInstallTarget {
-    fn partial_cmp(&self, other: &MacOSInstallTarget) -> Option<Ordering> {
+impl PartialOrd for InstallTarget {
+    fn partial_cmp(&self, other: &InstallTarget) -> Option<Ordering> {
         Some(self.cmp(&other))
     }
 }
 
-impl Ord for MacOSInstallTarget {
-    fn cmp(&self, other: &MacOSInstallTarget) -> Ordering {
+impl Ord for InstallTarget {
+    fn cmp(&self, other: &InstallTarget) -> Ordering {
         match (*self, *other) {
-            (MacOSInstallTarget::System, MacOSInstallTarget::System) => Ordering::Equal,
-            (MacOSInstallTarget::User, MacOSInstallTarget::User) => Ordering::Equal,
-            (MacOSInstallTarget::System, MacOSInstallTarget::User) => Ordering::Less,
-            (MacOSInstallTarget::User, MacOSInstallTarget::System) => Ordering::Greater
+            (InstallTarget::System, InstallTarget::System) => Ordering::Equal,
+            (InstallTarget::User, InstallTarget::User) => Ordering::Equal,
+            (InstallTarget::System, InstallTarget::User) => Ordering::Less,
+            (InstallTarget::User, InstallTarget::System) => Ordering::Greater
         }
     }
 }
@@ -235,7 +235,7 @@ pub struct MacOSInstaller {
     pub url: String,
     pub pkg_id: String,
     #[serde(default)]
-    pub targets: BTreeSet<MacOSInstallTarget>,
+    pub targets: BTreeSet<InstallTarget>,
     #[serde(default)]
     pub requires_reboot: bool,
     #[serde(default)]
