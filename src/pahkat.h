@@ -8,6 +8,7 @@
 
 #ifndef __APPLE__
 #define _Nonnull
+#define _Nullable
 #endif
 
 typedef void pahkat_client_t;
@@ -74,7 +75,7 @@ extern void
 pahkat_str_free(const char* str);
 
 extern void
-pahkat_error_free(pahkat_error_t* error);
+pahkat_error_free(pahkat_error_t* _Nonnull error);
 
 // extern void
 // pahkat_add_repo(const pahkat_client_t* _Nonnull handle, const char* repo_url);
@@ -106,7 +107,7 @@ pahkat_download_package(
     const char* _Nonnull package_key,
     uint8_t target,
     void (*progress)(const char* /* package_id */, uint64_t /* cur */, uint64_t /* max */),
-    pahkat_error_t** error
+    pahkat_error_t* error
 );
 
 extern pahkat_transaction_t*
@@ -121,7 +122,7 @@ extern uint32_t
 pahkat_validate_package_transaction(
     const pahkat_client_t* _Nonnull handle,
     const pahkat_transaction_t* _Nonnull transaction,
-    pahkat_error_t** error
+    pahkat_error_t* error
 );
 
 extern uint32_t
@@ -130,20 +131,20 @@ pahkat_run_package_transaction(
     pahkat_transaction_t* _Nonnull transaction,
     uint32_t tx_id,
     void (*progress)(uint32_t, const char* /* package_id */, uint32_t /* action */),
-    pahkat_error_t** error
+    pahkat_error_t* error
 );
 
 extern const char* _Nonnull
 pahkat_package_transaction_actions(
     const pahkat_client_t* _Nonnull handle,
     const pahkat_transaction_t* _Nonnull transaction,
-    pahkat_error_t** error
+    pahkat_error_t* error
 );
 
-// extern uint32_t /* error */
-// pakhat_install_package(const pahkat_client_t* _Nonnull handle,
-//     const char* package_key,
-//     uint8_t target);
+extern void/* error */
+pakhat_package_install(const pahkat_client_t* _Nonnull handle,
+    const char* package_key,
+    uint8_t target);
 
 // extern uint32_t /* error */
 // pakhat_uninstall_package(const pahkat_client_t* _Nonnull handle,

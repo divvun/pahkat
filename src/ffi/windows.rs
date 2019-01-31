@@ -380,6 +380,36 @@ extern fn pahkat_package_transaction_actions(
         .into_raw()
 }
 
+
+#[no_mangle]
+extern fn pahkat_package_install(
+    handle: *const WindowsPackageStore,
+    raw_package_key: *const c_char,
+    target: u8
+) {
+    let store = safe_handle!(handle);
+    let package_key = unsafe { CStr::from_ptr(raw_package_key) }.to_string_lossy();
+    let package_key = AbsolutePackageKey::from_string(&package_key).unwrap();
+    store.install(&package_key, InstallTarget::System);
+}
+
+#[no_mangle]
+extern fn pahkat_package_path(
+    handle: *const WindowsPackageStore,
+    raw_package_key: *const c_char
+) -> *const c_char {
+    let store = safe_handle!(handle);
+    let package_key = unsafe { CStr::from_ptr(raw_package_key) }.to_string_lossy();
+    let package_key = AbsolutePackageKey::from_string(&package_key).unwrap();
+    match store.package_path(&package_key) {
+        Some(v) => {
+            let p = v.to_string_lossy();
+            CString::new(&*p).unwrap().into_raw()
+        },
+        None => std::ptr::null()
+    }
+}
+
 enum ErrorCode {
     None,
     PackageDownloadError,

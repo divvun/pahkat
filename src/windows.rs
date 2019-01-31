@@ -463,6 +463,38 @@ impl WindowsPackageStore {
         return Ok(result);
     }
 
+    pub fn package_path(&self, key: &AbsolutePackageKey) -> Option<PathBuf> {
+        let package = match self.resolve_package(key) {
+            Some(v) => v,
+            None => {
+                return None;
+            }
+        };
+
+        let installer = match package.installer() {
+            None => return None,
+            Some(v) => v
+        };
+
+        let installer = match *installer {
+            Installer::Windows(ref v) => v,
+            _ => return None
+        };
+
+        let url = match url::Url::parse(&installer.url) {
+            Ok(v) => v,
+            Err(_) => return None
+        };
+        let filename = url.path_segments().unwrap().last().unwrap();
+        let pkg_path = self.download_path(&url.as_str()).join(filename);
+
+        if !pkg_path.exists() {
+            return None;
+        }
+
+        Some(pkg_path)
+    }
+
     pub fn install(&self, key: &AbsolutePackageKey, target: InstallTarget) -> Result<PackageStatus, WindowsInstallError> {
         let package = match self.resolve_package(key) {
             Some(v) => v,
@@ -507,20 +539,24 @@ impl WindowsPackageStore {
                         arg_str.push("\" /qn /norestart");
                     }
                     "nsis" => {
+                        arg_str.push("\"");
                         arg_str.push(&pkg_path);
-                        arg_str.push( "/SD");
-                        if target == InstallTarget::User {
-                            arg_str.push(" /CurrentUser")
-                        }
+                        arg_str.push("\" /S");
+                        // if target == InstallTarget::User {
+                        //     arg_str.push(" /CurrentUser")
+                        // }
                     }
-                    _ => return Err(WindowsInstallError::InvalidType)
+                    _ => {}
                 };
                 sys::args(&arg_str.as_os_str()).collect()
             }
-            _ => return Err(WindowsInstallError::InvalidType)
+            _ => sys::args(&OsString::from(pkg_path)).collect()
         };
+        println!("{:?}", &args);
         let prog = args[0].clone();
         args.remove(0);
+
+        // println!("Cmd line: {:?} {:?}", &pkg_path, &args);
 
         let res = Command::new(&prog)
             .args(&args)
@@ -529,11 +565,13 @@ impl WindowsPackageStore {
         let output = match res {
             Ok(v) => v,
             Err(e) => {
+                eprintln!("{:?}", e);
                 return Err(WindowsInstallError::Process(ProcessError::Io(e)));
             }
         };
 
         if !output.status.success() {
+            eprintln!("{:?}", output);
             return Err(WindowsInstallError::Process(ProcessError::Unknown(output)));
         }
         
@@ -584,7 +622,7 @@ impl WindowsPackageStore {
                 let arg_str = match type_.as_ref() {
                     "inno" => "/VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART".to_owned(),
                     "msi" => format!("/x \"{}\" /qn /norestart", &installer.product_code),
-                    "nsis" => "".to_owned(),
+                    "nsis" => "/S".to_owned(),
                     _ => return Err(WindowsUninstallError::InvalidType)
                 };
                 sys::args(&arg_str).collect()
