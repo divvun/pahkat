@@ -36,12 +36,6 @@ impl PubSubMetadata for Meta {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct RepoConfig {
-	pub url: String,
-	pub channel: String
-}
-
 build_rpc_trait! {
 	pub trait Rpc {
 		type Metadata;

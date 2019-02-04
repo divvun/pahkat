@@ -192,14 +192,20 @@ impl PackageTransaction {
                         progress(action.id.clone(), TransactionEvent::Installing);
                         match store.install(&action.id, action.target) {
                             Ok(_) => progress(action.id.clone(), TransactionEvent::Completed),
-                            Err(_) => progress(action.id.clone(), TransactionEvent::Error)
+                            Err(e) => {
+                                eprintln!("{:?}", &e);
+                                progress(action.id.clone(), TransactionEvent::Error)
+                            }
                         };
                     },
                     PackageActionType::Uninstall => {
                         progress(action.id.clone(), TransactionEvent::Uninstalling);
                         match store.uninstall(&action.id, action.target) {
                             Ok(_) => progress(action.id.clone(), TransactionEvent::Completed),
-                            Err(_) => progress(action.id.clone(), TransactionEvent::Error)
+                            Err(e) => {
+                                eprintln!("{:?}", &e);
+                                progress(action.id.clone(), TransactionEvent::Error)
+                            }
                         };
                     }
                 }
@@ -435,6 +441,7 @@ impl MacOSPackageStore {
         let pkg_path = self.download_path(&url.as_str()).join(filename);
 
         if !pkg_path.exists() {
+            eprintln!("Package path doesn't exist: {:?}", &pkg_path);
             return Err(MacOSInstallError::PackageNotInCache)
         }
         
@@ -538,6 +545,7 @@ impl MacOSPackageStore {
             }
         }
 
+        println!("Candidate: {}, Installed: {}", &candidate_version, &installed_version);
         if candidate_version > installed_version {
             Ok(PackageStatus::RequiresUpdate)
         } else {
@@ -597,6 +605,7 @@ fn get_package_info(bundle_id: &str, target: MacOSInstallTarget) -> Result<MacOS
     let output = match res {
         Ok(v) => v,
         Err(e) => {
+            eprintln!("{:?}", &e);
             return Err(ProcessError::Io(e));
         }
     };
@@ -604,10 +613,12 @@ fn get_package_info(bundle_id: &str, target: MacOSInstallTarget) -> Result<MacOS
     if !output.status.success() {
         if let Some(code) = output.status.code() {
             if code == 1 {
-              return Err(ProcessError::NotFound);
+                eprintln!("pkgutil pkg not found");
+                return Err(ProcessError::NotFound);
             }
         }
         
+        eprintln!("{:?}", &output);
         return Err(ProcessError::Unknown(output));
     }
 
@@ -640,9 +651,13 @@ fn install_macos_package(pkg_path: &Path, target: MacOSInstallTarget) -> Result<
     let res = Command::new("installer").args(args).output();
     let output = match res {
         Ok(v) => v,
-        Err(e) => return Err(ProcessError::Io(e))
+        Err(e) => {
+            eprintln!("{:?}", &e);
+            return Err(ProcessError::Io(e))
+        }
     };
     if !output.status.success() {
+        eprintln!("{:?}", &output);
         let _msg = format!("Exit code: {}", output.status.code().unwrap());
         return Err(ProcessError::Unknown(output));
     }

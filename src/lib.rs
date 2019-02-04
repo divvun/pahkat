@@ -292,27 +292,30 @@ impl std::default::Default for RawStoreConfig {
 pub struct StoreConfig {
     /// A reference to the path for this StoreConfig
     config_path: PathBuf,
-    data: Arc<RwLock<RawStoreConfig>>
+    data: Arc<RwLock<RawStoreConfig>>,
+    save_changes: bool
 }
 
 impl std::default::Default for StoreConfig {
     fn default() -> StoreConfig {
         StoreConfig {
             config_path: default_config_path().join("config.json"),
-            data: Arc::new(RwLock::new(RawStoreConfig::default()))
+            data: Arc::new(RwLock::new(RawStoreConfig::default())),
+            save_changes: true
         }
     }
 }
 
 // TODO no unwrap
 impl StoreConfig {
-    pub fn load_or_default() -> StoreConfig {
-        let res = StoreConfig::load(&default_config_path().join("config.json"));
+    pub fn load_or_default(save_changes: bool) -> StoreConfig {
+        let res = StoreConfig::load(&default_config_path().join("config.json"), save_changes);
         
-        let config = match res {
+        let mut config = match res {
             Ok(v) => v,
             Err(_) => StoreConfig::default()
         };
+        config.save_changes = save_changes;
 
         if !config.package_cache_path().exists() {
             std::fs::create_dir_all(&*config.package_cache_path()).unwrap();
@@ -325,13 +328,14 @@ impl StoreConfig {
         config
     }
 
-    pub fn load(config_path: &Path) -> io::Result<StoreConfig> {
+    pub fn load(config_path: &Path, save_changes: bool) -> io::Result<StoreConfig> {
         let file = File::open(config_path)?;
         let data: RawStoreConfig = serde_json::from_reader(file)?;
 
         Ok(StoreConfig {
             config_path: config_path.to_owned(),
-            data: Arc::new(RwLock::new(data))
+            data: Arc::new(RwLock::new(data)),
+            save_changes
         })
     }
 
@@ -358,14 +362,23 @@ impl StoreConfig {
         {
             self.data.write().unwrap().skipped_packages.remove(key);
         }
-        self.save()
+
+        if self.save_changes {
+            self.save()
+        } else { 
+            Ok(())
+        }
     }
 
     pub fn add_skipped_package(&self, key: AbsolutePackageKey, version: String) -> Result<(), ()> {
         {
             self.data.write().unwrap().skipped_packages.insert(key, version);
         }
-        self.save()
+        if self.save_changes {
+            self.save()
+        } else { 
+            Ok(())
+        }
     }
 
     pub fn package_cache_path(&self) -> PathBuf {
@@ -376,11 +389,19 @@ impl StoreConfig {
         self.data.read().unwrap().cache_path.join("repos")
     }
 
+    pub(crate) fn cache_base_path(&self) -> PathBuf {
+        self.data.read().unwrap().cache_path.to_owned()
+    }
+
     pub fn set_cache_base_path(&self, cache_path: PathBuf) -> Result<(), ()> {
         {
             self.data.write().unwrap().cache_path = cache_path;
         }
-        self.save()
+        if self.save_changes {
+            self.save()
+        } else { 
+            Ok(())
+        }
     }
 
     pub fn repos(&self) -> Vec<RepoRecord> {
@@ -392,14 +413,22 @@ impl StoreConfig {
             self.data.write().unwrap().repos = repos
         }
 
-        self.save()
+        if self.save_changes {
+            self.save()
+        } else { 
+            Ok(())
+        }
     }
 
     pub fn add_repo(&self, repo_record: RepoRecord) -> Result<(), ()> {
         {
             self.data.write().unwrap().repos.push(repo_record);
         }
-        self.save()
+        if self.save_changes {
+            self.save()
+        } else { 
+            Ok(())
+        }
     }
 
     pub fn remove_repo(&self, repo_record: RepoRecord) -> Result<(), ()> {
@@ -412,7 +441,11 @@ impl StoreConfig {
                 if cache_path.exists() {
                     fs::remove_dir_all(cache_path).expect("cache dir deleted");
                 }
-                self.save()
+                if self.save_changes {
+                    self.save()
+                } else { 
+                    Ok(())
+                }
             },
             None => Ok(())
         }
@@ -422,7 +455,11 @@ impl StoreConfig {
         {
             self.data.write().unwrap().repos[index] = repo_record;
         }
-        self.save()
+        if self.save_changes {
+            self.save()
+        } else { 
+            Ok(())
+        }
     }
 
     pub fn set_ui_setting(&self, key: &str, value: Option<String>) -> Result<(), ()> {
@@ -434,7 +471,11 @@ impl StoreConfig {
                 None => lock.ui.remove(key)
             };
         }
-        self.save()
+        if self.save_changes {
+            self.save()
+        } else { 
+            Ok(())
+        }
     }
 
     pub fn ui_setting(&self, key: &str) -> Option<String> {
