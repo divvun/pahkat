@@ -264,8 +264,8 @@ fn main() {
                 //         }
                 //     };
                 //     let target = match is_user {
-                //         true => MacOSInstallTarget::User,
-                //         false => MacOSInstallTarget::System
+                //         true => InstallTarget::User,
+                //         false => InstallTarget::System
                 //     };
                     
                 //     let status = store.status(&key, target);
@@ -295,8 +295,8 @@ fn main() {
                 //     };
 
                 //     let target = match is_user {
-                //         true => MacOSInstallTarget::User,
-                //         false => MacOSInstallTarget::System
+                //         true => InstallTarget::User,
+                //         false => InstallTarget::System
                 //     };
 
                 //     let status = store.status(&package, target);
@@ -329,8 +329,8 @@ fn main() {
 
                     let store = Arc::new(MacOSPackageStore::new(config));
                     let target = match is_user {
-                        true => MacOSInstallTarget::User,
-                        false => MacOSInstallTarget::System
+                        true => InstallTarget::User,
+                        false => InstallTarget::System
                     };
 
                     let mut keys = vec![];

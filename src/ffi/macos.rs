@@ -246,7 +246,7 @@ extern fn pahkat_status(handle: *const MacOSPackageStore, package_key: *const c_
 
     unsafe { *error = 0; }
 
-    fn make_json(status: PackageStatus, target: MacOSInstallTarget) -> *const c_char {
+    fn make_json(status: PackageStatus, target: InstallTarget) -> *const c_char {
         let map = json!({
             "status": status,
             "target": target
@@ -274,30 +274,30 @@ extern fn pahkat_status(handle: *const MacOSPackageStore, package_key: *const c_
     //     }
     // };
 
-    let pkg_status = match store.status(&package_key, MacOSInstallTarget::System) {
+    let pkg_status = match store.status(&package_key, InstallTarget::System) {
         Ok(v) => v,
         Err(e) => {
             unsafe { *error = 10; }
-            return make_json(PackageStatus::NotInstalled, MacOSInstallTarget::System);
+            return make_json(PackageStatus::NotInstalled, InstallTarget::System);
         }
     };
 
     match pkg_status {
         PackageStatus::NotInstalled => {},
         _ => {
-            return make_json(pkg_status, MacOSInstallTarget::System);
+            return make_json(pkg_status, InstallTarget::System);
         }
     };
 
-    let pkg_status = match store.status(&package_key, MacOSInstallTarget::User) {
+    let pkg_status = match store.status(&package_key, InstallTarget::User) {
         Ok(v) => v,
         Err(e) => {
             unsafe { *error = 10; }
-            return make_json(PackageStatus::NotInstalled, MacOSInstallTarget::System);
+            return make_json(PackageStatus::NotInstalled, InstallTarget::System);
         }
     };
 
-    make_json(pkg_status, MacOSInstallTarget::User)
+    make_json(pkg_status, InstallTarget::User)
 }
 
 #[no_mangle]
@@ -305,7 +305,7 @@ extern fn pahkat_create_action(action: u8, target: u8, package_key: *const c_cha
     Box::into_raw(Box::new(PackageAction {
         id: AbsolutePackageKey::from_string(&*unsafe { CStr::from_ptr(package_key) }.to_string_lossy()).unwrap(),
         action: PackageActionType::from_u8(action),
-        target: if target == 0 { MacOSInstallTarget::System } else { MacOSInstallTarget::User }
+        target: if target == 0 { InstallTarget::System } else { InstallTarget::User }
     }))
 }
 

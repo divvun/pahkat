@@ -16,24 +16,24 @@ required-features = ["binaries"]
 # pahkat =  { git = "https://github.com/divvun/pahkat", branch = "master" }
 pahkat = { path = "../pahkat" }
 reqwest = "0.9.5"
-serde = "1.0.80"
-serde_json = "1.0.33"
-serde_derive = "1.0.80"
+serde = "1.0.87"
+serde_json = "1.0.38"
+serde_derive = "1.0.87"
 semver = "0.9.0"
 tempdir = "0.3.7"
 url = "1.7.2"
 url_serde = "0.2.0"
-libc = "0.2.44"
+libc = "0.2.48"
 rust-crypto = "0.2.36"
 lazy_static = "1.2.0"
-sentry = "0.12.0"
+sentry = "0.13.0"
 maplit = "1.0"
 dirs = "1.0"
-crossbeam = "0.5.0"
+crossbeam = "0.7.1"
 directories = "1.0.2"
 
 # Prefix feature
-rhai = { version = "0.8", optional = true }
+rhai = { version = "0.9", optional = true }
 xz2 = { version = "*", optional = true }
 rusqlite = { version = "*", features = ["bundled"], optional = true }
 tar = { version = "*", optional = true }
@@ -50,7 +50,7 @@ jsonrpc-pubsub = { version = "9", optional = true }
 
 # MacOS-specific
 [target.'cfg(target_os="macos")'.dependencies]
-plist = { version = "0.3.0" }
+plist = { version = "0.4.0" }
 
 # Windows-specific
 [target.'cfg(target_os="windows")'.dependencies]

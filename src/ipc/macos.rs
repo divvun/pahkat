@@ -11,14 +11,14 @@ pub const LINESEP: &'static str = "\n";
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PackageStatusResponse {
 	pub status: PackageStatus,
-    pub target: MacOSInstallTarget
+    pub target: InstallTarget
 }
 
-fn parse_target(target: String) -> MacOSInstallTarget {
+fn parse_target(target: String) -> InstallTarget {
 	if target == "system" {
-		MacOSInstallTarget::System
+		InstallTarget::System
 	} else {
-		MacOSInstallTarget::User
+		InstallTarget::User
 	}
 }
 
@@ -72,7 +72,7 @@ impl Rpc for RpcImpl {
 		let mut map = BTreeMap::new();
 
 		for package in repo.packages().values() {
-			let status = match store.status(&package, MacOSInstallTarget::System) {
+			let status = match store.status(&package, InstallTarget::System) {
 				Ok(v) => v,
 				Err(e) => {
 					eprintln!("{:?}", e);
@@ -85,13 +85,13 @@ impl Rpc for RpcImpl {
 				_ => {
 					map.insert(package.id.clone(), PackageStatusResponse {
 						status: status,
-						target: MacOSInstallTarget::System
+						target: InstallTarget::System
 					});
 					continue;
 				}
 			};
 
-			let status = match store.status(&package, MacOSInstallTarget::User) {
+			let status = match store.status(&package, InstallTarget::User) {
 				Ok(v) => v,
 				Err(e) => {
 					eprintln!("{:?}", e);
@@ -101,7 +101,7 @@ impl Rpc for RpcImpl {
 
 			map.insert(package.id.clone(), PackageStatusResponse {
 				status: status,
-				target: MacOSInstallTarget::User
+				target: InstallTarget::User
 			});
 		}
 		

@@ -1,7 +1,7 @@
 use pahkat::types::{
-    MacOSInstallTarget,
-    MacOSInstaller,
+    InstallTarget,
     Installer,
+    MacOSInstaller,
     Package,
     Downloadable
 };
@@ -18,13 +18,11 @@ use crypto::digest::Digest;
 use crypto::sha2::Sha256;
 use std::sync::{Arc, RwLock};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread::{self, JoinHandle};
 use crate::{PackageActionType, PackageTransactionError, TransactionEvent};
 
 // use crossbeam::channel;
 
 use serde::de::{self, Deserialize, Deserializer};
-use plist::serde::{deserialize as deserialize_plist};
 
 use crate::{RepoRecord};
 use crate::*;
@@ -50,15 +48,8 @@ struct BundlePlistInfo {
     pub short_version: Option<String>,
 }
 
-#[test]
-fn test_bundle_plist() {
-    let file = File::open("/Users/Brendan/Library/Keyboard Layouts/so.brendan.keyboards.keyboardlayout.brendan.bundle/Contents/Info.plist").unwrap();
-    let plist: BundlePlistInfo = deserialize_plist(file).unwrap();
-    println!("{:?}", plist);
-}
-
 #[derive(Debug)]
-pub enum MacOSInstallError {
+pub enum InstallError {
     NoPackage,
     NoInstaller,
     WrongInstallerType,
@@ -69,29 +60,18 @@ pub enum MacOSInstallError {
 }
 
 #[derive(Debug)]
-pub enum MacOSUninstallError {
+pub enum UninstallError {
     NoPackage,
     NoInstaller,
     WrongInstallerType,
     PkgutilFailure(ProcessError)
 }
 
-// struct UiBindings {
-//     fn list_repos_json() -> String {
-//         unimplemented!();
-//     }
-
-//     fn all_repo_data_json() -> String {
-//         unimplemented();
-//     }
-// }
-
 #[derive(Debug, Clone, Serialize)]
-// TODO: this piece of shit doesn't serialize properly
 pub struct PackageAction {
     pub id: AbsolutePackageKey,
     pub action: PackageActionType,
-    pub target: MacOSInstallTarget
+    pub target: InstallTarget
 }
 
 pub struct TransactionDisposable {
@@ -323,7 +303,7 @@ impl MacOSPackageStore {
     }
 
     /// Get the dependencies for a given package
-    pub fn find_package_dependencies(&self, key: &AbsolutePackageKey, package: &Package, target: MacOSInstallTarget) -> Result<Vec<PackageDependency>, PackageDependencyError> {
+    pub fn find_package_dependencies(&self, key: &AbsolutePackageKey, package: &Package, target: InstallTarget) -> Result<Vec<PackageDependency>, PackageDependencyError> {
         let mut resolved = Vec::<String>::new();
         Ok(self.find_package_dependencies_impl(key, package, target, 0, &mut resolved)?)
     }
@@ -332,7 +312,7 @@ impl MacOSPackageStore {
         &self,
         key: &AbsolutePackageKey,
         package: &Package,
-        target: MacOSInstallTarget,
+        target: InstallTarget,
         level: u8,
         resolved: &mut Vec<String>
     ) -> Result<Vec<PackageDependency>, PackageDependencyError> {
@@ -417,69 +397,69 @@ impl MacOSPackageStore {
         disposable.wait()
     }
 
-    pub fn install(&self, key: &AbsolutePackageKey, target: MacOSInstallTarget) -> Result<PackageStatus, MacOSInstallError> {
+    pub fn install(&self, key: &AbsolutePackageKey, target: InstallTarget) -> Result<PackageStatus, InstallError> {
         let package = match self.resolve_package(key) {
             Some(v) => v,
             None => {
-                return Err(MacOSInstallError::NoPackage);
+                return Err(InstallError::NoPackage);
             }
         };
 
         let installer = match package.installer() {
-            None => return Err(MacOSInstallError::NoInstaller),
+            None => return Err(InstallError::NoInstaller),
             Some(v) => v
         };
 
         let installer = match *installer {
             Installer::MacOS(ref v) => v,
-            _ => return Err(MacOSInstallError::WrongInstallerType)
+            _ => return Err(InstallError::WrongInstallerType)
         };
 
         let url = url::Url::parse(&installer.url)
-            .map_err(|_| MacOSInstallError::InvalidUrl(installer.url.to_owned()))?;
+            .map_err(|_| InstallError::InvalidUrl(installer.url.to_owned()))?;
         let filename = url.path_segments().unwrap().last().unwrap();
         let pkg_path = self.download_path(&url.as_str()).join(filename);
 
         if !pkg_path.exists() {
             eprintln!("Package path doesn't exist: {:?}", &pkg_path);
-            return Err(MacOSInstallError::PackageNotInCache)
+            return Err(InstallError::PackageNotInCache)
         }
         
         match install_macos_package(&pkg_path, target) {
-            Err(e) => return Err(MacOSInstallError::InstallerFailure(e)),
+            Err(e) => return Err(InstallError::InstallerFailure(e)),
             _ => {}
         };
 
         Ok(self.status_impl(&installer, key, &package, target).unwrap())
     }
 
-    pub fn uninstall(&self, key: &AbsolutePackageKey, target: MacOSInstallTarget) -> Result<PackageStatus, MacOSUninstallError> {
+    pub fn uninstall(&self, key: &AbsolutePackageKey, target: InstallTarget) -> Result<PackageStatus, UninstallError> {
         let package = match self.resolve_package(key) {
             Some(v) => v,
             None => {
-                return Err(MacOSUninstallError::NoPackage);
+                return Err(UninstallError::NoPackage);
             }
         };
 
         let installer = match package.installer() {
-            None => return Err(MacOSUninstallError::NoInstaller),
+            None => return Err(UninstallError::NoInstaller),
             Some(v) => v
         };
 
         let installer = match installer {
             &Installer::MacOS(ref v) => v,
-            _ => return Err(MacOSUninstallError::WrongInstallerType)
+            _ => return Err(UninstallError::WrongInstallerType)
         };
 
         match uninstall_macos_package(&installer.pkg_id, target) {
-            Err(e) => return Err(MacOSUninstallError::PkgutilFailure(e)),
+            Err(e) => return Err(UninstallError::PkgutilFailure(e)),
             _ => {}
         };
 
         Ok(self.status_impl(installer, key, &package, target).unwrap())
     }
 
-    pub fn status(&self, key: &AbsolutePackageKey, target: MacOSInstallTarget) -> Result<PackageStatus, PackageStatusError> {
+    pub fn status(&self, key: &AbsolutePackageKey, target: InstallTarget) -> Result<PackageStatus, PackageStatusError> {
          let package = match self.resolve_package(key) {
             Some(v) => v,
             None => {
@@ -508,7 +488,7 @@ impl MacOSPackageStore {
         self.config.read().unwrap().package_cache_path().join(hash_id)
     }
 
-    fn status_impl(&self, installer: &MacOSInstaller, id: &AbsolutePackageKey, package: &Package, target: MacOSInstallTarget) -> Result<PackageStatus, PackageStatusError> {
+    fn status_impl(&self, installer: &MacOSInstaller, id: &AbsolutePackageKey, package: &Package, target: InstallTarget) -> Result<PackageStatus, PackageStatusError> {
         let pkg_info = match get_package_info(&installer.pkg_id, target) {
             Ok(v) => v,
             Err(e) => {
@@ -592,12 +572,12 @@ impl MacOSPackageExportPlist {
     }
 }
 
-fn get_package_info(bundle_id: &str, target: MacOSInstallTarget) -> Result<MacOSPackageExportPlist, ProcessError> {
+fn get_package_info(bundle_id: &str, target: InstallTarget) -> Result<MacOSPackageExportPlist, ProcessError> {
     use std::io::Cursor;
 
     let home_dir = dirs::home_dir().expect("Always find home directory");
     let mut args = vec!["--export-plist", bundle_id];
-    if let MacOSInstallTarget::User = target {
+    if let InstallTarget::User = target {
         args.push("--volume");
         args.push(&home_dir.to_str().unwrap());
     }
@@ -624,7 +604,7 @@ fn get_package_info(bundle_id: &str, target: MacOSInstallTarget) -> Result<MacOS
 
     let plist_data = String::from_utf8(output.stdout).expect("plist should always be valid UTF-8");
     let cursor = Cursor::new(plist_data);
-    let plist: MacOSPackageExportPlist = deserialize_plist(cursor).expect("plist should always be valid");
+    let plist: MacOSPackageExportPlist = plist::from_reader(cursor).expect("plist should always be valid");
     return Ok(plist);
 }
 
@@ -635,10 +615,10 @@ pub enum ProcessError {
     NotFound
 }
 
-fn install_macos_package(pkg_path: &Path, target: MacOSInstallTarget) -> Result<(), ProcessError> {
+fn install_macos_package(pkg_path: &Path, target: InstallTarget) -> Result<(), ProcessError> {
     let target_str = match target {
-        MacOSInstallTarget::User => "CurrentUserHomeDirectory",
-        MacOSInstallTarget::System => "LocalSystem"
+        InstallTarget::User => "CurrentUserHomeDirectory",
+        InstallTarget::System => "LocalSystem"
     };
 
     let args = &[
@@ -664,7 +644,7 @@ fn install_macos_package(pkg_path: &Path, target: MacOSInstallTarget) -> Result<
     Ok(())
 }
 
-fn uninstall_macos_package(bundle_id: &str, target: MacOSInstallTarget) -> Result<(), ProcessError> {
+fn uninstall_macos_package(bundle_id: &str, target: InstallTarget) -> Result<(), ProcessError> {
     let package_info = get_package_info(bundle_id, target)?;
 
     let mut errors = vec![];
@@ -721,10 +701,10 @@ fn uninstall_macos_package(bundle_id: &str, target: MacOSInstallTarget) -> Resul
     Ok(())
 }
 
-fn forget_pkg_id(bundle_id: &str, target: MacOSInstallTarget) -> Result<(), ProcessError> {
+fn forget_pkg_id(bundle_id: &str, target: InstallTarget) -> Result<(), ProcessError> {
     let home_dir = dirs::home_dir().expect("Always find home directory");
     let mut args = vec!["--forget", bundle_id];
-    if let MacOSInstallTarget::User = target {
+    if let InstallTarget::User = target {
         args.push("--volume");
         args.push(&home_dir.to_str().unwrap());
     }
