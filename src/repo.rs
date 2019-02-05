@@ -93,28 +93,6 @@ impl Repository {
             .map_err(|e| RepoDownloadError::JsonError(e))?;
 
         Ok(repo)
-
-        // let meta_file = File::open(cache_path.join("index.json"))
-        //     .map_err(|e| RepoDownloadError::IoError(e))?;
-        // let packages_file = File::open(cache_path.join("packages/index.json"))
-        //     .map_err(|e| RepoDownloadError::IoError(e))?;
-        // let virtuals_file = File::open(cache_path.join("virtuals/index.json"))
-        //     .map_err(|e| RepoDownloadError::IoError(e))?;
-
-        // let meta = serde_json::from_reader(meta_file)
-        //     .map_err(|e| RepoDownloadError::JsonError(e))?;;
-        // let packages = serde_json::from_reader(packages_file)
-        //     .map_err(|e| RepoDownloadError::JsonError(e))?;;
-        // let virtuals = serde_json::from_reader(virtuals_file)
-        //     .map_err(|e| RepoDownloadError::JsonError(e))?;;
-
-        // Ok(Repository {
-        //     meta,
-        //     packages,
-        //     virtuals,
-        //     channel,
-        //     hash_id
-        // })
     }
 
     pub fn from_url(url: &Url, channel: String) -> Result<Repository, RepoDownloadError> {
