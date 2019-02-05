@@ -14,7 +14,6 @@ use crate::windows::WindowsPackageStore;
 use crate::windows::PackageTransaction;
 use crate::StoreConfig;
 use crate::RepoRecord;
-use crate::repo::{PackageRecord, Repository};
 use crate::PackageStatus;
 use crate::AbsolutePackageKey;
 use pahkat::types::*;

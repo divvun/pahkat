@@ -15,7 +15,6 @@ use crate::macos::{
     PackageTransaction,
     PackageAction
 };
-use crate::repo::{PackageRecord, Repository};
 use crate::{
     PackageTransactionError,
     StoreConfig,

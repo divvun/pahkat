@@ -316,8 +316,6 @@ fn main() {
                 //     }
                 // }
                 ("install", Some(matches)) => {
-                    use pahkat_client::repo::PackageRecord;
-
                     let package_ids = matches.values_of("package-id").expect("package-id to always exist");
                     let is_user = matches.is_present("user-target");
                     
@@ -479,7 +477,6 @@ fn main() {
                     //         return;
                     //     }
                     // }
-                    use pahkat_client::repo::PackageRecord;
 
                     let package_ids = matches.values_of("package-id").expect("package-id to always exist");
                     let is_user = matches.is_present("user-target");

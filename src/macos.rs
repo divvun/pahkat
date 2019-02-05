@@ -12,7 +12,7 @@ use std::str::FromStr;
 use std::process;
 use std::process::Command;
 use std::collections::{HashMap, BTreeMap};
-use crate::repo::{Repository, PackageRecord};
+use crate::repo::Repository;
 use dirs;
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
