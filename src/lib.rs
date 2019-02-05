@@ -17,14 +17,6 @@ extern crate xz2;
 #[cfg(feature = "prefix")]
 extern crate tar;
 
-#[cfg(feature = "ipc")]
-extern crate jsonrpc_core;
-#[cfg(feature = "ipc")]
-extern crate jsonrpc_pubsub;
-#[macro_use]
-#[cfg(feature = "ipc")]
-extern crate jsonrpc_macros;
-
 #[cfg(windows)]
 extern crate winreg;
 
