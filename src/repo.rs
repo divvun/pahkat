@@ -72,14 +72,17 @@ impl Repository {
 
         if is_cache_valid {
             println!("Loading from cache");
-            Repository::from_directory(cache_path, hash_id) 
-        } else {
-            println!("loading from web");
-            let repo = Repository::from_url(url, channel)?;
-            repo.save_to_cache(cache_path)
-                .map_err(|e| RepoDownloadError::IoError(e))?;
-            Ok(repo)
-        }
+            match Repository::from_directory(cache_path, hash_id) {
+                Ok(v) => return Ok(v),
+                Err(_) => {} // fallthrough
+            }
+        } 
+        
+        println!("loading from web");
+        let repo = Repository::from_url(url, channel)?;
+        repo.save_to_cache(cache_path)
+            .map_err(|e| RepoDownloadError::IoError(e))?;
+        Ok(repo)
     }
 
     fn from_directory(cache_path: &Path, hash_id: String) -> Result<Repository, RepoDownloadError> {
