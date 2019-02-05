@@ -128,14 +128,20 @@ impl Repository {
         let meta: RepositoryMeta = serde_json::from_str(&meta_text)
             .map_err(|e| RepoDownloadError::JsonError(e))?;
 
-        let mut pkg_res = client.get(&format!("{}/packages/index.json", url)).send()
+        let index_json_path = if meta.default_channel == channel {
+            "index.json".into()
+        } else {
+            format!("index.{}.json", &channel)
+        };
+
+        let mut pkg_res = client.get(&format!("{}/packages/{}", url, index_json_path)).send()
             .map_err(|e| RepoDownloadError::ReqwestError(e))?;
         let pkg_text = pkg_res.text()
             .map_err(|e| RepoDownloadError::ReqwestError(e))?;
         let packages: Packages = serde_json::from_str(&pkg_text)
             .map_err(|e| RepoDownloadError::JsonError(e))?;
 
-        let mut virt_res = client.get(&format!("{}/virtuals/index.json", url)).send()
+        let mut virt_res = client.get(&format!("{}/virtuals/{}", url, index_json_path)).send()
             .map_err(|e| RepoDownloadError::ReqwestError(e))?;
         let virt_text = virt_res.text()
             .map_err(|e| RepoDownloadError::ReqwestError(e))?;
