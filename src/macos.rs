@@ -1,3 +1,17 @@
+
+use std::path::{Path, PathBuf};
+use std::fs::{remove_file, remove_dir};
+use std::fmt::Display;
+use std::str::FromStr;
+use std::process::{self, Command};
+use std::collections::{HashMap, BTreeMap};
+use std::sync::{Arc, RwLock, atomic::{AtomicBool, Ordering}};
+use std::io;
+
+use url::Url;
+use serde::de::{self, Deserialize, Deserializer};
+use crypto::digest::Digest;
+use crypto::sha2::Sha256;
 use pahkat::types::{
     InstallTarget,
     Installer,
@@ -5,27 +19,22 @@ use pahkat::types::{
     Package,
     Downloadable
 };
-use std::path::{Path, PathBuf};
-use std::fs::{remove_file, remove_dir};
-use std::fmt::Display;
-use std::str::FromStr;
-use std::process;
-use std::process::Command;
-use std::collections::{HashMap, BTreeMap};
-use crate::repo::Repository;
-use dirs;
-use crypto::digest::Digest;
-use crypto::sha2::Sha256;
-use std::sync::{Arc, RwLock};
-use std::sync::atomic::{AtomicBool, Ordering};
-use crate::{PackageActionType, PackageTransactionError, TransactionEvent};
 
-// use crossbeam::channel;
-
-use serde::de::{self, Deserialize, Deserializer};
-
-use crate::{RepoRecord};
-use crate::*;
+use crate::{
+    PackageStatus,
+    PackageStatusError,
+    PackageDependency,
+    PackageDependencyError,
+    StoreConfig,
+    AbsolutePackageKey,
+    PackageActionType,
+    PackageTransactionError,
+    TransactionEvent,
+    RepoRecord,
+    repo::Repository,
+    download::Download,
+    cmp
+};
 
 fn from_str<'de, T, D>(deserializer: D) -> Result<T, D::Error>
     where T: FromStr,
