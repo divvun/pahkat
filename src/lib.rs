@@ -43,7 +43,6 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::fs::{self, create_dir_all, File};
 use std::fmt;
-use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
 use url::Url;
 use std::sync::{Arc, RwLock};
@@ -55,6 +54,7 @@ pub mod macos;
 pub mod tarball;
 
 pub mod ffi;
+mod cmp;
 mod download;
 pub mod repo;
 pub use self::download::Download;

@@ -503,34 +503,11 @@ impl MacOSPackageStore {
             }
         };
 
-        let installed_version = match semver::Version::parse(&pkg_info.pkg_version) {
-            Err(_) => return Err(PackageStatusError::ParsingVersion),
-            Ok(v) => v
-        };
+        let skipped_package = self.config().skipped_package(id);
+        let skipped_package = skipped_package.as_ref().map(String::as_ref);
 
-        let candidate_version = match semver::Version::parse(&package.version) {
-            Err(_) => return Err(PackageStatusError::ParsingVersion),
-            Ok(v) => v
-        };
-
-        // TODO: handle skipped versions
-        if let Some(skipped_version) = self.config().skipped_package(id) {
-            match semver::Version::parse(&skipped_version) {
-                Err(_) => {}, // No point giving up now
-                Ok(v) => {
-                    if candidate_version <= v {
-                        return Ok(PackageStatus::Skipped)
-                    }
-                }
-            }
-        }
-
-        println!("Candidate: {}, Installed: {}", &candidate_version, &installed_version);
-        if candidate_version > installed_version {
-            Ok(PackageStatus::RequiresUpdate)
-        } else {
-            Ok(PackageStatus::UpToDate)
-        }
+        self::cmp::semver_cmp(&pkg_info.pkg_version, &package.version, skipped_package)
+            .or_else(|_| self::cmp::iso8601_cmp(&pkg_info.pkg_version, &package.version, skipped_package))
     }
 }
 
