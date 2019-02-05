@@ -81,14 +81,25 @@ fn request_package_data(cur_dir: &Path) -> Option<Package> {
     })
 }
 
-fn request_repo_data() -> Repository {
+fn input_repo_data() -> Repository {
     let base = {
-        let base = prompt_line("Base URL", "").unwrap();
-        if !base.ends_with("/") {
-            format!("{}/", base)
-        } else {
-            base
-        }
+        let mut base = String::new();
+        while base == "" {
+            let b = prompt_line("Base URL", "").map(|b| {
+                if !base.ends_with("/") {
+                    format!("{}/", b)
+                } else {
+                    b
+                }
+            }).unwrap();
+
+            if let Ok(_) = url::Url::parse(&b) {
+                base = b;
+            } else {
+                progress(Color::Red, "Error", "Invalid URL.").unwrap();
+            }
+        };
+        base
     };
     
     let en_name = prompt_line("Name", "Repository").unwrap();
@@ -99,14 +110,24 @@ fn request_repo_data() -> Repository {
     let mut description = BTreeMap::new();
     description.insert("en".to_owned(), en_description);
 
-    println!("Supported filters: category, language");
-    let primary_filter = prompt_line("Primary Filter", "category").unwrap();
+    let primary_filter = prompt_select("Primary Filter", &["category".into(), "language".into()], 0);
+    
+    let channels = {
+        let mut r: Vec<String> = vec![];
+        while r.len() == 0 {
+            r = prompt_multi_select("Channels", &["stable", "beta", "alpha", "nightly"]);
+            if r.len() == 0 {
+                progress(Color::Red, "Error", "No channels selected; please select at least one.").unwrap();
+            }
+        }
+        r
+    };
 
-    println!("Supported channels: stable, beta, alpha, nightly");
-    let channels: Vec<String> = prompt_line("Channels (comma-separated)", "stable").unwrap()
-        .split(",")
-        .map(|x| x.trim().to_owned())
-        .collect();
+    let default_channel = if channels.len() == 1 {
+        channels[0].to_string()
+    } else {
+        prompt_select("Default channel", &channels, 0)
+    };
     
     let mut categories = BTreeMap::new();
     categories.insert("en".to_owned(), BTreeMap::new());
@@ -114,17 +135,18 @@ fn request_repo_data() -> Repository {
     Repository {
         _context: Some(LD_CONTEXT.to_owned()),
         _type: ld_type!("Repository"),
-        agent: Some(RepositoryAgent::default()),
-        base: base,
-        name: name,
-        description: description,
-        primary_filter: primary_filter,
-        channels: channels,
-        categories: categories
+        agent: RepositoryAgent::default(),
+        base,
+        name,
+        description,
+        primary_filter,
+        default_channel,
+        channels,
+        categories
     }
 }
 
-fn package_init(output_dir: &Path) {
+fn package_init(output_dir: &Path, channel: Option<&str>) {
     if !open_repo(&output_dir).is_ok() {
         progress(Color::Red, "Error", "Cannot generate package outside of a repository; aborting.").unwrap();
         return;
@@ -142,29 +164,36 @@ fn package_init(output_dir: &Path) {
     if prompt_question("Save index.json", true) {
         let package_dir = output_dir.join(&format!("packages/{}", &pkg_data.id));
         fs::create_dir(&package_dir).unwrap();
-        let mut file = File::create(&package_dir.join("index.json")).unwrap();
+        let mut file = File::create(&package_dir.join(index_fn(channel))).unwrap();
         file.write_all(json.as_bytes()).unwrap();
         file.write(&[b'\n']).unwrap();
     }
 }
 
-fn write_repo_index_virtuals(cur_dir: &Path, index: &Virtuals) {
-    let json = serde_json::to_string_pretty(&index).unwrap();
-    let pkg_path = cur_dir.join("virtuals");
+use serde::Serialize;
 
-    progress(Color::Green, "Writing", "virtuals index").unwrap();
-    let mut file = File::create(&pkg_path.join("index.json")).unwrap();
+fn write_index<T: ProgressOutput, U: Serialize>(cur_dir: &Path, repo: &Repository, index: &U, channel: Option<&str>, output: &T, name: &str) {
+    let json = serde_json::to_string_pretty(index).unwrap();
+    let pkg_path = cur_dir.join(name);
+
+    output.writing(&format!("{} {} index", channel.unwrap_or(&repo.default_channel), name));
+    let mut file = File::create(&pkg_path.join(index_fn(channel))).unwrap();
     file.write_all(json.as_bytes()).unwrap();
     file.write(&[b'\n']).unwrap();
 }
 
-fn generate_repo_index_virtuals(cur_dir: &Path, repo: &Repository) -> Virtuals {
-    progress(Color::Green, "Generating", "virtuals index").unwrap();
+fn write_repo_index_virtuals<T: ProgressOutput>(cur_dir: &Path, repo: &Repository, index: &Virtuals, channel: Option<&str>, output: &T) {
+    write_index(cur_dir, repo, index, channel, output, "virtuals");
+}
+
+fn generate_repo_index_virtuals<T: ProgressOutput>(cur_dir: &Path, repo: &Repository, channel: Option<&str>, output: &T) -> Virtuals {
+    output.generating(&format!("{} virtuals index", channel.unwrap_or(&repo.default_channel)));
 
     let pkg_path = cur_dir.join("virtuals");
-    let mut map = BTreeMap::new();
+    let items = fs::read_dir(&pkg_path).unwrap();
 
-    for x in fs::read_dir(&pkg_path).unwrap() {
+    let mut map = BTreeMap::new();
+    for x in items {
         let path = x.unwrap().path();
         
         if !path.is_dir() {
@@ -173,21 +202,25 @@ fn generate_repo_index_virtuals(cur_dir: &Path, repo: &Repository) -> Virtuals {
 
         let indexes: Vec<Virtual> = fs::read_dir(&path).unwrap()
             .map(|x| x.unwrap().path())
-            .filter(|path| path.is_dir() && path.join("index.json").exists())
+            .filter(|path| path.is_dir() && path.join(index_fn(channel)).exists())
             .map(|path| {
-                let file = File::open(path.join("index.json")).unwrap();
+                let file = File::open(path.join(index_fn(channel))).unwrap();
                 let pkg_index: Virtual = serde_json::from_reader(file)
-                    .expect(path.join("index.json").to_str().unwrap());
+                    .expect(path.join(index_fn(channel)).to_str().unwrap());
                 let msg = format!("{} {}", &pkg_index.id, &pkg_index.version);
                 progress(Color::Yellow, "Inserting", &msg).unwrap();
                 pkg_index
             })
             .collect();
-        
+
         for pkg in indexes.into_iter() {
             let entry = map.entry(pkg.id.to_owned()).or_insert(vec![]);
             entry.push(pkg.version);
         }
+    }
+
+    if map.len() == 0 {
+        output.info("no virtuals found");
     }
 
     Virtuals {
@@ -195,12 +228,57 @@ fn generate_repo_index_virtuals(cur_dir: &Path, repo: &Repository) -> Virtuals {
         _type: ld_type!("Virtuals"),
         _id: Some("".to_owned()),
         base: format!("{}virtuals/", &repo.base),
+        channel: channel.unwrap_or(&repo.default_channel).to_string(),
         virtuals: map
     }
 }
 
-fn generate_repo_index_packages(cur_dir: &Path, repo: &Repository) -> Packages {
-    progress(Color::Green, "Generating", "packages index").unwrap();
+trait ProgressOutput {
+    fn info(&self, msg: &str);
+    fn generating(&self, thing: &str);
+    fn writing(&self, thing: &str);
+    fn inserting(&self, id: &str, version: &str);
+    fn error(&self, thing: &str);
+    fn warn(&self, thing: &str);
+}
+
+struct StderrOutput;
+
+impl ProgressOutput for StderrOutput {
+    fn info(&self, msg: &str) {
+        progress(Color::Cyan, "Info", msg).unwrap();
+    }
+
+    fn generating(&self, thing: &str) {
+        progress(Color::Green, "Generating", thing).unwrap();
+    }
+
+    fn writing(&self, thing: &str) {
+        progress(Color::Green, "Writing", thing).unwrap();
+    }
+
+    fn inserting(&self, id: &str, version: &str) {
+        progress(Color::Yellow, "Inserting", &format!("{} {}", id, version)).unwrap();
+    }
+
+    fn error(&self, thing: &str) {
+        progress(Color::Red, "Error", thing).unwrap();
+    }
+
+    fn warn(&self, thing: &str) {
+        progress(Color::Magenta, "Warning", thing).unwrap();
+    }
+}
+
+fn index_fn(channel: Option<&str>) -> String {
+    match channel {
+        Some(v) => format!("index.{}.json", v),
+        None => "index.json".into()
+    }
+}
+
+fn generate_repo_index_packages<T: ProgressOutput>(cur_dir: &Path, repo: &Repository, channel: Option<&str>, output: &T) -> Packages {
+    output.generating(&format!("{} packages index", channel.unwrap_or(&repo.default_channel)));
 
     let pkg_path = cur_dir.join("packages");
     let pkgs: Vec<Package> = fs::read_dir(&pkg_path)
@@ -209,35 +287,44 @@ fn generate_repo_index_packages(cur_dir: &Path, repo: &Repository) -> Packages {
             x.unwrap().path()
         })
         .filter_map(|path| {
-            if !path.is_dir() || !path.join("index.json").exists() {
-                if path.ends_with("index.json") {
-                    return None;
+            if !path.is_dir() {
+                if let Some(ex) = path.extension() {
+                    if ex == "json" {
+                        return None;
+                    }
                 }
 
                 let relpath = pathdiff::diff_paths(&*path, cur_dir).unwrap();
-                progress(Color::Magenta, "Warning", &format!("{:?} is not a directory; skipping", &relpath)).unwrap();
+                output.warn(&format!("{:?} is not a directory; skipping", &relpath));
                 return None;
             }
 
-            let index_path = path.join("index.json");
+            if !path.join(index_fn(channel)).exists() {
+                if channel.is_none() {
+                    let relpath = pathdiff::diff_paths(&*path, cur_dir).unwrap();
+                    output.warn(&format!("{:?} does not contain {:?}; skipping", &relpath, index_fn(channel)));
+                }
+                return None;
+            }
+
+            let index_path = path.join(index_fn(channel));
             let file = File::open(&index_path).unwrap();
             let pkg_index: Package = match serde_json::from_reader(file) {
                 Ok(x) => x,
                 Err(err) => {
                     let relpath = pathdiff::diff_paths(&*index_path, cur_dir).unwrap();
-                    progress(Color::Red, "Error", &format!("Error parsing path {:?}:", &relpath)).unwrap();
-                    progress(Color::Red, "Error", &format!("{}", err)).unwrap();
+                    output.error(&format!("Error parsing path {:?}:", &relpath));
+                    output.error(&format!("{}", err));
                     return None;
                 }
             };
 
             if pkg_index.installer.is_none() {
-                progress(Color::Magenta, "Warning", &format!("{} {} has no installer; skipping", &pkg_index.id, &pkg_index.version)).unwrap();
+                output.warn(&format!("{} {} has no installer; skipping", &pkg_index.id, &pkg_index.version));
                 return None;
-            }   
-            
-            let msg = format!("{} {}", &pkg_index.id, &pkg_index.version);
-            progress(Color::Yellow, "Inserting", &msg).unwrap();
+            }
+
+            output.inserting(&pkg_index.id, &pkg_index.version);
             Some(pkg_index)
         })
         .collect();
@@ -247,23 +334,22 @@ fn generate_repo_index_packages(cur_dir: &Path, repo: &Repository) -> Packages {
         map.insert(pkg.id.to_owned(), pkg);
     }
 
+    if map.len() == 0 {
+        output.info("no packages found");
+    }
+
     Packages {
         _context: Some(LD_CONTEXT.to_owned()),
         _type: ld_type!("Packages"),
         _id: Some("".to_owned()),
         base: format!("{}packages/", &repo.base),
+        channel: channel.unwrap_or(&repo.default_channel).to_string(),
         packages: map
     }
 }
 
-fn write_repo_index_packages(cur_dir: &Path, index: &Packages) {
-    let pkg_path = cur_dir.join("packages");
-    let json = serde_json::to_string_pretty(&index).unwrap();
-
-    progress(Color::Green, "Writing", "packages index").unwrap();
-    let mut file = File::create(&pkg_path.join("index.json")).unwrap();
-    file.write_all(json.as_bytes()).unwrap();
-    file.write(&[b'\n']).unwrap();
+fn write_repo_index_packages<T: ProgressOutput>(cur_dir: &Path, repo: &Repository, index: &Packages, channel: Option<&str>, output: &T) {
+    write_index(cur_dir, repo, index, channel, output, "packages");
 }
 
 enum OpenIndexError {
@@ -288,36 +374,39 @@ fn open_repo(path: &Path) -> Result<Repository, OpenIndexError> {
     Ok(index)
 }
 
-fn open_package(path: &Path) -> Result<Package, OpenIndexError> {
-    let file = File::open(path.join("index.json"))
+fn open_package(path: &Path, channel: Option<&str>) -> Result<Package, OpenIndexError> {
+    let file = File::open(path.join(index_fn(channel)))
         .map_err(|e| OpenIndexError::FileError(e))?;
     let index = serde_json::from_reader(file)
         .map_err(|e| OpenIndexError::JsonError(e))?;
     Ok(index)
 }
 
-fn repo_init(cur_dir: &Path) {
+fn repo_init<T: ProgressOutput>(cur_dir: &Path, output: &T) {
     if open_repo(&cur_dir).is_ok() {
-        progress(Color::Red, "Error", "Repo already exists; aborting.").unwrap();
+        // progress(Color::Red, "Error", "Repo already exists; aborting.").unwrap();
+        output.error("Repo already exists; aborting.");
         return;
     }
 
     if cur_dir.join("packages").exists() {
-        progress(Color::Red, "Error", "A file or directory named 'packages' already exists; aborting.").unwrap();
+        output.error("A file or directory named 'packages' already exists; aborting.");
+        // progress(Color::Red, "Error", "A file or directory named 'packages' already exists; aborting.").unwrap();
         return;
     }
 
     if cur_dir.join("virtuals").exists() {
-        progress(Color::Red, "Error", "A file or directory named 'virtuals' already exists; aborting.").unwrap();
+        output.error("A file or directory named 'virtuals' already exists; aborting.");
+        // progress(Color::Red, "Error", "A file or directory named 'virtuals' already exists; aborting.").unwrap();
         return;
     }
 
-    let repo_data = request_repo_data();
+    let repo_data = input_repo_data();
     let json = serde_json::to_string_pretty(&repo_data).unwrap();
     
     println!("\n{}\n", json);
 
-    if !prompt_question("Save index.json and generate repo directories", true) {
+    if !prompt_question("Save index.json and generate repo directories?", true) {
         return;
     }
 
@@ -332,36 +421,35 @@ fn repo_init(cur_dir: &Path) {
     fs::create_dir(cur_dir.join("packages")).unwrap();
     fs::create_dir(cur_dir.join("virtuals")).unwrap();
 
-    repo_index(&cur_dir);
+    repo_index(&cur_dir, output);
 }
 
-fn generate_repo_index_meta(repo_path: &Path) -> Repository {
-    progress(Color::Green, "Generating", "repository index").unwrap();
+fn generate_repo_index_meta<T: ProgressOutput>(repo_path: &Path, output: &T) -> Repository {
+    output.generating("repository index");
 
     let file = File::open(repo_path.join("index.json")).unwrap();
     let mut repo_index: Repository = serde_json::from_reader(file)
         .expect(repo_path.join("index.json").to_str().unwrap());
 
     repo_index._type = ld_type!("Repository");
-    repo_index.agent = Some(RepositoryAgent::default());
+    repo_index.agent = RepositoryAgent::default();
 
     repo_index
 }
 
-fn write_repo_index_meta(cur_dir: &Path, repo_index: &Repository) {
-    let repo_path = cur_dir;
+fn write_repo_index_meta<T: ProgressOutput>(repo_path: &Path, repo_index: &Repository, output: &T) {
     let json = serde_json::to_string_pretty(&repo_index).unwrap();
 
-    progress(Color::Green, "Writing", "repository index").unwrap();
+    output.writing("repository index");
     let mut file = File::create(&repo_path.join("index.json")).unwrap();
     file.write_all(json.as_bytes()).unwrap();
     file.write(&[b'\n']).unwrap();
 }
 
-fn repo_index(cur_dir: &Path) {
+fn repo_index<T: ProgressOutput>(cur_dir: &Path, output: &T) {
     if let Err(err) = open_repo(&cur_dir) {
-        progress(Color::Red, "Error", &format!("{}", err)).unwrap();
-        progress(Color::Red, "Error", "Repo does not exist or is invalid; aborting.").unwrap();
+        output.error(&format!("{}", err));
+        output.error("Repo does not exist or is invalid; aborting.");
         return;
     }
     
@@ -373,17 +461,24 @@ fn repo_index(cur_dir: &Path) {
         fs::create_dir(cur_dir.join("virtuals")).unwrap();
     }
     
-    let repo_index = generate_repo_index_meta(&cur_dir);
-    let package_index = generate_repo_index_packages(&cur_dir, &repo_index);
-    let virtuals_index = generate_repo_index_virtuals(&cur_dir, &repo_index);
+    // TODO: would be nice if this were transactional
 
-    write_repo_index_meta(&cur_dir, &repo_index);
-    write_repo_index_packages(&cur_dir, &package_index);
-    write_repo_index_virtuals(&cur_dir, &virtuals_index);
+    let repo_index = generate_repo_index_meta(&cur_dir, output);
+    write_repo_index_meta(&cur_dir, &repo_index, output);
+
+    for channel in repo_index.channels.iter() {
+        let channel: Option<&str> = if channel == &repo_index.default_channel { None } else { Some(&*channel) };
+
+        let package_index = generate_repo_index_packages(&cur_dir, &repo_index, channel, output);
+        write_repo_index_packages(&cur_dir, &repo_index, &package_index, channel, output);
+
+        let virtuals_index = generate_repo_index_virtuals(&cur_dir, &repo_index, channel, output);
+        write_repo_index_virtuals(&cur_dir, &repo_index, &virtuals_index, channel, output);
+    }
 }
 
-fn package_tarball_installer(file_path: &Path, force_yes: bool, tarball: &str, url: &str, size: usize) {
-    let mut pkg = match open_package(&file_path) {
+fn package_tarball_installer(file_path: &Path, channel: Option<&str>, force_yes: bool, tarball: &str, url: &str, size: usize) {
+    let mut pkg = match open_package(&file_path, channel) {
         Ok(pkg) => pkg,
         Err(err) => {
             progress(Color::Red, "Error", &format!("{}", err)).unwrap();
@@ -415,14 +510,14 @@ fn package_tarball_installer(file_path: &Path, force_yes: bool, tarball: &str, u
         }
     }
 
-    let mut file = File::create(file_path.join("index.json")).unwrap();
+    let mut file = File::create(file_path.join(index_fn(channel))).unwrap();
     file.write_all(json.as_bytes()).unwrap();
     file.write(&[b'\n']).unwrap();
 }
 
-fn package_macos_installer(file_path: &Path, version: &str, force_yes: bool, installer: &str, targets: Vec<&str>, pkg_id: &str,
+fn package_macos_installer(file_path: &Path, channel: Option<&str>, version: &str, force_yes: bool, installer: &str, targets: Vec<&str>, pkg_id: &str,
         url: &str, size: usize, requires_reboot: bool, requires_uninst_reboot: bool) {
-    let mut pkg = match open_package(&file_path) {
+    let mut pkg = match open_package(&file_path, channel) {
         Ok(pkg) => pkg,
         Err(err) => {
             progress(Color::Red, "Error", &format!("{}", err)).unwrap();
@@ -477,15 +572,15 @@ fn package_macos_installer(file_path: &Path, version: &str, force_yes: bool, ins
     }
 
     // TODO Check dir exists
-    let mut file = File::create(file_path.join("index.json")).unwrap();
+    let mut file = File::create(file_path.join(index_fn(channel))).unwrap();
     file.write_all(json.as_bytes()).unwrap();
     file.write(&[b'\n']).unwrap();
 }
 
-fn package_windows_installer(file_path: &Path, force_yes: bool, product_code: &str, installer: &str, type_: Option<&str>,
+fn package_windows_installer(file_path: &Path, channel: Option<&str>, force_yes: bool, product_code: &str, installer: &str, type_: Option<&str>,
         args: Option<&str>, uninst_args: Option<&str>, url: &str, size: usize, 
         requires_reboot: bool, requires_uninst_reboot: bool) {
-    let mut pkg = match open_package(&file_path) {
+    let mut pkg = match open_package(&file_path, channel) {
         Ok(pkg) => pkg,
         Err(err) => {
             progress(Color::Red, "Error", &format!("{}", err)).unwrap();
@@ -524,7 +619,7 @@ fn package_windows_installer(file_path: &Path, force_yes: bool, product_code: &s
         }
     }
 
-    let mut file = File::create(file_path.join("index.json")).unwrap();
+    let mut file = File::create(file_path.join(index_fn(channel))).unwrap();
     file.write_all(json.as_bytes()).unwrap();
     file.write(&[b'\n']).unwrap();
 }
@@ -563,6 +658,13 @@ fn main() {
                 .help("The repository root directory (default: current working directory)")
                 .short("p")
                 .long("path")
+                .takes_value(true)
+            )
+            .arg(Arg::with_name("channel")
+                .value_name("CHANNEL")
+                .help("The channel to use (default: repository default)")
+                .short("C")
+                .long("channel")
                 .takes_value(true)
             )
         )
@@ -744,13 +846,16 @@ fn main() {
                     ))
         )
         .get_matches();
+
+    let output = StderrOutput;
     
     match matches.subcommand() {
         ("init", Some(matches)) => {
             let current_dir = &env::current_dir().unwrap();
             let path: &Path = matches.value_of("path")
                 .map_or(&current_dir, |v| Path::new(v));
-            package_init(&path)
+            let channel = matches.value_of("channel");
+            package_init(&path, channel)
         },
         ("installer", Some(matches)) => {
             let current_dir = &env::current_dir().unwrap();
@@ -760,6 +865,7 @@ fn main() {
             match matches.subcommand() {
                 ("macos", Some(matches)) => {
                     let installer = matches.value_of("package").unwrap();
+                    let channel = matches.value_of("channel");
                     let version = matches.value_of("version").unwrap();
                     let targets: Vec<&str> = matches.value_of("targets").unwrap().split(",").collect();
                     let pkg_id = matches.value_of("pkg-id").unwrap();
@@ -770,11 +876,12 @@ fn main() {
                     let requires_uninst_reboot = matches.is_present("requires-uninst-reboot");
                     let skip_confirm = matches.is_present("skip-confirmation");
 
-                    package_macos_installer(path, version, skip_confirm, installer, targets, pkg_id, url, size, requires_reboot, 
+                    package_macos_installer(path, channel, version, skip_confirm, installer, targets, pkg_id, url, size, requires_reboot, 
                         requires_uninst_reboot);
                 },
                 ("windows", Some(matches)) => {
                     let product_code = matches.value_of("product-code").unwrap();
+                    let channel = matches.value_of("channel");
                     let type_ = matches.value_of("type");
                     let installer = matches.value_of("installer").unwrap();
                     let args = matches.value_of("args");
@@ -786,17 +893,18 @@ fn main() {
                     let requires_uninst_reboot = matches.is_present("requires-uninst-reboot");
                     let skip_confirm = matches.is_present("skip-confirmation");
 
-                    package_windows_installer(path, skip_confirm, product_code, installer, type_, args, uninstall_args, url, 
+                    package_windows_installer(path, channel, skip_confirm, product_code, installer, type_, args, uninstall_args, url, 
                         size, requires_reboot, requires_uninst_reboot);
                 },
                 ("tarball", Some(matches)) => {
                     let tarball = matches.value_of("tarball").unwrap();
+                    let channel = matches.value_of("channel");
                     let url = matches.value_of("url").unwrap();
                     let size = matches.value_of("installed-size").unwrap()
                         .parse::<usize>().unwrap();
                     let skip_confirm = matches.is_present("skip-confirmation");
 
-                    package_tarball_installer(path, skip_confirm, tarball, url, size);
+                    package_tarball_installer(path, channel, skip_confirm, tarball, url, size);
                 },
                 _ => {}
             }
@@ -807,8 +915,8 @@ fn main() {
                 .map_or(&current_dir, |v| Path::new(v));
 
             match matches.subcommand() {
-                ("init", _) => repo_init(&path),
-                ("index", _) => repo_index(&path),
+                ("init", _) => repo_init(&path, &output),
+                ("index", _) => repo_index(&path, &output),
                 _ => {}
             }
         }

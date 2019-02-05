@@ -7,12 +7,13 @@ pub struct Repository {
     pub _context: Option<String>,
     #[serde(rename = "@type")]
     pub _type: Option<String>,
-    pub agent: Option<RepositoryAgent>,
+    pub agent: RepositoryAgent,
     pub base: String,
     pub name: BTreeMap<String, String>,
     #[serde(default = "BTreeMap::new")]
     pub description: BTreeMap<String, String>,
     pub primary_filter: String,
+    pub default_channel: String,
     pub channels: Vec<String>,
     #[serde(default = "BTreeMap::new")]
     pub categories: BTreeMap<String, BTreeMap<String, String>>

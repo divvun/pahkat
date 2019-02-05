@@ -63,6 +63,7 @@ pub struct Packages {
     #[serde(rename = "@id")]
     pub _id: Option<String>,
     pub base: String,
+    pub channel: String,
     #[serde(default = "BTreeMap::new")]
     pub packages: PackageMap
 }
@@ -95,6 +96,7 @@ pub struct Virtuals {
     #[serde(rename = "@id")]
     pub _id: Option<String>,
     pub base: String,
+    pub channel: String,
     #[serde(default = "BTreeMap::new")]
     pub virtuals: VirtualRefMap
 }
@@ -118,7 +120,6 @@ pub enum Installer {
     Windows(WindowsInstaller),
     MacOS(MacOSInstaller),
     Tarball(TarballInstaller),
-    // MacOSBundle(MacOSBundleInstaller)
 }
 
 impl Downloadable for Installer {
@@ -127,35 +128,9 @@ impl Downloadable for Installer {
             Installer::Windows(ref v) => v.url.to_owned(),
             Installer::MacOS(ref v) => v.url.to_owned(),
             Installer::Tarball(ref v) => v.url.to_owned(),
-            // Installer::MacOSBundle(ref v) => v.url.to_owned()
         }
     }
 }
-
-// #[derive(Default, Debug, Serialize, Deserialize)]
-// #[serde(rename_all = "camelCase")]
-// pub struct MacOSBundleInstallPath {
-//     pub user: Option<String>,
-//     pub system: Option<String>
-// }
-
-/// This type is for .bundle files which include an Info.plist for versioning purposes
-// #[derive(Debug, Serialize, Deserialize)]
-// #[serde(rename_all = "camelCase")]
-// pub struct MacOSBundleInstaller {
-//     #[serde(rename = "@type")]
-//     pub _type: Option<String>,
-//     pub url: String,
-//     #[serde(default)]
-//     pub install_path: MacOSBundleInstallPath,
-//     #[serde(default)]
-//     pub requires_reboot: bool,
-//     #[serde(default)]
-//     pub requires_uninstall_reboot: bool,
-//     pub size: usize,
-//     pub installed_size: usize,
-//     pub signature: Option<InstallerSignature>
-// }
 
 #[derive(Debug, Clone, Copy, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
