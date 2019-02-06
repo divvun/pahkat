@@ -62,6 +62,9 @@ pahkat_config_cache_path(pahkat_client_t* _Nonnull handle);
 extern void
 pahkat_refresh_repos(pahkat_client_t* _Nonnull handle);
 
+extern void
+pahkat_force_refresh_repos(pahkat_client_t* _Nonnull handle);
+
 // extern void
 // pahkat_config_add_repo()
 

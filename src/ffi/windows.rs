@@ -48,13 +48,13 @@ macro_rules! safe_handle {
 }
 
 #[no_mangle]
-extern fn pahkat_client_new(config_path: *const c_char) -> *const WindowsPackageStore {
+extern fn pahkat_client_new(config_path: *const c_char, save_changes: u8) -> *const WindowsPackageStore {
     println!("pahkat_client_new");
     let config = if config_path.is_null() {
-        Ok(StoreConfig::load_or_default())
+        Ok(StoreConfig::load_or_default(save_changes != 0))
     } else {
         let config_path = unsafe { CStr::from_ptr(config_path) }.to_string_lossy();
-        StoreConfig::load(std::path::Path::new(&*config_path))
+        StoreConfig::load(std::path::Path::new(&*config_path), save_changes != 0)
     };
 
     match config {
@@ -162,6 +162,12 @@ extern fn pahkat_repos_json(handle: *const WindowsPackageStore) -> *const c_char
 extern fn pahkat_refresh_repos(handle: *const WindowsPackageStore) {
     let store = safe_handle!(handle);
     store.refresh_repos();
+}
+
+#[no_mangle]
+extern fn pahkat_force_refresh_repos(handle: *const WindowsPackageStore) {
+    let store = safe_handle!(handle);
+    store.force_refresh_repos();
 }
 
 struct DownloadPackageKey(*const c_char);

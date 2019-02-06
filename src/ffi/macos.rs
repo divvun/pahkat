@@ -182,6 +182,12 @@ extern fn pahkat_refresh_repos(handle: *const MacOSPackageStore) {
     store.refresh_repos();
 }
 
+#[no_mangle]
+extern fn pahkat_force_refresh_repos(handle: *const MacOSPackageStore) {
+    let store = safe_handle!(handle);
+    store.force_refresh_repos();
+}
+
 struct DownloadPackageKey(*const c_char);
 unsafe impl Send for DownloadPackageKey {}
 

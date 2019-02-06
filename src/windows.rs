@@ -321,9 +321,27 @@ impl WindowsPackageStore {
     }
 
     pub fn refresh_repos(&self) {
+        self.refresh_repos_impl(false);
+    }
+
+    pub fn force_refresh_repos(&self) {
+        self.refresh_repos_impl(true);
+    }
+
+    fn refresh_repos_impl(&self, invalidate_cache: bool) {
         let mut repos = HashMap::new();
         let config = self.config.read().unwrap();
         for record in config.repos().iter() {
+            if invalidate_cache {
+                match Repository::invalidate_cache(
+                    &record.url,
+                    record.channel.clone(),
+                    &config.repo_cache_path()
+                ) {
+                    Err(e) => { println!("{:?}", e); }
+                    Ok(_) => {},
+                };
+            }
             match Repository::from_cache_or_url(
                 &record.url,
                 record.channel.clone(),
@@ -334,7 +352,7 @@ impl WindowsPackageStore {
             };
         }
 
-        *self.repos.write().unwrap() = repos;
+        *self.repos.write().unwrap() = repos;        
     }
 
     pub fn add_repo(&self, url: String, channel: String) -> Result<(), ()> {

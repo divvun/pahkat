@@ -137,6 +137,16 @@ impl Repository {
         Ok(repo)
     }
 
+    pub fn invalidate_cache(url: &Url, channel: String, cache_path: &Path) -> Result<(), std::io::Error> {
+        let hash_id = Repository::path_hash(url, &channel);
+        let repo_cache_path = cache_path.join(&hash_id);
+        let cache_file_path = repo_cache_path.join("cache.json");
+        if cache_file_path.exists() {
+            fs::remove_file(cache_file_path)?;
+        }
+        Ok(())
+    }
+
     pub fn save_to_cache(&self, cache_path: &Path) -> Result<(), std::io::Error> {
         let hash_cache_path = cache_path.join(&self.hash_id);
         fs::create_dir_all(&hash_cache_path)?;
