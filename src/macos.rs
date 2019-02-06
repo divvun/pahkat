@@ -240,28 +240,30 @@ impl MacOSPackageStore {
         serde_json::to_string(&self.repos.read().unwrap().values().collect::<Vec<_>>()).unwrap()
     }
 
-    pub fn refresh_repos(&self) {
-        self.refresh_repos_impl(false);
+    fn clear_cache(&self) {
+        let config = self.config.read().unwrap();
+        for record in config.repos().iter() {
+            match Repository::clear_cache(
+                &record.url,
+                record.channel.clone(),
+                &config.repo_cache_path()
+            ) {
+                Err(e) => { println!("{:?}", e); }
+                Ok(_) => {},
+            };
+        }
     }
 
     pub fn force_refresh_repos(&self) {
-        self.refresh_repos_impl(true);
+        self.clear_cache();
+        self.refresh_repos();
     }
-
-    fn refresh_repos_impl(&self, invalidate_cache: bool) {
+    
+    pub fn refresh_repos(&self) {
         let mut repos = HashMap::new();
         let config = self.config.read().unwrap();
+
         for record in config.repos().iter() {
-            if invalidate_cache {
-                match Repository::invalidate_cache(
-                    &record.url,
-                    record.channel.clone(),
-                    &config.repo_cache_path()
-                ) {
-                    Err(e) => { println!("{:?}", e); }
-                    Ok(_) => {},
-                };
-            }
             match Repository::from_cache_or_url(
                 &record.url,
                 record.channel.clone(),
