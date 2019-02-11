@@ -155,6 +155,12 @@ pakhat_package_install(const pahkat_client_t* _Nonnull handle,
     const char* package_key,
     uint8_t target);
 
+extern uint8_t
+pahkat_semver_is_valid(const char* version_str);
+
+extern int32_t
+pahkat_semver_compare(const char* lhs, const char* rhs);
+
 // extern uint32_t /* error */
 // pakhat_uninstall_package(const pahkat_client_t* _Nonnull handle,
 //     const char* package_key,

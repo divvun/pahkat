@@ -423,6 +423,49 @@ extern fn pahkat_package_transaction_actions(
         .into_raw()
 }
 
+#[no_mangle]
+extern fn pahkat_semver_is_valid(version_str: *const c_char) -> u8 {
+    let version_string = unsafe { CStr::from_ptr(version_str) }.to_string_lossy();
+
+    match Version::parse(&version_string) {
+        Ok(version) => 1,
+        _ => {
+            eprintln!("pahkat_semver_is_valid: failed to parse version string: {}", &version_string);
+            0
+        }
+    }
+}
+
+#[no_mangle]
+extern fn pahkat_semver_compare(lhs: *const c_char, rhs: *const c_char) -> i32 {
+    let lhs_string = unsafe { CStr::from_ptr(lhs) }.to_string_lossy();
+    let rhs_string = unsafe { CStr::from_ptr(rhs) }.to_string_lossy();
+
+    let lhs_version = match Version::parse(&lhs_string) {
+        Ok(version) => version,
+        _ => {
+            eprintln!("pahkat_semver_compare: lhs is not a valid semver");
+            return 0
+        }
+    };
+    
+    let rhs_version = match Version::parse(&rhs_string) {
+        Ok(version) => version,
+        _ => {
+            eprintln!("pahkat_semver_compare: rhs is not a valid semver");
+            return 0
+        }
+    };
+
+    if lhs_version < rhs_version {
+        -1
+    } else if lhs_version == rhs_version {
+        0
+    } else {
+        1
+    }
+}
+
 enum ErrorCode {
     None,
     PackageDownloadError,
