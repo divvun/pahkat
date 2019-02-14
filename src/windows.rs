@@ -549,8 +549,9 @@ impl WindowsPackageStore {
                 // TODO: generic parameter extensions for windows based on install target
                 match type_.as_ref() {
                     "inno" => {
+                        arg_str.push("\"");
                         arg_str.push(&pkg_path);
-                        arg_str.push(" /VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART");
+                        arg_str.push("\" /VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART");
                         // TODO: add user-mode installation?
                     }
                     "msi" => {
