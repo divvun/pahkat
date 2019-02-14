@@ -19,6 +19,7 @@ use crate::PackageStatus;
 use crate::AbsolutePackageKey;
 use pahkat::types::*;
 use crate::PackageActionType;
+use crate::PackageTransactionError;
 use crate::windows::PackageAction;
 use std::sync::Arc;
 
@@ -304,30 +305,49 @@ extern fn pahkat_create_package_transaction<'a>(
     c_actions: *const *const PackageAction,
     error: *mut *const PahkatError
 ) -> *const PackageTransaction {
-    println!("pahkat_create_package_transaction");
     let store = unsafe { Arc::from_raw(handle) };
     let mut actions = Vec::<PackageAction>::new();
 
-    println!("pahkat_create_package_transaction 2");
     for i in 0..action_count as isize {
-        println!("pahkat_create_package_transaction 2q");
         let ptr = unsafe { *c_actions.offset(i) };
-        println!("pahkat_create_package_transaction 2-");
         let action = unsafe { &*ptr }.to_owned();
-        println!("pahkat_create_package_transaction 2s");
         actions.push(action);
-        println!("pahkat_create_package_transaction 2d");
     }
 
-    println!("pahkat_create_package_transaction 3");
     let tx = match PackageTransaction::new(store.clone(), actions) {
-        Ok(v) => v,
-        Err(e) => panic!(e) // TODO: hand back to client
+        Ok(v) => {
+            let store = Arc::into_raw(store);
+            std::mem::forget(store);
+            v
+        },
+        Err(e) => {
+            let c_error = match e {
+                PackageTransactionError::NoPackage(id) => {
+                    PahkatError {
+                        code: 1,
+                        message: CString::new(&*format!("No package with id: {}", id)).unwrap().into_raw()
+                    }
+                }
+                PackageTransactionError::Deps(dep_error) => {
+                    PahkatError {
+                        code: 2,
+                        message: CString::new(&*format!("{:?}", dep_error)).unwrap().into_raw()
+                    }
+                },
+                PackageTransactionError::ActionContradiction(id) => {
+                    PahkatError {
+                        code: 3,
+                        message: CString::new(&*format!("Package contradiction for: {}", id)).unwrap().into_raw()
+                    }
+                }
+            };
+            unsafe { *error = Box::into_raw(Box::new(c_error)) };
+            let store = Arc::into_raw(store);
+            std::mem::forget(store);
+            return std::ptr::null()
+        }
     };
-    let store = Arc::into_raw(store);
-    std::mem::forget(store);
 
-    println!("pahkat_create_package_transaction 4");
     Box::into_raw(Box::from(tx))
 }
 
