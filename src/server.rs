@@ -1,4 +1,4 @@
-use actix_web::{server, actix::System, App, HttpResponse, Responder, State, http::Method, Path as WebPath, error::ErrorNotFound};
+use actix_web::{server, actix::System, App, HttpResponse, Responder, State, http::Method, Path as WebPath};
 use clap::{AppSettings, App as CliApp, SubCommand, Arg, crate_version};
 use std::env;
 use std::path::{Path, PathBuf};
@@ -26,7 +26,13 @@ fn repo_index(state: State<ServerState>) -> impl Responder {
 
     repo_index_path.push("index.json");
     
-    read_file(repo_index_path.to_str().expect("Cannot convert path to string"))
+    match read_file(repo_index_path.to_str().expect("Cannot convert path to string")) {
+        Ok(body) => HttpResponse::Ok().content_type("application/json").body(body),
+        Err(e) => {
+            eprintln!("Error while reading repo index file: {:?}", e);
+            HttpResponse::InternalServerError().finish()
+        }
+    }    
 }
 
 fn packages_index(state: State<ServerState>) -> impl Responder {
@@ -35,7 +41,13 @@ fn packages_index(state: State<ServerState>) -> impl Responder {
     packages_index_path.push("packages");
     packages_index_path.push("index.json");
     
-    read_file(packages_index_path.to_str().expect("Cannot convert path to string"))
+    match read_file(packages_index_path.to_str().expect("Cannot convert path to string")) {
+        Ok(body) => HttpResponse::Ok().content_type("application/json").body(body),
+        Err(e) => {
+            eprintln!("Error while reading packages index file: {:?}", e);
+            HttpResponse::InternalServerError().finish()
+        }
+    }    
 }
 
 fn packages_package_index(state: State<ServerState>, path: WebPath<String>) -> impl Responder {
@@ -46,12 +58,13 @@ fn packages_package_index(state: State<ServerState>, path: WebPath<String>) -> i
     packages_package_index_path.push("packages");
     packages_package_index_path.push(package_id);
     packages_package_index_path.push("index.json");
+    let index_path_str = packages_package_index_path.to_str().expect("Cannot convert path to string");
     
-    match read_file(packages_package_index_path.to_str().expect("Cannot convert path to string")) {
-        Ok(v) => Ok(v),
+    match read_file(index_path_str) {
+        Ok(body) => HttpResponse::Ok().content_type("application/json").body(body),
         Err(e) => {
-            eprintln!("Error while reading packages package index: {:?}", e);
-            Err(ErrorNotFound("Not found"))
+            eprintln!("Error while reading packages package index {}: {:?}", index_path_str, e);
+            HttpResponse::NotFound().finish()
         },
     }
 }
@@ -62,7 +75,13 @@ fn virtuals_index(state: State<ServerState>) -> impl Responder {
     virtuals_index_path.push("virtuals");
     virtuals_index_path.push("index.json");
     
-    read_file(virtuals_index_path.to_str().expect("Cannot convert path to string"))
+    match read_file(virtuals_index_path.to_str().expect("Cannot convert path to string")) {
+        Ok(body) => HttpResponse::Ok().content_type("application/json").body(body),
+        Err(e) => {
+            eprintln!("Error while reading virtuals index file: {:?}", e);
+            HttpResponse::InternalServerError().finish()
+        }
+    }    
 }
 
 fn virtuals_package_index(state: State<ServerState>, path: WebPath<String>) -> impl Responder {
@@ -73,12 +92,13 @@ fn virtuals_package_index(state: State<ServerState>, path: WebPath<String>) -> i
     virtuals_package_index_path.push("virtuals");
     virtuals_package_index_path.push(package_id);
     virtuals_package_index_path.push("index.json");
+    let index_path_str = virtuals_package_index_path.to_str().expect("Cannot convert path to string");
     
-    match read_file(virtuals_package_index_path.to_str().expect("Cannot convert path to string")) {
-        Ok(v) => Ok(v),
+    match read_file(index_path_str) {
+        Ok(body) => HttpResponse::Ok().content_type("application/json").body(body),
         Err(e) => {
-            eprintln!("Error while reading virtuals package index: {:?}", e);
-            Err(ErrorNotFound("Not found"))
+            eprintln!("Error while reading virtuals package index {}: {:?}", index_path_str, e);
+            HttpResponse::NotFound().finish()
         },
     }
 }
