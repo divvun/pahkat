@@ -38,6 +38,24 @@ fn packages_index(state: State<ServerState>) -> impl Responder {
     read_file(packages_index_path.to_str().expect("Cannot convert path to string"))
 }
 
+fn packages_package_index(state: State<ServerState>, path: WebPath<String>) -> impl Responder {
+    let package_id = path.clone();
+
+    let mut packages_package_index_path = state.path.clone();
+
+    packages_package_index_path.push("packages");
+    packages_package_index_path.push(package_id);
+    packages_package_index_path.push("index.json");
+    
+    match read_file(packages_package_index_path.to_str().expect("Cannot convert path to string")) {
+        Ok(v) => Ok(v),
+        Err(e) => {
+            eprintln!("Error while reading packages package index: {:?}", e);
+            Err(ErrorNotFound("Not found"))
+        },
+    }
+}
+
 fn virtuals_index(state: State<ServerState>) -> impl Responder {
     let mut virtuals_index_path = state.path.clone();
 
@@ -75,9 +93,20 @@ fn run_server(path: &Path, port: &str) {
 
     server::new(move || {
             App::with_state(state.clone())
+                .resource("", |r| r.method(Method::GET).with(repo_index))
+                .resource("/", |r| r.method(Method::GET).with(repo_index))
                 .resource("/index.json", |r| r.method(Method::GET).with(repo_index))
+                .resource("/packages", |r| r.method(Method::GET).with(packages_index))
+                .resource("/packages/", |r| r.method(Method::GET).with(packages_index))
                 .resource("/packages/index.json", |r| r.method(Method::GET).with(packages_index))
+                .resource("/packages/{packageId}", |r| r.method(Method::GET).with(packages_package_index))
+                .resource("/packages/{packageId}/", |r| r.method(Method::GET).with(packages_package_index))
+                .resource("/packages/{packageId}/index.json", |r| r.method(Method::GET).with(packages_package_index))
+                .resource("/virtuals", |r| r.method(Method::GET).with(virtuals_index))
+                .resource("/virtuals/", |r| r.method(Method::GET).with(virtuals_index))
                 .resource("/virtuals/index.json", |r| r.method(Method::GET).with(virtuals_index))
+                .resource("/virtuals/{packageId}", |r| r.method(Method::GET).with(virtuals_package_index))
+                .resource("/virtuals/{packageId}/", |r| r.method(Method::GET).with(virtuals_package_index))
                 .resource("/virtuals/{packageId}/index.json", |r| r.method(Method::GET).with(virtuals_package_index))
         })
         .bind(&format!("127.0.0.1:{}", port))
