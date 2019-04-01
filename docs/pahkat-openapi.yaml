@@ -30,6 +30,26 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Packages"
+  /packages/{packageId}/index.json:
+    parameters:
+      - name: packageId
+        in: path
+        required: true
+        description: The package identifier
+        schema:
+          type: string
+    get:
+      operationId: package
+      summary: Package index
+      description: >
+        A package represents an installer that can be run by a package manager.
+      responses:
+        200:
+          description: a package index
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Package"
   /virtuals/index.json:
     get:
       operationId: virtualsIndex
@@ -231,7 +251,8 @@ components:
             - $ref: "#/components/schemas/WindowsInstaller"
             - $ref: "#/components/schemas/MacOSInstaller"
             - $ref: "#/components/schemas/TarballInstaller"
-          discriminator: "@type"
+          discriminator:
+            propertyName: "@type"
     TarballInstaller:
       type: object
       required:
