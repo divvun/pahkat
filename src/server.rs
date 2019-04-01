@@ -180,14 +180,37 @@ fn main() {
             let mut watcher = Watcher::new(path)
                 .expect("Failed to start file watcher");
 
+            // todo: the automatic re-indexing feature currently uses the
+            //       pahkat client and assumes that its in the same directory
+            //       as pahkat-server. at some point the code from main.rs should
+            //       be refactored and used instead of calling the client executable
+            let mut pahkat_path = std::env::current_exe()
+                .expect("Failed to get the path of the current executable");
+
+            pahkat_path.pop();
+            pahkat_path.push("pahkat");
+            if !pahkat_path.exists() || !pahkat_path.is_file() {
+                panic!(format!("Failed to re-index pahkat repo: Expected a pahkat client at {}", pahkat_path.as_path().display()));
+            }
+
             std::thread::spawn(move || {
                 let watcher_interval = std::time::Duration::from_millis(2000);
                 loop {
                     match watcher.update() {
                         Err(error) => eprintln!("Failed to update watcher: {:?}", error),
                         Ok(ref events) if events.len() > 0 => {
-                            // todo: re-index pahkat repo
-                            println!("{} event(s) since last update", events.len())
+                            println!("Watcher reports {} event(s) since last update", events.len());
+
+                            let mut reindex_command = std::process::Command::new(&pahkat_path);
+                            reindex_command
+                                .current_dir(watcher.path())
+                                .arg("repo")
+                                .arg("index");
+
+                            match reindex_command.output() {
+                                Err(error) => eprintln!("Failed to re-index pahkat repo at {}: {:?}", watcher.path(), error),
+                                Ok(_) => println!("Successfully re-indexed pahkat repo at {}", watcher.path()),
+                            }
                         }
                         _ => {}
                     }
