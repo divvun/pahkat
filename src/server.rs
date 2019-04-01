@@ -7,7 +7,9 @@ use std::io::BufReader;
 use std::io::prelude::*;
 
 mod watcher;
+mod repo_ops;
 use watcher::*;
+use repo_ops::*;
 
 fn read_file(path: &str) -> std::io::Result<String> {
     let file = File::open(path)?;
@@ -180,18 +182,7 @@ fn main() {
             let mut watcher = Watcher::new(path)
                 .expect("Failed to start file watcher");
 
-            // todo: the automatic re-indexing feature currently uses the
-            //       pahkat client and assumes that its in the same directory
-            //       as pahkat-server. at some point the code from main.rs should
-            //       be refactored and used instead of calling the client executable
-            let mut pahkat_path = std::env::current_exe()
-                .expect("Failed to get the path of the current executable");
-
-            pahkat_path.pop();
-            pahkat_path.push("pahkat");
-            if !pahkat_path.exists() || !pahkat_path.is_file() {
-                panic!(format!("Failed to re-index pahkat repo: Expected a pahkat client at {}", pahkat_path.as_path().display()));
-            }
+            let output = ConsoleOutput;
 
             std::thread::spawn(move || {
                 let watcher_interval = std::time::Duration::from_millis(2000);
@@ -200,17 +191,12 @@ fn main() {
                         Err(error) => eprintln!("Failed to update watcher: {:?}", error),
                         Ok(ref events) if events.len() > 0 => {
                             println!("Watcher reports {} event(s) since last update", events.len());
-
-                            let mut reindex_command = std::process::Command::new(&pahkat_path);
-                            reindex_command
-                                .current_dir(watcher.path())
-                                .arg("repo")
-                                .arg("index");
-
-                            match reindex_command.output() {
-                                Err(error) => eprintln!("Failed to re-index pahkat repo at {}: {:?}", watcher.path(), error),
-                                Ok(_) => println!("Successfully re-indexed pahkat repo at {}", watcher.path()),
-                            }
+                            repo_ops::repo_index(Path::new(watcher.path()), &output);
+                            // todo: repo_ops calls need improved error handling to support:
+                            // match repo_ops::repo_index(&path, &output) {
+                            //     Err(error) => eprintln!("Failed to re-index pahkat repo at {}: {:?}", watcher.path(), error),
+                            //     Ok(_) => println!("Successfully re-indexed pahkat repo at {}", watcher.path()),
+                            // }
                         }
                         _ => {}
                     }
@@ -221,5 +207,33 @@ fn main() {
             run_server(path, port);
         }
         _ => {}
+    }
+}
+
+struct ConsoleOutput;
+
+impl ProgressOutput for ConsoleOutput {
+    fn info(&self, msg: &str) {
+        println!("Info {}", msg);
+    }
+
+    fn generating(&self, thing: &str) {
+        println!("Generating {}", thing);
+    }
+
+    fn writing(&self, thing: &str) {
+        println!("Writing {}", thing);
+    }
+
+    fn inserting(&self, id: &str, version: &str) {
+        println!("Inserting {} {}", id, version);
+    }
+
+    fn error(&self, thing: &str) {
+        eprintln!("Error {}", thing);
+    }
+
+    fn warn(&self, thing: &str) {
+        println!("Warning {}", thing);
     }
 }
