@@ -6,6 +6,9 @@ use std::fs::File;
 use std::io::BufReader;
 use std::io::prelude::*;
 
+mod watcher;
+use watcher::*;
+
 fn read_file(path: &str) -> std::io::Result<String> {
     let file = File::open(path)?;
     let mut buf_reader = BufReader::new(file);
@@ -174,7 +177,25 @@ fn main() {
             let port: &str = matches.value_of("port")
                 .map_or("8000", |v| v);
 
-            run_server(path, port)
+            let mut watcher = Watcher::new(path)
+                .expect("Failed to start file watcher");
+
+            std::thread::spawn(move || {
+                let watcher_interval = std::time::Duration::from_millis(2000);
+                loop {
+                    match watcher.update() {
+                        Err(error) => eprintln!("Failed to update watcher: {:?}", error),
+                        Ok(ref events) if events.len() > 0 => {
+                            // todo: re-index pahkat repo
+                            println!("{} event(s) since last update", events.len())
+                        }
+                        _ => {}
+                    }
+                    std::thread::sleep(watcher_interval);
+                }
+            });
+
+            run_server(path, port);
         }
         _ => {}
     }

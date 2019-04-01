@@ -24,6 +24,7 @@ serde = "1.0.87"
 serde_derive = "1.0.87"
 serde_json = "1.0.38"
 actix-web = "0.7.18"
+glob = "0.3.0"
 
 [features]
 binaries = ["clap", "termcolor", "pathdiff", "dialoguer", "url"]
