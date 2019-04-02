@@ -18,17 +18,12 @@ use std::path::Path;
 
 mod cli;
 mod types;
+#[macro_use]
 mod repo_ops;
 
 use cli::*;
 use pahkat::types::*;
 use repo_ops::*;
-
-macro_rules! ld_type {
-    ($e:expr) => {
-        Some(format!("{}", $e).to_owned())
-    };
-}
 
 struct StderrOutput;
 
