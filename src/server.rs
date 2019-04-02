@@ -23,6 +23,7 @@ fn read_file(path: &str) -> std::io::Result<String> {
 #[derive(Clone)]
 struct ServerState {
     path: PathBuf,
+    bind: String,
     port: String,
 }
 
@@ -108,11 +109,12 @@ fn virtuals_package_index(state: State<ServerState>, path: WebPath<String>) -> i
     }
 }
 
-fn run_server(path: &Path, port: &str) {
+fn run_server(path: &Path, bind: &str, port: &str) {
     let system = System::new("páhkat-server");
 
     let state = ServerState {
         path: path.to_path_buf(),
+        bind: bind.to_string(),
         port: port.to_string()
     };
 
@@ -134,11 +136,11 @@ fn run_server(path: &Path, port: &str) {
                 .resource("/virtuals/{packageId}/", |r| r.method(Method::GET).with(virtuals_package_index))
                 .resource("/virtuals/{packageId}/index.json", |r| r.method(Method::GET).with(virtuals_package_index))
         })
-        .bind(&format!("127.0.0.1:{}", port))
-        .expect(&format!("Can not bind to port {}", port))
+        .bind(&format!("{}:{}", bind, port))
+        .expect(&format!("Can not bind to {}:{}", bind, port))
         .start();
 
-    println!("Running on port {}", port);
+    println!("Running on port {} bound to {}", port, bind);
 
     system.run();
 }
@@ -161,6 +163,13 @@ fn main() {
                         .takes_value(true)
                 )
                 .arg(
+                    Arg::with_name("bind")
+                        .value_name("BIND")
+                        .help("The address which the server to listen to (default: 127.0.0.1)")
+                        .long("bind")
+                        .takes_value(true)
+                )
+                .arg(
                     Arg::with_name("port")
                         .value_name("PORT")
                         .help("The port which the server to listen to (default: 8000)")
@@ -176,6 +185,8 @@ fn main() {
             let current_dir = &env::current_dir().unwrap();
             let path: &Path = matches.value_of("path")
                 .map_or(&current_dir, |v| Path::new(v));
+            let bind: &str = matches.value_of("bind")
+                .map_or("127.0.0.1", |v| v);
             let port: &str = matches.value_of("port")
                 .map_or("8000", |v| v);
 
@@ -204,7 +215,7 @@ fn main() {
                 }
             });
 
-            run_server(path, port);
+            run_server(path, bind, port);
         }
         _ => {}
     }
