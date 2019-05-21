@@ -1,4 +1,4 @@
-use actix_web::{server, actix::System, App, HttpResponse, Responder, State, http::Method, Path as WebPath};
+use actix_web::{HttpServer, App, HttpResponse, Responder, web};
 use clap::{AppSettings, App as CliApp, SubCommand, Arg, crate_version};
 use std::env;
 use std::path::{Path, PathBuf};
@@ -27,7 +27,7 @@ struct ServerState {
     port: String,
 }
 
-fn repo_index(state: State<ServerState>) -> impl Responder {
+fn repo_index(state: web::Data<ServerState>) -> impl Responder {
     let mut repo_index_path = state.path.clone();
 
     repo_index_path.push("index.json");
@@ -41,7 +41,7 @@ fn repo_index(state: State<ServerState>) -> impl Responder {
     }    
 }
 
-fn packages_index(state: State<ServerState>) -> impl Responder {
+fn packages_index(state: web::Data<ServerState>) -> impl Responder {
     let mut packages_index_path = state.path.clone();
 
     packages_index_path.push("packages");
@@ -56,7 +56,7 @@ fn packages_index(state: State<ServerState>) -> impl Responder {
     }    
 }
 
-fn packages_package_index(state: State<ServerState>, path: WebPath<String>) -> impl Responder {
+fn packages_package_index(state: web::Data<ServerState>, path: web::Path<String>) -> impl Responder {
     let package_id = path.clone();
 
     let mut packages_package_index_path = state.path.clone();
@@ -75,7 +75,7 @@ fn packages_package_index(state: State<ServerState>, path: WebPath<String>) -> i
     }
 }
 
-fn virtuals_index(state: State<ServerState>) -> impl Responder {
+fn virtuals_index(state: web::Data<ServerState>) -> impl Responder {
     let mut virtuals_index_path = state.path.clone();
 
     virtuals_index_path.push("virtuals");
@@ -90,7 +90,7 @@ fn virtuals_index(state: State<ServerState>) -> impl Responder {
     }    
 }
 
-fn virtuals_package_index(state: State<ServerState>, path: WebPath<String>) -> impl Responder {
+fn virtuals_package_index(state: web::Data<ServerState>, path: web::Path<String>) -> impl Responder {
     let package_id = path.clone();
 
     let mut virtuals_package_index_path = state.path.clone();
@@ -110,7 +110,7 @@ fn virtuals_package_index(state: State<ServerState>, path: WebPath<String>) -> i
 }
 
 fn run_server(path: &Path, bind: &str, port: &str) {
-    let system = System::new("páhkat-server");
+    let system = actix::System::new("páhkat-server");
 
     let state = ServerState {
         path: path.to_path_buf(),
@@ -118,31 +118,26 @@ fn run_server(path: &Path, bind: &str, port: &str) {
         port: port.to_string()
     };
 
-    server::new(move || {
-            App::with_state(state.clone())
-                .resource("", |r| r.method(Method::GET).with(repo_index))
-                .resource("/", |r| r.method(Method::GET).with(repo_index))
-                .resource("/index.json", |r| r.method(Method::GET).with(repo_index))
-                .resource("/packages", |r| r.method(Method::GET).with(packages_index))
-                .resource("/packages/", |r| r.method(Method::GET).with(packages_index))
-                .resource("/packages/index.json", |r| r.method(Method::GET).with(packages_index))
-                .resource("/packages/{packageId}", |r| r.method(Method::GET).with(packages_package_index))
-                .resource("/packages/{packageId}/", |r| r.method(Method::GET).with(packages_package_index))
-                .resource("/packages/{packageId}/index.json", |r| r.method(Method::GET).with(packages_package_index))
-                .resource("/virtuals", |r| r.method(Method::GET).with(virtuals_index))
-                .resource("/virtuals/", |r| r.method(Method::GET).with(virtuals_index))
-                .resource("/virtuals/index.json", |r| r.method(Method::GET).with(virtuals_index))
-                .resource("/virtuals/{packageId}", |r| r.method(Method::GET).with(virtuals_package_index))
-                .resource("/virtuals/{packageId}/", |r| r.method(Method::GET).with(virtuals_package_index))
-                .resource("/virtuals/{packageId}/index.json", |r| r.method(Method::GET).with(virtuals_package_index))
-        })
+    HttpServer::new(move || {
+        App::new()
+            .data(state.clone())
+            .service(web::resource("/index.json")
+                .route(web::get().to(repo_index)))
+            .service(web::resource("/packages/index.json")
+                .route(web::get().to(packages_index)))
+            .service(web::resource("/packages//{packageId}/index.json")
+                .route(web::get().to(packages_package_index)))
+            .service(web::resource("/virtuals/index.json")
+                .route(web::get().to(virtuals_index)))
+            .service(web::resource("/virtuals/{packageId}/index.json")
+                .route(web::get().to(virtuals_package_index)))
+    })
         .bind(&format!("{}:{}", bind, port))
         .expect(&format!("Can not bind to {}:{}", bind, port))
         .start();
 
     println!("Running on port {} bound to {}", port, bind);
-
-    system.run();
+    let _ = system.run();
 }
 
 fn main() {
