@@ -35,7 +35,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::fs::{self, create_dir_all, File};
 use std::fmt;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use url::Url;
 use std::sync::{Arc, RwLock};
 
