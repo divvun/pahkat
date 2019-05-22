@@ -104,9 +104,31 @@ pub struct Virtuals {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum VirtualTarget {
+    WindowsRegistryKey(RegistryKey),
+    MacOSPackage(MacOSPackage),
+    MacOSPath(MacOSPath)
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct VirtualTarget {
-    pub registry_key: Option<RegistryKey>
+pub struct MacOSPackage {
+    pkg_id: String,
+    min_version: Option<String>,
+    max_version: Option<String>,
+    min_build: Option<String>,
+    max_build: Option<String>
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MacOSPath {
+    app_path: String,
+    min_version: Option<String>,
+    max_version: Option<String>,
+    min_build: Option<String>,
+    max_build: Option<String>
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
