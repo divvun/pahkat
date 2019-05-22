@@ -16,7 +16,9 @@ pub struct Repository {
     pub default_channel: String,
     pub channels: Vec<String>,
     #[serde(default = "BTreeMap::new")]
-    pub categories: BTreeMap<String, BTreeMap<String, String>>
+    pub categories: BTreeMap<String, BTreeMap<String, String>>,
+    #[serde(default = "Vec::new")]
+    pub linked_repositories: Vec<String>
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
