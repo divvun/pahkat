@@ -3,21 +3,21 @@ extern crate clap;
 extern crate serde;
 extern crate serde_json;
 
-use clap::{Arg, App, AppSettings, SubCommand};
-use termcolor::Color;
-use std::env;
+use clap::{App, AppSettings, Arg, SubCommand};
 use std::collections::BTreeMap;
+use std::env;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
+use termcolor::Color;
 
 mod cli;
 
 use cli::*;
-use pahkat_types::*;
-use pahkat_common::*;
 use pahkat_common::ld_type;
+use pahkat_common::*;
+use pahkat_types::*;
 
 struct StderrOutput;
 
@@ -49,9 +49,17 @@ impl ProgressOutput for StderrOutput {
 
 fn request_package_data(cur_dir: &Path) -> Option<Package> {
     let package_id = prompt_line("Package identifier", "").unwrap();
-    
-    if cur_dir.join(&format!("{}/index.json", &package_id)).exists() {
-        progress(Color::Red, "Error", &format!("Package {} already exists; aborting.", &package_id)).unwrap();
+
+    if cur_dir
+        .join(&format!("{}/index.json", &package_id))
+        .exists()
+    {
+        progress(
+            Color::Red,
+            "Error",
+            &format!("Package {} already exists; aborting.", &package_id),
+        )
+        .unwrap();
         return None;
     }
 
@@ -67,14 +75,18 @@ fn request_package_data(cur_dir: &Path) -> Option<Package> {
     let category = prompt_line("Category", "").unwrap();
 
     println!("Package languages are languages the installed package supports.");
-    let languages: Vec<String> = prompt_line("Package languages (comma-separated)", "en").unwrap()
+    let languages: Vec<String> = prompt_line("Package languages (comma-separated)", "en")
+        .unwrap()
         .split(",")
         .map(|x| x.trim().to_owned())
         .collect();
 
     println!("Supported platforms: android, ios, linux, macos, windows");
-    println!("Specify platform support like \"windows\" or with version guards \"windows >= 8.1\".");
-    let platform_vec: Vec<String> = prompt_line("Platforms (comma-separated)", OS).unwrap()
+    println!(
+        "Specify platform support like \"windows\" or with version guards \"windows >= 8.1\"."
+    );
+    let platform_vec: Vec<String> = prompt_line("Platforms (comma-separated)", OS)
+        .unwrap()
         .split(",")
         .map(|x| x.trim().to_owned())
         .collect();
@@ -92,7 +104,7 @@ fn request_package_data(cur_dir: &Path) -> Option<Package> {
         platform: platform,
         dependencies: Default::default(),
         virtual_dependencies: Default::default(),
-        installer: None
+        installer: None,
     })
 }
 
@@ -100,23 +112,25 @@ fn input_repo_data() -> Repository {
     let base = {
         let mut base = String::new();
         while base == "" {
-            let b = prompt_line("Base URL", "").map(|b| {
-                if !base.ends_with("/") {
-                    format!("{}/", b)
-                } else {
-                    b
-                }
-            }).unwrap();
+            let b = prompt_line("Base URL", "")
+                .map(|b| {
+                    if !base.ends_with("/") {
+                        format!("{}/", b)
+                    } else {
+                        b
+                    }
+                })
+                .unwrap();
 
             if let Ok(_) = url::Url::parse(&b) {
                 base = b;
             } else {
                 progress(Color::Red, "Error", "Invalid URL.").unwrap();
             }
-        };
+        }
         base
     };
-    
+
     let en_name = prompt_line("Name", "Repository").unwrap();
     let mut name = BTreeMap::new();
     name.insert("en".to_owned(), en_name);
@@ -125,14 +139,20 @@ fn input_repo_data() -> Repository {
     let mut description = BTreeMap::new();
     description.insert("en".to_owned(), en_description);
 
-    let primary_filter = prompt_select("Primary Filter", &["category".into(), "language".into()], 0);
-    
+    let primary_filter =
+        prompt_select("Primary Filter", &["category".into(), "language".into()], 0);
+
     let channels = {
         let mut r: Vec<String> = vec![];
         while r.len() == 0 {
             r = prompt_multi_select("Channels", &["stable", "beta", "alpha", "nightly"]);
             if r.len() == 0 {
-                progress(Color::Red, "Error", "No channels selected; please select at least one.").unwrap();
+                progress(
+                    Color::Red,
+                    "Error",
+                    "No channels selected; please select at least one.",
+                )
+                .unwrap();
             }
         }
         r
@@ -143,7 +163,7 @@ fn input_repo_data() -> Repository {
     } else {
         prompt_select("Default channel", &channels, 0)
     };
-    
+
     let mut categories = BTreeMap::new();
     categories.insert("en".to_owned(), BTreeMap::new());
 
@@ -157,23 +177,30 @@ fn input_repo_data() -> Repository {
         primary_filter,
         default_channel,
         channels,
-        categories
+        categories,
     }
 }
 
 fn package_init(output_dir: &Path, channel: Option<&str>) {
     if !open_repo(&output_dir).is_ok() {
-        progress(Color::Red, "Error", "Cannot generate package outside of a repository; aborting.").unwrap();
+        progress(
+            Color::Red,
+            "Error",
+            "Cannot generate package outside of a repository; aborting.",
+        )
+        .unwrap();
         return;
     }
 
     let pkg_data = match request_package_data(output_dir) {
         Some(v) => v,
-        None => { return; }
+        None => {
+            return;
+        }
     };
 
     let json = serde_json::to_string_pretty(&pkg_data).unwrap();
-    
+
     println!("\n{}\n", json);
 
     if prompt_question("Save index.json", true) {
@@ -206,7 +233,7 @@ fn repo_init<T: ProgressOutput>(cur_dir: &Path, output: &T) {
 
     let repo_data = input_repo_data();
     let json = serde_json::to_string_pretty(&repo_data).unwrap();
-    
+
     println!("\n{}\n", json);
 
     if !prompt_question("Save index.json and generate repo directories?", true) {
@@ -227,12 +254,24 @@ fn repo_init<T: ProgressOutput>(cur_dir: &Path, output: &T) {
     repo_index(&cur_dir, output);
 }
 
-fn package_tarball_installer(file_path: &Path, channel: Option<&str>, force_yes: bool, tarball: &str, url: &str, size: usize) {
+fn package_tarball_installer(
+    file_path: &Path,
+    channel: Option<&str>,
+    force_yes: bool,
+    tarball: &str,
+    url: &str,
+    size: usize,
+) {
     let mut pkg = match open_package(&file_path, channel) {
         Ok(pkg) => pkg,
         Err(err) => {
             progress(Color::Red, "Error", &format!("{}", err)).unwrap();
-            progress(Color::Red, "Error", "Package does not exist or is invalid; aborting").unwrap();
+            progress(
+                Color::Red,
+                "Error",
+                "Package does not exist or is invalid; aborting",
+            )
+            .unwrap();
             return;
         }
     };
@@ -245,13 +284,13 @@ fn package_tarball_installer(file_path: &Path, channel: Option<&str>, force_yes:
         _type: ld_type!("TarballInstaller"),
         url: url.to_owned(),
         size: installer_size,
-        installed_size: size
+        installed_size: size,
     };
 
     pkg.installer = Some(Installer::Tarball(installer_index));
 
     let json = serde_json::to_string_pretty(&pkg).unwrap();
-    
+
     if !force_yes {
         println!("\n{}\n", json);
 
@@ -265,13 +304,29 @@ fn package_tarball_installer(file_path: &Path, channel: Option<&str>, force_yes:
     file.write(&[b'\n']).unwrap();
 }
 
-fn package_macos_installer(file_path: &Path, channel: Option<&str>, version: &str, force_yes: bool, installer: &str, targets: Vec<&str>, pkg_id: &str,
-        url: &str, size: usize, requires_reboot: bool, requires_uninst_reboot: bool) {
+fn package_macos_installer(
+    file_path: &Path,
+    channel: Option<&str>,
+    version: &str,
+    force_yes: bool,
+    installer: &str,
+    targets: Vec<&str>,
+    pkg_id: &str,
+    url: &str,
+    size: usize,
+    requires_reboot: bool,
+    requires_uninst_reboot: bool,
+) {
     let mut pkg = match open_package(&file_path, channel) {
         Ok(pkg) => pkg,
         Err(err) => {
             progress(Color::Red, "Error", &format!("{}", err)).unwrap();
-            progress(Color::Red, "Error", "Package does not exist or is invalid; aborting").unwrap();
+            progress(
+                Color::Red,
+                "Error",
+                "Package does not exist or is invalid; aborting",
+            )
+            .unwrap();
             return;
         }
     };
@@ -280,18 +335,29 @@ fn package_macos_installer(file_path: &Path, channel: Option<&str>, version: &st
     let meta = installer_file.metadata().unwrap();
     let installer_size = meta.len() as usize;
 
-    let target_results: Vec<Result<InstallTarget, &str>> = targets.iter()
+    let target_results: Vec<Result<InstallTarget, &str>> = targets
+        .iter()
         .map(|x| x.parse::<InstallTarget>().map_err(|_| *x))
         .collect();
 
-    let target_errors: Vec<&str> = target_results.iter().filter(|x| x.is_err()).map(|x| x.err().unwrap()).collect();
+    let target_errors: Vec<&str> = target_results
+        .iter()
+        .filter(|x| x.is_err())
+        .map(|x| x.err().unwrap())
+        .collect();
 
     if target_errors.len() > 0 {
-        progress(Color::Red, "Error", &format!("Invalid targets supplied: {}", &target_errors.join(", "))).unwrap();
+        progress(
+            Color::Red,
+            "Error",
+            &format!("Invalid targets supplied: {}", &target_errors.join(", ")),
+        )
+        .unwrap();
         return;
     }
 
-    let targets: std::collections::BTreeSet<InstallTarget> = target_results.iter()
+    let targets: std::collections::BTreeSet<InstallTarget> = target_results
+        .iter()
         .filter(|x| x.is_ok())
         .map(|x| x.unwrap())
         .collect();
@@ -305,14 +371,14 @@ fn package_macos_installer(file_path: &Path, channel: Option<&str>, version: &st
         requires_uninstall_reboot: requires_uninst_reboot,
         size: installer_size,
         installed_size: size,
-        signature: None
+        signature: None,
     };
 
     pkg.version = version.to_owned();
     pkg.installer = Some(Installer::MacOS(installer_index));
 
     let json = serde_json::to_string_pretty(&pkg).unwrap();
-    
+
     if !force_yes {
         println!("\n{}\n", json);
 
@@ -327,14 +393,30 @@ fn package_macos_installer(file_path: &Path, channel: Option<&str>, version: &st
     file.write(&[b'\n']).unwrap();
 }
 
-fn package_windows_installer(file_path: &Path, channel: Option<&str>, force_yes: bool, product_code: &str, installer: &str, type_: Option<&str>,
-        args: Option<&str>, uninst_args: Option<&str>, url: &str, size: usize, 
-        requires_reboot: bool, requires_uninst_reboot: bool) {
+fn package_windows_installer(
+    file_path: &Path,
+    channel: Option<&str>,
+    force_yes: bool,
+    product_code: &str,
+    installer: &str,
+    type_: Option<&str>,
+    args: Option<&str>,
+    uninst_args: Option<&str>,
+    url: &str,
+    size: usize,
+    requires_reboot: bool,
+    requires_uninst_reboot: bool,
+) {
     let mut pkg = match open_package(&file_path, channel) {
         Ok(pkg) => pkg,
         Err(err) => {
             progress(Color::Red, "Error", &format!("{}", err)).unwrap();
-            progress(Color::Red, "Error", "Package does not exist or is invalid; aborting").unwrap();
+            progress(
+                Color::Red,
+                "Error",
+                "Package does not exist or is invalid; aborting",
+            )
+            .unwrap();
             return;
         }
     };
@@ -354,13 +436,13 @@ fn package_windows_installer(file_path: &Path, channel: Option<&str>, force_yes:
         requires_uninstall_reboot: requires_uninst_reboot,
         size: installer_size,
         installed_size: size,
-        signature: None
+        signature: None,
     };
 
     pkg.installer = Some(Installer::Windows(installer_index));
 
     let json = serde_json::to_string_pretty(&pkg).unwrap();
-    
+
     if !force_yes {
         println!("\n{}\n", json);
 
@@ -598,18 +680,20 @@ fn main() {
         .get_matches();
 
     let output = StderrOutput;
-    
+
     match matches.subcommand() {
         ("init", Some(matches)) => {
             let current_dir = &env::current_dir().unwrap();
-            let path: &Path = matches.value_of("path")
+            let path: &Path = matches
+                .value_of("path")
                 .map_or(&current_dir, |v| Path::new(v));
             let channel = matches.value_of("channel");
             package_init(&path, channel)
-        },
+        }
         ("installer", Some(matches)) => {
             let current_dir = &env::current_dir().unwrap();
-            let path: &Path = matches.value_of("path")
+            let path: &Path = matches
+                .value_of("path")
                 .map_or(&current_dir, |v| Path::new(v));
 
             match matches.subcommand() {
@@ -617,18 +701,33 @@ fn main() {
                     let installer = matches.value_of("package").unwrap();
                     let channel = matches.value_of("channel");
                     let version = matches.value_of("version").unwrap();
-                    let targets: Vec<&str> = matches.value_of("targets").unwrap().split(",").collect();
+                    let targets: Vec<&str> =
+                        matches.value_of("targets").unwrap().split(",").collect();
                     let pkg_id = matches.value_of("pkg-id").unwrap();
                     let url = matches.value_of("url").unwrap();
-                    let size = matches.value_of("installed-size").unwrap()
-                        .parse::<usize>().unwrap();
+                    let size = matches
+                        .value_of("installed-size")
+                        .unwrap()
+                        .parse::<usize>()
+                        .unwrap();
                     let requires_reboot = matches.is_present("requires-reboot");
                     let requires_uninst_reboot = matches.is_present("requires-uninst-reboot");
                     let skip_confirm = matches.is_present("skip-confirmation");
 
-                    package_macos_installer(path, channel, version, skip_confirm, installer, targets, pkg_id, url, size, requires_reboot, 
-                        requires_uninst_reboot);
-                },
+                    package_macos_installer(
+                        path,
+                        channel,
+                        version,
+                        skip_confirm,
+                        installer,
+                        targets,
+                        pkg_id,
+                        url,
+                        size,
+                        requires_reboot,
+                        requires_uninst_reboot,
+                    );
+                }
                 ("windows", Some(matches)) => {
                     let product_code = matches.value_of("product-code").unwrap();
                     let channel = matches.value_of("channel");
@@ -637,31 +736,50 @@ fn main() {
                     let args = matches.value_of("args");
                     let uninstall_args = matches.value_of("uninst-args");
                     let url = matches.value_of("url").unwrap();
-                    let size = matches.value_of("installed-size").unwrap()
-                        .parse::<usize>().unwrap();
+                    let size = matches
+                        .value_of("installed-size")
+                        .unwrap()
+                        .parse::<usize>()
+                        .unwrap();
                     let requires_reboot = matches.is_present("requires-reboot");
                     let requires_uninst_reboot = matches.is_present("requires-uninst-reboot");
                     let skip_confirm = matches.is_present("skip-confirmation");
 
-                    package_windows_installer(path, channel, skip_confirm, product_code, installer, type_, args, uninstall_args, url, 
-                        size, requires_reboot, requires_uninst_reboot);
-                },
+                    package_windows_installer(
+                        path,
+                        channel,
+                        skip_confirm,
+                        product_code,
+                        installer,
+                        type_,
+                        args,
+                        uninstall_args,
+                        url,
+                        size,
+                        requires_reboot,
+                        requires_uninst_reboot,
+                    );
+                }
                 ("tarball", Some(matches)) => {
                     let tarball = matches.value_of("tarball").unwrap();
                     let channel = matches.value_of("channel");
                     let url = matches.value_of("url").unwrap();
-                    let size = matches.value_of("installed-size").unwrap()
-                        .parse::<usize>().unwrap();
+                    let size = matches
+                        .value_of("installed-size")
+                        .unwrap()
+                        .parse::<usize>()
+                        .unwrap();
                     let skip_confirm = matches.is_present("skip-confirmation");
 
                     package_tarball_installer(path, channel, skip_confirm, tarball, url, size);
-                },
+                }
                 _ => {}
             }
         }
         ("repo", Some(matches)) => {
             let current_dir = &env::current_dir().unwrap();
-            let path: &Path = matches.value_of("path")
+            let path: &Path = matches
+                .value_of("path")
                 .map_or(&current_dir, |v| Path::new(v));
 
             match matches.subcommand() {

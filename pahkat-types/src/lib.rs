@@ -1,7 +1,7 @@
+use std;
+use std::cmp::*;
 use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
-use std::cmp::*;
-use std;
 
 use serde::{Deserialize, Serialize};
 
@@ -39,14 +39,14 @@ pub struct Package {
     #[serde(default = "BTreeMap::new")]
     pub virtual_dependencies: BTreeMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub installer: Option<Installer>
+    pub installer: Option<Installer>,
 }
 
 impl Package {
     pub fn installer(&self) -> Option<&Installer> {
         match &self.installer {
             &Some(ref v) => Some(&v),
-            &None => None
+            &None => None,
         }
     }
 }
@@ -67,7 +67,7 @@ pub struct Packages {
     pub base: String,
     pub channel: String,
     #[serde(default = "BTreeMap::new")]
-    pub packages: PackageMap
+    pub packages: PackageMap,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -85,7 +85,7 @@ pub struct Virtual {
     pub url: String,
     #[serde(rename = "virtual")]
     pub virtual_: bool,
-    pub target: VirtualTarget
+    pub target: VirtualTarget,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -100,7 +100,7 @@ pub struct Virtuals {
     pub base: String,
     pub channel: String,
     #[serde(default = "BTreeMap::new")]
-    pub virtuals: VirtualRefMap
+    pub virtuals: VirtualRefMap,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -144,7 +144,7 @@ pub struct RegistryKey {
     pub _type: Option<String>,
 
     pub path: String,
-    pub name: String
+    pub name: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -169,7 +169,7 @@ impl Downloadable for Installer {
 #[serde(rename_all = "camelCase")]
 pub enum InstallTarget {
     System,
-    User
+    User,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -194,17 +194,21 @@ impl FromStr for InstallTarget {
         match s {
             "system" => Ok(InstallTarget::System),
             "user" => Ok(InstallTarget::User),
-            _ => Err(ParseInstallTargetError {})
+            _ => Err(ParseInstallTargetError {}),
         }
     }
 }
 
 impl std::fmt::Display for InstallTarget {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", match *self {
-            InstallTarget::System => "system",
-            InstallTarget::User => "user"
-        })
+        write!(
+            f,
+            "{}",
+            match *self {
+                InstallTarget::System => "system",
+                InstallTarget::User => "user",
+            }
+        )
     }
 }
 
@@ -213,7 +217,7 @@ impl PartialEq for InstallTarget {
         match (*self, *other) {
             (InstallTarget::System, InstallTarget::System) => true,
             (InstallTarget::User, InstallTarget::User) => true,
-            _ => false
+            _ => false,
         }
     }
 }
@@ -230,7 +234,7 @@ impl Ord for InstallTarget {
             (InstallTarget::System, InstallTarget::System) => Ordering::Equal,
             (InstallTarget::User, InstallTarget::User) => Ordering::Equal,
             (InstallTarget::System, InstallTarget::User) => Ordering::Less,
-            (InstallTarget::User, InstallTarget::System) => Ordering::Greater
+            (InstallTarget::User, InstallTarget::System) => Ordering::Greater,
         }
     }
 }
@@ -250,7 +254,7 @@ pub struct MacOSInstaller {
     pub requires_uninstall_reboot: bool,
     pub size: usize,
     pub installed_size: usize,
-    pub signature: Option<InstallerSignature>
+    pub signature: Option<InstallerSignature>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -270,7 +274,7 @@ pub struct WindowsInstaller {
     pub requires_uninstall_reboot: bool,
     pub size: usize,
     pub installed_size: usize,
-    pub signature: Option<InstallerSignature>
+    pub signature: Option<InstallerSignature>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -280,7 +284,7 @@ pub struct TarballInstaller {
     pub _type: Option<String>,
     pub url: String,
     pub size: usize,
-    pub installed_size: usize
+    pub installed_size: usize,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -289,5 +293,5 @@ pub struct InstallerSignature {
     pub public_key: String,
     pub method: String,
     pub hash_algorithm: String,
-    pub data: String
+    pub data: String,
 }

@@ -1,14 +1,17 @@
+use dialoguer::{theme::ColorfulTheme, Checkboxes, Confirmation, Input, Select};
+use std::collections::BTreeMap;
 use std::io;
 use std::io::Write;
-use std::collections::BTreeMap;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
-use dialoguer::{Confirmation, Input, Checkboxes, Select, theme::ColorfulTheme};
 
 pub fn progress(color: Color, first: &str, rest: &str) -> Result<(), io::Error> {
     let mut stderr = StandardStream::stderr(ColorChoice::Always);
-    stderr.set_color(ColorSpec::new().set_fg(Some(color))
-        .set_intense(true)
-        .set_bold(true))?;
+    stderr.set_color(
+        ColorSpec::new()
+            .set_fg(Some(color))
+            .set_intense(true)
+            .set_bold(true),
+    )?;
     write!(&mut stderr, "{:>12}", first)?;
     stderr.reset()?;
     writeln!(&mut stderr, " {}", rest)?;
@@ -24,12 +27,14 @@ pub fn prompt_question(prompt: &str, default: bool) -> bool {
 }
 
 pub fn prompt_line(prompt: &str, default: &str) -> Option<String> {
-    Some(Input::with_theme(&ColorfulTheme::default())
-        .with_prompt(prompt)
-        .default(default.to_string())
-        .interact()
-        .unwrap_or(default.to_string())
-        .to_string())
+    Some(
+        Input::with_theme(&ColorfulTheme::default())
+            .with_prompt(prompt)
+            .default(default.to_string())
+            .interact()
+            .unwrap_or(default.to_string())
+            .to_string(),
+    )
 }
 
 pub fn prompt_multi_select(prompt: &str, options: &[&str]) -> Vec<String> {

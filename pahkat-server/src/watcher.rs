@@ -1,6 +1,6 @@
-use std::io;
 use std::collections::HashMap;
 use std::fs;
+use std::io;
 use std::path::Path;
 use std::time::SystemTime;
 
@@ -10,14 +10,14 @@ use glob::glob;
 pub enum WatcherEvent {
     Created(String),
     Deleted(String),
-    Modified(String)
+    Modified(String),
 }
 
 #[derive(Debug)]
 pub enum WatcherError {
     IllegalPath(String),
     IoError(io::Error),
-    PatternError(glob::PatternError)
+    PatternError(glob::PatternError),
 }
 
 impl From<io::Error> for WatcherError {
@@ -36,7 +36,7 @@ impl From<glob::PatternError> for WatcherError {
 pub struct Watcher {
     path: String,
     glob_expression: String,
-    cache: HashMap<String, SystemTime>
+    cache: HashMap<String, SystemTime>,
 }
 
 impl Watcher {
@@ -49,7 +49,7 @@ impl Watcher {
         Ok(Watcher {
             path: path_display.to_string(),
             glob_expression,
-            cache: HashMap::<String, SystemTime>::new()
+            cache: HashMap::<String, SystemTime>::new(),
         })
     }
 
@@ -64,11 +64,11 @@ impl Watcher {
             .into_iter()
             .filter_map(|entry| match entry {
                 Ok(path) => Some(path.display().to_string()),
-                _ => None
+                _ => None,
             })
             .collect();
 
-        let mut removed_indexes = Vec::<String>::new();        
+        let mut removed_indexes = Vec::<String>::new();
         for cached_index in self.cache.keys() {
             let count = matches
                 .iter()

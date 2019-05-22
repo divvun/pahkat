@@ -30,7 +30,7 @@ pub struct RepositoryAgent {
     pub _type: Option<String>,
     name: String,
     version: String,
-    url: Option<String>
+    url: Option<String>,
 }
 
 impl Default for RepositoryAgent {
@@ -39,7 +39,7 @@ impl Default for RepositoryAgent {
             _type: Some("RepositoryAgent".to_owned()),
             name: "pahkat".to_string(),
             version: env!("CARGO_PKG_VERSION").to_owned(),
-            url: Some("https://github.com/divvun/pahkat".to_owned())
+            url: Some("https://github.com/divvun/pahkat".to_owned()),
         }
     }
 }
