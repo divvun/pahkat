@@ -34,7 +34,9 @@ use crate::{
     RepoRecord,
     repo::Repository,
     download::Download,
-    cmp
+    cmp,
+    default_uninstall_path,
+    global_uninstall_path
 };
 
 fn from_str<'de, T, D>(deserializer: D) -> Result<T, D::Error>
@@ -682,8 +684,45 @@ fn install_macos_package(pkg_path: &Path, target: InstallTarget) -> Result<(), P
     Ok(())
 }
 
+fn run_script(name: &str, bundle_id: &str, target: InstallTarget) -> Result<(), ProcessError> {
+    let path = match target {
+        InstallTarget::User => default_uninstall_path(),
+        InstallTarget::System => global_uninstall_path()
+    };
+    let script_path = path.join(bundle_id).join(name);
+
+    if !is_executable::is_executable(&script_path) {
+        return Ok(());
+    }
+
+    let res = Command::new(&script_path).output();
+    let output = match res {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("{:?}", &e);
+            return Err(ProcessError::Io(e))
+        }
+    };
+    if !output.status.success() {
+        eprintln!("{:?}", &output);
+        let _msg = format!("Exit code: {}", output.status.code().unwrap());
+        return Err(ProcessError::Unknown(output));
+    }
+    Ok(())
+}
+
+fn run_pre_uninstall_script(bundle_id: &str, target: InstallTarget) -> Result<(), ProcessError> {
+    run_script("pre-uninstall", bundle_id, target)
+}
+
+fn run_post_uninstall_script(bundle_id: &str, target: InstallTarget) -> Result<(), ProcessError> {
+    run_script("post-uninstall", bundle_id, target)
+}
+
 fn uninstall_macos_package(bundle_id: &str, target: InstallTarget) -> Result<(), ProcessError> {
     let package_info = get_package_info(bundle_id, target)?;
+
+    run_pre_uninstall_script(bundle_id, target)?;
 
     let mut errors = vec![];
     let mut directories = vec![];
@@ -735,6 +774,8 @@ fn uninstall_macos_package(bundle_id: &str, target: InstallTarget) -> Result<(),
     eprintln!("{:?}", errors);
     
     forget_pkg_id(bundle_id, target)?;
+
+    run_post_uninstall_script(bundle_id, target)?;
 
     Ok(())
 }
