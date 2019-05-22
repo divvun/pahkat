@@ -195,6 +195,17 @@ pub fn default_cache_path() -> PathBuf {
         .cache_dir().join("Pahkat")
 }
 
+#[cfg(target_os = "macos")]
+pub fn default_uninstall_path() -> PathBuf {
+    BaseDirs::new().expect("base directories must be known")
+        .data_dir().join("Pahkat").join("uninstall")
+}
+
+#[cfg(target_os = "macos")]
+pub fn global_uninstall_path() -> PathBuf {
+    PathBuf::from("/Library/Application Support/Pahkat/uninstall")
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct RepoRecord {
     #[serde(with = "url_serde")]
