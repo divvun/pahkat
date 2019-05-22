@@ -4,7 +4,8 @@ use std::fs::{remove_file, remove_dir};
 use std::fmt::Display;
 use std::str::FromStr;
 use std::process::{self, Command};
-use std::collections::{HashMap, BTreeMap};
+use hashbrown::HashMap;
+use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock, atomic::{AtomicBool, Ordering}};
 use std::io;
 
@@ -258,7 +259,6 @@ impl MacOSPackageStore {
         self.refresh_repos();
     }
 
-    // TODO: hashbrown
     fn recurse_linked_repos(&self, url: &str, channel: String, repos: &mut HashMap<RepoRecord, Repository>, cache_path: &Path) {
         let url = match url::Url::parse(url) {
             Ok(v) => v,
