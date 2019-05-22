@@ -1,15 +1,16 @@
-use actix_web::{HttpServer, App, HttpResponse, Responder, web};
-use clap::{AppSettings, App as CliApp, SubCommand, Arg, crate_version};
 use std::env;
 use std::path::{Path, PathBuf};
 use std::fs::File;
 use std::io::BufReader;
 use std::io::prelude::*;
 
+use actix_web::{HttpServer, App, HttpResponse, Responder, web};
+use clap::{AppSettings, App as CliApp, SubCommand, Arg, crate_version};
+
 mod watcher;
-mod repo_ops;
+
 use watcher::*;
-use repo_ops::*;
+use pahkat_common::*;
 
 fn read_file(path: &str) -> std::io::Result<String> {
     let file = File::open(path)?;
@@ -197,7 +198,7 @@ fn main() {
                         Err(error) => eprintln!("Failed to update watcher: {:?}", error),
                         Ok(ref events) if events.len() > 0 => {
                             println!("Watcher reports {} event(s) since last update", events.len());
-                            repo_ops::repo_index(Path::new(watcher.path()), &output);
+                            pahkat_common::repo_index(Path::new(watcher.path()), &output);
                             // todo: repo_ops calls need improved error handling to support:
                             // match repo_ops::repo_index(&path, &output) {
                             //     Err(error) => eprintln!("Failed to re-index pahkat repo at {}: {:?}", watcher.path(), error),

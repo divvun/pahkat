@@ -2,10 +2,6 @@
 extern crate clap;
 extern crate serde;
 extern crate serde_json;
-#[macro_use]
-extern crate serde_derive;
-extern crate termcolor;
-extern crate pathdiff;
 
 use clap::{Arg, App, AppSettings, SubCommand};
 use termcolor::Color;
@@ -17,13 +13,11 @@ use std::io::Write;
 use std::path::Path;
 
 mod cli;
-mod types;
-#[macro_use]
-mod repo_ops;
 
 use cli::*;
-use pahkat::types::*;
-use repo_ops::*;
+use pahkat_types::*;
+use pahkat_common::*;
+use pahkat_common::ld_type;
 
 struct StderrOutput;
 

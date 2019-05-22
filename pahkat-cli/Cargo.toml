@@ -1,0 +1,20 @@
+[package]
+name = "pahkat-cli"
+version = "0.1.0"
+authors = ["Brendan Molloy <brendan@bbqsrc.net>"]
+edition = "2018"
+
+[[bin]]
+name = "pahkat"
+path = "src/main.rs"
+
+[dependencies]
+pahkat-types = { path = "../pahkat-types" }
+pahkat-common = { path = "../pahkat-common" }
+clap = { version = "2.32.0" }
+dialoguer = { version = "0.3.0" }
+termcolor = { version = "1.0.4" }
+pathdiff = { version = "0.1" }
+url = { version = "1.7.2" }
+serde = "1.0.87"
+serde_json = "1.0.38"

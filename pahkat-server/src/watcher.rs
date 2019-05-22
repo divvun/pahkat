@@ -1,10 +1,9 @@
-extern crate glob;
-
 use std::io;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::time::SystemTime;
+
 use glob::glob;
 
 #[derive(Debug)]

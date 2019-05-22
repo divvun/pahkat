@@ -1,4 +1,3 @@
-use serde::Serialize;
 use std::collections::BTreeMap;
 use std::fs;
 use std::fs::File;
@@ -6,8 +5,11 @@ use std::io::Write;
 use std::path::Path;
 use std::fmt;
 
-use pahkat::types::*;
+use serde::Serialize;
 
+use pahkat_types::*;
+
+#[macro_export]
 macro_rules! ld_type {
     ($e:expr) => {
         Some(format!("{}", $e).to_owned())

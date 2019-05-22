@@ -1,31 +1,8 @@
-[package]
-name = "pahkat"
-version = "0.6.0"
-authors = ["Brendan Molloy <brendan@bbqsrc.net>"]
-edition = "2018"
+[workspace]
 
-[[bin]]
-name = "pahkat"
-path = "src/main.rs"
-required-features = ["binaries"]
-
-[[bin]]
-name = "pahkat-server"
-path = "src/server.rs"
-required-features = ["binaries"]
-
-[dependencies]
-clap = { version = "2.32.0", optional = true }
-dialoguer = { version = "0.3.0", optional = true }
-termcolor = { version = "1.0.4", optional = true }
-pathdiff = { version = "0.1", optional = true }
-url = { version = "1.7.2", optional = true}
-serde = "1.0.87"
-serde_derive = "1.0.87"
-serde_json = "1.0.38"
-actix-web = "1.0.0-beta.3"
-actix = "0.8"
-glob = "0.3.0"
-
-[features]
-binaries = ["clap", "termcolor", "pathdiff", "dialoguer", "url"]
+members = [
+    "pahkat-types",
+    "pahkat-common",
+    "pahkat-cli",
+    "pahkat-server",
+]

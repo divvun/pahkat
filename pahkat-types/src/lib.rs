@@ -1,9 +1,9 @@
-#![allow(dead_code)]
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 use std::cmp::*;
 use std;
+
+use serde::{Deserialize, Serialize};
 
 pub mod repo;
 pub use self::repo::*;

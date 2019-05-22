@@ -1,0 +1,11 @@
+[package]
+name = "pahkat-common"
+version = "0.1.0"
+authors = ["Brendan Molloy <brendan@bbqsrc.net>"]
+edition = "2018"
+
+[dependencies]
+pahkat-types = { path = "../pahkat-types" }
+serde = "1.0.87"
+serde_json = "1.0.38"
+pathdiff = { version = "0.1" }
