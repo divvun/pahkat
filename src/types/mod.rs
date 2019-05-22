@@ -114,26 +114,35 @@ pub enum VirtualTarget {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MacOSPackage {
-    pkg_id: String,
-    min_version: Option<String>,
-    max_version: Option<String>,
-    min_build: Option<String>,
-    max_build: Option<String>
+    #[serde(rename = "@type")]
+    pub _type: Option<String>,
+
+    pub pkg_id: String,
+    pub min_version: Option<String>,
+    pub max_version: Option<String>,
+    pub min_build: Option<String>,
+    pub max_build: Option<String>
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MacOSPath {
-    app_path: String,
-    min_version: Option<String>,
-    max_version: Option<String>,
-    min_build: Option<String>,
-    max_build: Option<String>
+    #[serde(rename = "@type")]
+    pub _type: Option<String>,
+
+    pub app_paths: Vec<String>,
+    pub min_version: Option<String>,
+    pub max_version: Option<String>,
+    pub min_build: Option<String>,
+    pub max_build: Option<String>
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RegistryKey {
+    #[serde(rename = "@type")]
+    pub _type: Option<String>,
+
     pub path: String,
     pub name: String
 }
