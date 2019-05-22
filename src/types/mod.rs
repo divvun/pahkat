@@ -28,6 +28,8 @@ pub struct Package {
     pub id: String,
     pub name: BTreeMap<String, String>,
     pub description: BTreeMap<String, String>,
+    pub authors: Vec<String>,
+    pub license: String,
     pub version: String,
     pub category: String,
     pub languages: Vec<String>,
