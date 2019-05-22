@@ -83,7 +83,7 @@ ${props.map(p => `
 `.trim()
 
 const indexTmpl = (objs) => `
-== Pákhat 0.1.0
+== Páhkat 0.1.0
 
 === Classes
 
