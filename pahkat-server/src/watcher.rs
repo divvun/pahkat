@@ -61,7 +61,6 @@ impl Watcher {
         let mut result = Vec::<WatcherEvent>::new();
 
         let matches: Vec<String> = glob(&self.glob_expression)?
-            .into_iter()
             .filter_map(|entry| match entry {
                 Ok(path) => Some(path.display().to_string()),
                 _ => None,

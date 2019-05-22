@@ -77,7 +77,7 @@ fn request_package_data(cur_dir: &Path) -> Option<Package> {
     println!("Package languages are languages the installed package supports.");
     let languages: Vec<String> = prompt_line("Package languages (comma-separated)", "en")
         .unwrap()
-        .split(",")
+        .split(',')
         .map(|x| x.trim().to_owned())
         .collect();
 
@@ -87,7 +87,7 @@ fn request_package_data(cur_dir: &Path) -> Option<Package> {
     );
     let platform_vec: Vec<String> = prompt_line("Platforms (comma-separated)", OS)
         .unwrap()
-        .split(",")
+        .split(',')
         .map(|x| x.trim().to_owned())
         .collect();
     let platform = parse_platform_list(&platform_vec);
@@ -96,12 +96,12 @@ fn request_package_data(cur_dir: &Path) -> Option<Package> {
         _context: Some(LD_CONTEXT.to_owned()),
         _type: ld_type!("Package"),
         id: package_id,
-        name: name,
-        description: description,
-        version: version,
-        category: category,
-        languages: languages,
-        platform: platform,
+        name,
+        description,
+        version,
+        category,
+        languages,
+        platform,
         dependencies: Default::default(),
         virtual_dependencies: Default::default(),
         installer: None,
@@ -114,7 +114,7 @@ fn input_repo_data() -> Repository {
         while base == "" {
             let b = prompt_line("Base URL", "")
                 .map(|b| {
-                    if !base.ends_with("/") {
+                    if !base.ends_with('/') {
                         format!("{}/", b)
                     } else {
                         b
@@ -122,7 +122,7 @@ fn input_repo_data() -> Repository {
                 })
                 .unwrap();
 
-            if let Ok(_) = url::Url::parse(&b) {
+            if url::Url::parse(&b).is_ok() {
                 base = b;
             } else {
                 progress(Color::Red, "Error", "Invalid URL.").unwrap();
@@ -144,9 +144,9 @@ fn input_repo_data() -> Repository {
 
     let channels = {
         let mut r: Vec<String> = vec![];
-        while r.len() == 0 {
+        while r.is_empty() {
             r = prompt_multi_select("Channels", &["stable", "beta", "alpha", "nightly"]);
-            if r.len() == 0 {
+            if r.is_empty() {
                 progress(
                     Color::Red,
                     "Error",
@@ -182,7 +182,7 @@ fn input_repo_data() -> Repository {
 }
 
 fn package_init(output_dir: &Path, channel: Option<&str>) {
-    if !open_repo(&output_dir).is_ok() {
+    if open_repo(&output_dir).is_err() {
         progress(
             Color::Red,
             "Error",
@@ -208,7 +208,7 @@ fn package_init(output_dir: &Path, channel: Option<&str>) {
         fs::create_dir(&package_dir).unwrap();
         let mut file = File::create(&package_dir.join(index_fn(channel))).unwrap();
         file.write_all(json.as_bytes()).unwrap();
-        file.write(&[b'\n']).unwrap();
+        file.write_all(&[b'\n']).unwrap();
     }
 }
 
@@ -246,7 +246,7 @@ fn repo_init<T: ProgressOutput>(cur_dir: &Path, output: &T) {
 
     let mut file = File::create(cur_dir.join("index.json")).unwrap();
     file.write_all(json.as_bytes()).unwrap();
-    file.write(&[b'\n']).unwrap();
+    file.write_all(&[b'\n']).unwrap();
 
     fs::create_dir(cur_dir.join("packages")).unwrap();
     fs::create_dir(cur_dir.join("virtuals")).unwrap();
@@ -301,7 +301,7 @@ fn package_tarball_installer(
 
     let mut file = File::create(file_path.join(index_fn(channel))).unwrap();
     file.write_all(json.as_bytes()).unwrap();
-    file.write(&[b'\n']).unwrap();
+    file.write_all(&[b'\n']).unwrap();
 }
 
 fn package_macos_installer(
@@ -346,7 +346,7 @@ fn package_macos_installer(
         .map(|x| x.err().unwrap())
         .collect();
 
-    if target_errors.len() > 0 {
+    if !target_errors.is_empty() {
         progress(
             Color::Red,
             "Error",
@@ -366,8 +366,8 @@ fn package_macos_installer(
         _type: ld_type!("MacOSInstaller"),
         url: url.to_owned(),
         pkg_id: pkg_id.to_owned(),
-        targets: targets,
-        requires_reboot: requires_reboot,
+        targets,
+        requires_reboot,
         requires_uninstall_reboot: requires_uninst_reboot,
         size: installer_size,
         installed_size: size,
@@ -390,7 +390,7 @@ fn package_macos_installer(
     // TODO Check dir exists
     let mut file = File::create(file_path.join(index_fn(channel))).unwrap();
     file.write_all(json.as_bytes()).unwrap();
-    file.write(&[b'\n']).unwrap();
+    file.write_all(&[b'\n']).unwrap();
 }
 
 fn package_windows_installer(
@@ -432,7 +432,7 @@ fn package_windows_installer(
         args: args.map(|x| x.to_owned()),
         uninstall_args: uninst_args.map(|x| x.to_owned()),
         product_code: product_code.to_owned(),
-        requires_reboot: requires_reboot,
+        requires_reboot,
         requires_uninstall_reboot: requires_uninst_reboot,
         size: installer_size,
         installed_size: size,
@@ -453,7 +453,7 @@ fn package_windows_installer(
 
     let mut file = File::create(file_path.join(index_fn(channel))).unwrap();
     file.write_all(json.as_bytes()).unwrap();
-    file.write(&[b'\n']).unwrap();
+    file.write_all(&[b'\n']).unwrap();
 }
 
 fn main() {
@@ -702,7 +702,7 @@ fn main() {
                     let channel = matches.value_of("channel");
                     let version = matches.value_of("version").unwrap();
                     let targets: Vec<&str> =
-                        matches.value_of("targets").unwrap().split(",").collect();
+                        matches.value_of("targets").unwrap().split(',').collect();
                     let pkg_id = matches.value_of("pkg-id").unwrap();
                     let url = matches.value_of("url").unwrap();
                     let size = matches

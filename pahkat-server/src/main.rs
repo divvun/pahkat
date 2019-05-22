@@ -232,7 +232,7 @@ fn main() {
                 loop {
                     match watcher.update() {
                         Err(error) => eprintln!("Failed to update watcher: {:?}", error),
-                        Ok(ref events) if events.len() > 0 => {
+                        Ok(ref events) if !events.is_empty() => {
                             println!(
                                 "Watcher reports {} event(s) since last update",
                                 events.len()

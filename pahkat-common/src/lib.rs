@@ -16,7 +16,7 @@ macro_rules! ld_type {
     };
 }
 
-pub const LD_CONTEXT: &'static str = "https://pahkat.org/";
+pub const LD_CONTEXT: &str = "https://pahkat.org/";
 
 pub trait ProgressOutput {
     fn info(&self, msg: &str);
@@ -42,15 +42,15 @@ impl fmt::Display for OpenIndexError {
 }
 
 pub fn open_repo(path: &Path) -> Result<Repository, OpenIndexError> {
-    let file = File::open(path.join("index.json")).map_err(|e| OpenIndexError::FileError(e))?;
-    let index = serde_json::from_reader(file).map_err(|e| OpenIndexError::JsonError(e))?;
+    let file = File::open(path.join("index.json")).map_err(OpenIndexError::FileError)?;
+    let index = serde_json::from_reader(file).map_err(OpenIndexError::JsonError)?;
     Ok(index)
 }
 
 pub fn open_package(path: &Path, channel: Option<&str>) -> Result<Package, OpenIndexError> {
     let file =
-        File::open(path.join(index_fn(channel))).map_err(|e| OpenIndexError::FileError(e))?;
-    let index = serde_json::from_reader(file).map_err(|e| OpenIndexError::JsonError(e))?;
+        File::open(path.join(index_fn(channel))).map_err(OpenIndexError::FileError)?;
+    let index = serde_json::from_reader(file).map_err(OpenIndexError::JsonError)?;
     Ok(index)
 }
 
@@ -107,7 +107,7 @@ fn write_index<T: ProgressOutput, U: Serialize>(
     ));
     let mut file = File::create(&pkg_path.join(index_fn(channel))).unwrap();
     file.write_all(json.as_bytes()).unwrap();
-    file.write(&[b'\n']).unwrap();
+    file.write_all(&[b'\n']).unwrap();
 }
 
 fn generate_repo_index_meta<T: ProgressOutput>(repo_path: &Path, output: &T) -> Repository {
@@ -129,7 +129,7 @@ fn write_repo_index_meta<T: ProgressOutput>(repo_path: &Path, repo_index: &Repos
     output.writing("repository index");
     let mut file = File::create(&repo_path.join("index.json")).unwrap();
     file.write_all(json.as_bytes()).unwrap();
-    file.write(&[b'\n']).unwrap();
+    file.write_all(&[b'\n']).unwrap();
 }
 
 fn generate_repo_index_packages<T: ProgressOutput>(
@@ -202,7 +202,7 @@ fn generate_repo_index_packages<T: ProgressOutput>(
         map.insert(pkg.id.to_owned(), pkg);
     }
 
-    if map.len() == 0 {
+    if map.is_empty() {
         output.info("no packages found");
     }
 
@@ -262,12 +262,12 @@ fn generate_repo_index_virtuals<T: ProgressOutput>(
             .collect();
 
         for pkg in indexes.into_iter() {
-            let entry = map.entry(pkg.id.to_owned()).or_insert(vec![]);
+            let entry = map.entry(pkg.id.to_owned()).or_insert_with(|| vec![]);
             entry.push(pkg.version);
         }
     }
 
-    if map.len() == 0 {
+    if map.is_empty() {
         output.info("no virtuals found");
     }
 

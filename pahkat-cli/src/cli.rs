@@ -32,7 +32,7 @@ pub fn prompt_line(prompt: &str, default: &str) -> Option<String> {
             .with_prompt(prompt)
             .default(default.to_string())
             .interact()
-            .unwrap_or(default.to_string())
+            .unwrap_or_else(|_| default.to_string())
             .to_string(),
     )
 }
@@ -42,7 +42,7 @@ pub fn prompt_multi_select(prompt: &str, options: &[&str]) -> Vec<String> {
         .with_prompt(prompt)
         .items(options)
         .interact()
-        .unwrap_or(vec![])
+        .unwrap_or_else(|_| vec![])
         .into_iter()
         .map(|i| options[i].to_string())
         .collect()
@@ -62,7 +62,7 @@ pub fn parse_platform_list(vec: &[String]) -> BTreeMap<String, String> {
     let mut map: BTreeMap<String, String> = BTreeMap::new();
 
     for item in vec {
-        let chunks: Vec<&str> = item.splitn(2, " ").collect();
+        let chunks: Vec<&str> = item.splitn(2, ' ').collect();
 
         if chunks.len() == 1 {
             map.insert(chunks[0].to_owned(), "*".to_owned());

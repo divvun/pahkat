@@ -45,8 +45,8 @@ pub struct Package {
 impl Package {
     pub fn installer(&self) -> Option<&Installer> {
         match &self.installer {
-            &Some(ref v) => Some(&v),
-            &None => None,
+            Some(ref v) => Some(&v),
+            None => None,
         }
     }
 }
