@@ -95,7 +95,6 @@ pub struct PackageTransaction {
     is_cancelled: Arc<AtomicBool>
 }
 
-
 impl PackageTransaction {
     pub fn new(
         store: Arc<MacOSPackageStore>,
@@ -258,20 +257,53 @@ impl MacOSPackageStore {
         self.clear_cache();
         self.refresh_repos();
     }
+
+    // TODO: hashbrown
+    fn recurse_linked_repos(&self, url: &str, channel: String, repos: &mut HashMap<RepoRecord, Repository>, cache_path: &Path) {
+        let url = match url::Url::parse(url) {
+            Ok(v) => v,
+            Err(e) => { 
+                eprintln!("{:?}", e);
+                return;
+            }
+        };
+
+        let record = RepoRecord {
+            url,
+            channel
+        };
+
+        self.recurse_repo(&record, repos, cache_path);
+    }
+
+    fn recurse_repo(&self, record: &RepoRecord, repos: &mut HashMap<RepoRecord, Repository>, cache_path: &Path) {
+        if repos.contains_key(&record) {
+            return;
+        }
+
+        match Repository::from_cache_or_url(
+            &record.url,
+            record.channel.clone(),
+            cache_path
+        ) {
+            Ok(repo) => {
+                for url in repo.meta().linked_repositories.iter() {
+                    self.recurse_linked_repos(url, record.channel.clone(), repos, cache_path);
+                }
+
+                repos.insert(record.clone(), repo);
+            },
+            // TODO: actual error handling omg
+            Err(e) => { eprintln!("{:?}", e); }
+        };
+    }
     
     pub fn refresh_repos(&self) {
         let mut repos = HashMap::new();
         let config = self.config.read().unwrap();
 
         for record in config.repos().iter() {
-            match Repository::from_cache_or_url(
-                &record.url,
-                record.channel.clone(),
-                &config.repo_cache_path()
-            ) {
-                Ok(repo) => { repos.insert(record.clone(), repo); },
-                Err(e) => { println!("{:?}", e); }
-            };
+            self.recurse_repo(record, &mut repos, &config.repo_cache_path());
         }
 
         *self.repos.write().unwrap() = repos;        
