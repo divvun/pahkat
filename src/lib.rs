@@ -1,4 +1,4 @@
-extern crate pahkat;
+
 #[cfg(prefix)]
 extern crate rusqlite;
 extern crate reqwest;
@@ -51,7 +51,7 @@ mod download;
 pub mod repo;
 pub use self::download::Download;
 pub use self::repo::Repository;
-use pahkat::types::{
+use pahkat_types::{
     Repository as RepositoryMeta
 };
 

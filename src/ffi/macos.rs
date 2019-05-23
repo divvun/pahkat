@@ -23,7 +23,7 @@ use crate::{
     AbsolutePackageKey,
     PackageActionType
 };
-use pahkat::types::*;
+use pahkat_types::*;
 use std::sync::Arc;
 
 #[repr(C)]

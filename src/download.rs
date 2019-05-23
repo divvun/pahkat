@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use pahkat::types::{Package, Downloadable};
+use pahkat_types::{Package, Downloadable};
 use std::io::{self, BufWriter, Write};
 use std::fs::File;
 use std::sync::Arc;

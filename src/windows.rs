@@ -1,5 +1,5 @@
 #![cfg(windows)]
-use pahkat::types::{
+use pahkat_types::{
     WindowsInstaller,
     Installer,
     Package,

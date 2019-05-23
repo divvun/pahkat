@@ -1,6 +1,6 @@
 #[macro_use]
 extern crate clap;
-extern crate pahkat;
+extern crate pahkat_types as pahkat;
 extern crate pahkat_client;
 extern crate sentry;
 
@@ -8,7 +8,7 @@ use clap::{App, AppSettings, Arg, SubCommand};
 #[cfg(prefix)]
 use std::path::{Path, PathBuf};
 
-use pahkat::types::{Package, InstallTarget};
+use pahkat_types::{Package, InstallTarget};
 use pahkat_client::*;
 use sentry::integrations::panic::register_panic_handler;
 use std::sync::Arc;
