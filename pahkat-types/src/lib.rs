@@ -15,7 +15,7 @@ pub const OS: &str = "linux";
 pub const OS: &str = "windows";
 
 pub type PackageMap = BTreeMap<String, Package>;
-pub type VirtualRefMap = BTreeMap<String, Vec<String>>;
+pub type VirtualMap = BTreeMap<String, Virtual>;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -78,12 +78,11 @@ pub struct Virtual {
     pub _type: Option<String>,
     pub id: String,
     pub name: BTreeMap<String, String>,
+    pub version: String,
     #[serde(default = "BTreeMap::new")]
     pub description: BTreeMap<String, String>,
-    pub version: String,
-    pub url: String,
-    #[serde(rename = "virtual")]
-    pub virtual_: bool,
+    pub help: BTreeMap<String, String>,
+    pub url: Option<String>,
     pub target: VirtualTarget,
 }
 
@@ -99,20 +98,20 @@ pub struct Virtuals {
     pub base: String,
     pub channel: String,
     #[serde(default = "BTreeMap::new")]
-    pub virtuals: VirtualRefMap,
+    pub virtuals: VirtualMap,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum VirtualTarget {
     WindowsRegistryKey(RegistryKey),
-    MacOSPackage(MacOSPackage),
-    MacOSPath(MacOSPath)
+    MacOSPackage(MacOSPackageRef),
+    MacOSPath(MacOSPathRef)
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MacOSPackage {
+pub struct MacOSPackageRef {
     #[serde(rename = "@type")]
     pub _type: Option<String>,
 
@@ -125,7 +124,7 @@ pub struct MacOSPackage {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MacOSPath {
+pub struct MacOSPathRef {
     #[serde(rename = "@type")]
     pub _type: Option<String>,
 

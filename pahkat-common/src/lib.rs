@@ -27,6 +27,7 @@ pub trait ProgressOutput {
     fn warn(&self, thing: &str);
 }
 
+#[derive(Debug)]
 pub enum OpenIndexError {
     FileError(std::io::Error),
     JsonError(serde_json::Error),
@@ -237,34 +238,55 @@ fn generate_repo_index_virtuals<T: ProgressOutput>(
         channel.unwrap_or(&repo.default_channel)
     ));
 
-    let pkg_path = cur_dir.join("virtuals");
-    let items = fs::read_dir(&pkg_path).unwrap();
+    let virtuals_path = cur_dir.join("virtuals");
+    let virtuals: Vec<Virtual> = fs::read_dir(&virtuals_path)
+        .unwrap()
+        .map(|x| x.unwrap().path())
+        .filter_map(|path| {
+            if !path.is_dir() {
+                if let Some(ex) = path.extension() {
+                    if ex == "json" {
+                        return None;
+                    }
+                }
+
+                let relpath = pathdiff::diff_paths(&*path, cur_dir).unwrap();
+                output.warn(&format!("{:?} is not a directory; skipping", &relpath));
+                return None;
+            }
+
+            if !path.join(index_fn(channel)).exists() {
+                if channel.is_none() {
+                    let relpath = pathdiff::diff_paths(&*path, cur_dir).unwrap();
+                    output.warn(&format!(
+                        "{:?} does not contain {:?}; skipping",
+                        &relpath,
+                        index_fn(channel)
+                    ));
+                }
+                return None;
+            }
+
+            let index_path = path.join(index_fn(channel));
+            let file = File::open(&index_path).unwrap();
+            let virtual_index: Virtual = match serde_json::from_reader(file) {
+                Ok(x) => x,
+                Err(err) => {
+                    let relpath = pathdiff::diff_paths(&*index_path, cur_dir).unwrap();
+                    output.error(&format!("Error parsing path {:?}:", &relpath));
+                    output.error(&format!("{}", err));
+                    return None;
+                }
+            };
+
+            output.inserting(&virtual_index.id, &virtual_index.version);
+            Some(virtual_index)
+        })
+        .collect();
 
     let mut map = BTreeMap::new();
-    for x in items {
-        let path = x.unwrap().path();
-
-        if !path.is_dir() {
-            continue;
-        }
-
-        let indexes: Vec<Virtual> = fs::read_dir(&path)
-            .unwrap()
-            .map(|x| x.unwrap().path())
-            .filter(|path| path.is_dir() && path.join(index_fn(channel)).exists())
-            .map(|path| {
-                let file = File::open(path.join(index_fn(channel))).unwrap();
-                let pkg_index: Virtual = serde_json::from_reader(file)
-                    .expect(path.join(index_fn(channel)).to_str().unwrap());
-                output.inserting(&pkg_index.id, &pkg_index.version);
-                pkg_index
-            })
-            .collect();
-
-        for pkg in indexes.into_iter() {
-            let entry = map.entry(pkg.id.to_owned()).or_insert_with(|| vec![]);
-            entry.push(pkg.version);
-        }
+    for virtual_ in virtuals.into_iter() {
+        map.insert(virtual_.id.to_owned(), virtual_);
     }
 
     if map.is_empty() {

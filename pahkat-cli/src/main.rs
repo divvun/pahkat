@@ -113,6 +113,96 @@ fn request_package_data(cur_dir: &Path) -> Option<Package> {
     })
 }
 
+fn request_virtual_data(cur_dir: &Path) -> Option<Virtual> {
+    let package_id = prompt_line("Package identifier", "").unwrap();
+
+    if cur_dir
+        .join(&format!("{}/index.json", &package_id))
+        .exists()
+    {
+        progress(
+            Color::Red,
+            "Error",
+            &format!("Package {} already exists; aborting.", &package_id),
+        )
+        .unwrap();
+        return None;
+    }
+
+    let en_name = prompt_line("Name", "").unwrap();
+    let mut name = BTreeMap::new();
+    name.insert("en".to_owned(), en_name);
+
+    let version = prompt_line("Version", "0.1.0").unwrap();
+
+    let en_description = prompt_line("Description", "").unwrap();
+    let mut description = BTreeMap::new();
+    description.insert("en".to_owned(), en_description);
+
+    let en_help = prompt_line("Help", "").unwrap();
+    let mut help = BTreeMap::new();
+    help.insert("en".to_owned(), en_help);
+
+    let opts = &[
+        "Windows Registry Key",
+        "macOS Package (ie, installed .pkg)",
+        "macOS Path (ie, to an app)"
+    ];
+
+    let target = match prompt_select("Which target?", opts, 0) {
+        0 => {
+            VirtualTarget::WindowsRegistryKey(RegistryKey {
+                _type: ld_type!("RegistryKey"),
+                name: prompt_line("Key name", "").unwrap(),
+                path: prompt_line("Key path", "").unwrap()
+            })
+        },
+        1 => {
+            VirtualTarget::MacOSPackage(MacOSPackageRef {
+                _type: ld_type!("MacOSPackageRef"),
+                pkg_id: prompt_line("Package identifier", "").unwrap(),
+                min_build: None,
+                max_build: None,
+                min_version: None,
+                max_version: None
+            })
+        },
+        2 => {
+            VirtualTarget::MacOSPath(MacOSPathRef {
+                _type: ld_type!("MacOSPathRef"),
+                app_paths: vec![prompt_line("App path", "").unwrap()],
+                min_build: None,
+                max_build: None,
+                min_version: None,
+                max_version: None
+            })
+        },
+        _ => {
+            panic!("ohno")
+        }
+    };
+
+    Some(Virtual {
+        _context: Some(LD_CONTEXT.to_owned()),
+        _type: ld_type!("Virtual"),
+        id: package_id,
+        name,
+        description,
+        // authors: vec![author],
+        // license,
+        version,
+        help,
+        url: None,
+        target
+        // category,
+        // languages,
+        // platform,
+        // dependencies: Default::default(),
+        // virtual_dependencies: Default::default(),
+        // installer: None,
+    })
+}
+
 fn input_repo_data() -> Repository {
     let base = {
         let mut base = String::new();
@@ -144,8 +234,8 @@ fn input_repo_data() -> Repository {
     let mut description = BTreeMap::new();
     description.insert("en".to_owned(), en_description);
 
-    let primary_filter =
-        prompt_select("Primary Filter", &["category".into(), "language".into()], 0);
+    let filters = &["category", "language"];
+    let primary_filter = filters[prompt_select("Primary Filter", filters, 0)].to_string();
 
     let channels = {
         let mut r: Vec<String> = vec![];
@@ -166,7 +256,8 @@ fn input_repo_data() -> Repository {
     let default_channel = if channels.len() == 1 {
         channels[0].to_string()
     } else {
-        prompt_select("Default channel", &channels, 0)
+        let i = prompt_select("Default channel", &channels.iter().map(|x| x.as_ref()).collect::<Vec<_>>(), 0);
+        channels[i].to_string()
     };
 
     let mut categories = BTreeMap::new();
@@ -187,14 +278,59 @@ fn input_repo_data() -> Repository {
     }
 }
 
+fn validate_repo(path: &Path) -> bool {
+    match open_repo(&path) {
+        Ok(_) => true,
+        Err(e) => {
+            match e {
+                OpenIndexError::FileError(_) => {
+                    progress(
+                        Color::Red,
+                        "Error",
+                        "Cannot generate outside of a repository; aborting.",
+                    ).unwrap();
+                },
+                OpenIndexError::JsonError(e) => {
+                    progress(Color::Red, "Error", &format!("JSON error: {}", e)).unwrap();
+                    progress(
+                        Color::Red,
+                        "Error",
+                        "Cannot parse repository JSON; aborting.",
+                    ).unwrap();
+                }
+            }
+            false
+        }
+    }
+}
+
+fn virtual_init(output_dir: &Path, channel: Option<&str>) {
+    if !validate_repo(output_dir) {
+        return;
+    }
+
+    let virtual_data = match request_virtual_data(output_dir) {
+        Some(v) => v,
+        None => {
+            return;
+        }
+    };
+
+    let json = serde_json::to_string_pretty(&virtual_data).unwrap();
+
+    println!("\n{}\n", json);
+
+    if prompt_question("Save index.json", true) {
+        let virtual_dir = output_dir.join(&format!("virtuals/{}", &virtual_data.id));
+        fs::create_dir(&virtual_dir).unwrap();
+        let mut file = File::create(&virtual_dir.join(index_fn(channel))).unwrap();
+        file.write_all(json.as_bytes()).unwrap();
+        file.write_all(&[b'\n']).unwrap();
+    }
+}
+
 fn package_init(output_dir: &Path, channel: Option<&str>) {
-    if open_repo(&output_dir).is_err() {
-        progress(
-            Color::Red,
-            "Error",
-            "Cannot generate package outside of a repository; aborting.",
-        )
-        .unwrap();
+    if !validate_repo(output_dir) {
         return;
     }
 
@@ -489,22 +625,48 @@ fn main() {
             )
         )
         .subcommand(
-            SubCommand::with_name("init")
-            .about("Initialise a package to the specified directory")
-            .arg(Arg::with_name("path")
-                .value_name("PATH")
-                .help("The repository root directory (default: current working directory)")
-                .short("p")
-                .long("path")
-                .takes_value(true)
-            )
-            .arg(Arg::with_name("channel")
-                .value_name("CHANNEL")
-                .help("The channel to use (default: repository default)")
-                .short("C")
-                .long("channel")
-                .takes_value(true)
-            )
+            SubCommand::with_name("package")
+                .about("Package related functionality")
+                .subcommand(
+                    SubCommand::with_name("init")
+                    .about("Initialise a package in the specified repository")
+                    .arg(Arg::with_name("path")
+                        .value_name("PATH")
+                        .help("The repository root directory (default: current working directory)")
+                        .short("p")
+                        .long("path")
+                        .takes_value(true)
+                    )
+                    .arg(Arg::with_name("channel")
+                        .value_name("CHANNEL")
+                        .help("The channel to use (default: repository default)")
+                        .short("C")
+                        .long("channel")
+                        .takes_value(true)
+                    )
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("virtual")
+                .about("Virtual package related functionality")
+                .subcommand(
+                    SubCommand::with_name("init")
+                    .about("Initialise a virtual in the specified repository")
+                    .arg(Arg::with_name("path")
+                        .value_name("PATH")
+                        .help("The repository root directory (default: current working directory)")
+                        .short("p")
+                        .long("path")
+                        .takes_value(true)
+                    )
+                    .arg(Arg::with_name("channel")
+                        .value_name("CHANNEL")
+                        .help("The channel to use (default: repository default)")
+                        .short("C")
+                        .long("channel")
+                        .takes_value(true)
+                    )
+                )
         )
         .subcommand(
             SubCommand::with_name("installer")
@@ -688,14 +850,32 @@ fn main() {
     let output = StderrOutput;
 
     match matches.subcommand() {
-        ("init", Some(matches)) => {
-            let current_dir = &env::current_dir().unwrap();
-            let path: &Path = matches
-                .value_of("path")
-                .map_or(&current_dir, |v| Path::new(v));
-            let channel = matches.value_of("channel");
-            package_init(&path, channel)
-        }
+        ("package", Some(matches)) => {
+            match matches.subcommand() {
+                ("init", Some(matches)) => {
+                    let current_dir = &env::current_dir().unwrap();
+                    let path: &Path = matches
+                        .value_of("path")
+                        .map_or(&current_dir, |v| Path::new(v));
+                    let channel = matches.value_of("channel");
+                    package_init(&path, channel)
+                },
+                _ => {}
+            }
+        },
+        ("virtual", Some(matches)) => {
+            match matches.subcommand() {
+                ("init", Some(matches)) => {
+                    let current_dir = &env::current_dir().unwrap();
+                    let path: &Path = matches
+                        .value_of("path")
+                        .map_or(&current_dir, |v| Path::new(v));
+                    let channel = matches.value_of("channel");
+                    virtual_init(&path, channel)
+                },
+                _ => {}
+            }
+        },
         ("installer", Some(matches)) => {
             let current_dir = &env::current_dir().unwrap();
             let path: &Path = matches

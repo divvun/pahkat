@@ -48,14 +48,13 @@ pub fn prompt_multi_select(prompt: &str, options: &[&str]) -> Vec<String> {
         .collect()
 }
 
-pub fn prompt_select(prompt: &str, options: &[String], default: usize) -> String {
+pub fn prompt_select(prompt: &str, options: &[&str], default: usize) -> usize {
     Select::with_theme(&ColorfulTheme::default())
         .with_prompt(prompt)
         .items(options)
         .default(default)
         .interact()
-        .map(|i| options[i].to_string())
-        .unwrap_or_else(|_| options[default].to_string())
+        .unwrap_or_else(|_| default)
 }
 
 pub fn parse_platform_list(vec: &[String]) -> BTreeMap<String, String> {
