@@ -1,3 +1,5 @@
+#![allow(deprecated)] // until 1.0
+
 use std::cmp::*;
 use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
@@ -17,6 +19,16 @@ pub const OS: &str = "windows";
 pub type PackageMap = BTreeMap<String, Package>;
 pub type VirtualMap = BTreeMap<String, Virtual>;
 
+#[deprecated(note = "Will be removed in 1.0; no unknown fields will be accepted.")]
+fn unknown() -> String {
+    "Unknown".into()
+}
+
+#[deprecated(note = "Will be removed in 1.0; no unknown fields will be accepted.")]
+fn unknown_vec() -> Vec<String> {
+    vec![unknown()]
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Package {
@@ -27,7 +39,9 @@ pub struct Package {
     pub id: String,
     pub name: BTreeMap<String, String>,
     pub description: BTreeMap<String, String>,
+    #[serde(default = "unknown_vec")]
     pub authors: Vec<String>,
+    #[serde(default = "unknown")]
     pub license: String,
     pub version: String,
     pub category: String,
