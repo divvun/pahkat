@@ -4,6 +4,7 @@ use std::io;
 use std::path::Path;
 use std::time::SystemTime;
 
+use log::info;
 use glob::glob;
 
 #[derive(Debug)]
@@ -80,7 +81,7 @@ impl Watcher {
 
         for index in removed_indexes {
             self.cache.remove(&index);
-            println!("Index {} has been deleted", &index);
+            info!("Index {} has been deleted", &index);
             result.push(WatcherEvent::Deleted(index.clone()));
         }
 
@@ -92,13 +93,13 @@ impl Watcher {
                 Some(cached_modified) => {
                     if modified != *cached_modified {
                         *cached_modified = modified;
-                        println!("Index {} has been modified", index.as_str());
+                        info!("Index {} has been modified", index.as_str());
                         result.push(WatcherEvent::Modified(index.clone()));
                     }
                 }
                 None => {
                     self.cache.insert(index.to_string(), modified);
-                    println!("Index {} has been created", index.as_str());
+                    info!("Index {} has been created", index.as_str());
                     result.push(WatcherEvent::Created(index.clone()));
                 }
             }

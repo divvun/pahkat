@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use clap::{crate_version, App as CliApp, AppSettings, Arg, SubCommand};
+use log::{info, warn, error};
 
 mod watcher;
 
@@ -42,7 +43,7 @@ fn repo_index(state: web::Data<ServerState>) -> impl Responder {
             .content_type("application/json")
             .body(body),
         Err(e) => {
-            eprintln!("Error while reading repo index file: {:?}", e);
+            error!("Error while reading repo index file: {:?}", e);
             HttpResponse::InternalServerError().finish()
         }
     }
@@ -63,7 +64,7 @@ fn packages_index(state: web::Data<ServerState>) -> impl Responder {
             .content_type("application/json")
             .body(body),
         Err(e) => {
-            eprintln!("Error while reading packages index file: {:?}", e);
+            error!("Error while reading packages index file: {:?}", e);
             HttpResponse::InternalServerError().finish()
         }
     }
@@ -89,7 +90,7 @@ fn packages_package_index(
             .content_type("application/json")
             .body(body),
         Err(e) => {
-            eprintln!(
+            error!(
                 "Error while reading packages package index {}: {:?}",
                 index_path_str, e
             );
@@ -113,7 +114,7 @@ fn virtuals_index(state: web::Data<ServerState>) -> impl Responder {
             .content_type("application/json")
             .body(body),
         Err(e) => {
-            eprintln!("Error while reading virtuals index file: {:?}", e);
+            error!("Error while reading virtuals index file: {:?}", e);
             HttpResponse::InternalServerError().finish()
         }
     }
@@ -139,7 +140,7 @@ fn virtuals_package_index(
             .content_type("application/json")
             .body(body),
         Err(e) => {
-            eprintln!(
+            error!(
                 "Error while reading virtuals package index {}: {:?}",
                 index_path_str, e
             );
@@ -176,11 +177,13 @@ fn run_server(path: &Path, bind: &str, port: &str) {
     .expect(&format!("Can not bind to {}:{}", bind, port))
     .start();
 
-    println!("Running on port {} bound to {}", port, bind);
     let _ = system.run();
 }
 
 fn main() {
+    env::set_var("RUST_LOG", "info");
+    env_logger::init();
+
     let matches = CliApp::new("Páhkat server")
         .version(crate_version!())
         .author("Rostislav Raykov <rostislav@technocreatives.com>")
@@ -231,9 +234,9 @@ fn main() {
                 let watcher_interval = std::time::Duration::from_millis(2000);
                 loop {
                     match watcher.update() {
-                        Err(error) => eprintln!("Failed to update watcher: {:?}", error),
+                        Err(error) => error!("Failed to update watcher: {:?}", error),
                         Ok(ref events) if !events.is_empty() => {
-                            println!(
+                            info!(
                                 "Watcher reports {} event(s) since last update",
                                 events.len()
                             );
@@ -260,26 +263,26 @@ struct ConsoleOutput;
 
 impl ProgressOutput for ConsoleOutput {
     fn info(&self, msg: &str) {
-        println!("Info {}", msg);
+        info!("Info: {}", msg);
     }
 
-    fn generating(&self, thing: &str) {
-        println!("Generating {}", thing);
+    fn generating(&self, msg: &str) {
+        info!("Generating {}", msg);
     }
 
-    fn writing(&self, thing: &str) {
-        println!("Writing {}", thing);
+    fn writing(&self, msg: &str) {
+        info!("Writing {}", msg);
     }
 
     fn inserting(&self, id: &str, version: &str) {
-        println!("Inserting {} {}", id, version);
+        info!("Inserting {} {}", id, version);
     }
 
-    fn error(&self, thing: &str) {
-        eprintln!("Error {}", thing);
+    fn error(&self, msg: &str) {
+        error!("Error: {}", msg);
     }
 
-    fn warn(&self, thing: &str) {
-        println!("Warning {}", thing);
+    fn warn(&self, msg: &str) {
+        warn!("Warning: {}", msg);
     }
 }
