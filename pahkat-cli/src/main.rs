@@ -71,6 +71,9 @@ fn request_package_data(cur_dir: &Path) -> Option<Package> {
     let mut description = BTreeMap::new();
     description.insert("en".to_owned(), en_description);
 
+    let author = prompt_line("Author", "").unwrap();
+    let license = prompt_line("License", "").unwrap();
+
     let version = prompt_line("Version", "0.1.0").unwrap();
     let category = prompt_line("Category", "").unwrap();
 
@@ -98,6 +101,8 @@ fn request_package_data(cur_dir: &Path) -> Option<Package> {
         id: package_id,
         name,
         description,
+        authors: vec![author],
+        license,
         version,
         category,
         languages,
@@ -178,6 +183,7 @@ fn input_repo_data() -> Repository {
         default_channel,
         channels,
         categories,
+        linked_repositories: vec![]
     }
 }
 
