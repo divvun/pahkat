@@ -4,11 +4,16 @@ use std::io::prelude::*;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
+#[macro_use]
+extern crate diesel;
+
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use clap::{crate_version, App as CliApp, AppSettings, Arg, SubCommand};
 use log::{info, warn, error};
 
 mod watcher;
+mod database;
+mod models;
 
 use pahkat_common::*;
 use watcher::*;
