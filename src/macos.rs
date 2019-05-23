@@ -13,7 +13,7 @@ use url::Url;
 use serde::de::{self, Deserialize, Deserializer};
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
-use pahkat::types::{
+use pahkat_types::{
     InstallTarget,
     Installer,
     MacOSInstaller,

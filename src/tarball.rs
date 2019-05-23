@@ -1,6 +1,6 @@
 #![cfg(prefix)]
 
-use pahkat::types::*;
+use pahkat_types::*;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::ffi::OsStr;

@@ -1,7 +1,7 @@
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
 use serde_derive::Serialize;
-use pahkat::types::{
+use pahkat_types::{
     Package,
     Packages,
     Virtuals,

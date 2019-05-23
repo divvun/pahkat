@@ -17,7 +17,7 @@ use crate::StoreConfig;
 use crate::RepoRecord;
 use crate::PackageStatus;
 use crate::AbsolutePackageKey;
-use pahkat::types::*;
+use pahkat_types::*;
 use crate::PackageActionType;
 use crate::PackageTransactionError;
 use crate::windows::PackageAction;
