@@ -1,5 +1,5 @@
-use std::io::prelude::*;
 use std::fs::File;
+use std::io::prelude::*;
 use std::io::BufReader;
 
 use actix_web::{web, HttpResponse, Responder};

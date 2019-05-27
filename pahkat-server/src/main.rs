@@ -9,18 +9,18 @@ extern crate diesel;
 
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use clap::{crate_version, App as CliApp, AppSettings, Arg, SubCommand};
-use log::{info, warn, error};
+use log::{error, info, warn};
 
-mod watcher;
 mod database;
-mod models;
 mod handlers;
+mod models;
+mod watcher;
 
+use handlers::{
+    packages_index, packages_package_index, repo_index, virtuals_index, virtuals_package_index,
+};
 use pahkat_common::*;
 use watcher::*;
-use handlers::{
-    repo_index, packages_index, packages_package_index, virtuals_index, virtuals_package_index
-};
 
 #[derive(Clone)]
 pub struct ServerState {
@@ -44,7 +44,7 @@ fn run_server(path: &Path, bind: &str, port: &str) {
             .service(web::resource("/index.json").route(web::get().to(repo_index)))
             .service(web::resource("/packages/index.json").route(web::get().to(packages_index)))
             .service(
-                web::resource("/packages//{packageId}/index.json")
+                web::resource("/packages/{packageId}/index.json")
                     .route(web::get().to(packages_package_index)),
             )
             .service(web::resource("/virtuals/index.json").route(web::get().to(virtuals_index)))

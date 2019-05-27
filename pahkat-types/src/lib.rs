@@ -120,7 +120,7 @@ pub struct Virtuals {
 pub enum VirtualTarget {
     WindowsRegistryKey(RegistryKey),
     MacOSPackage(MacOSPackageRef),
-    MacOSPath(MacOSPathRef)
+    MacOSPath(MacOSPathRef),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -133,7 +133,7 @@ pub struct MacOSPackageRef {
     pub min_version: Option<String>,
     pub max_version: Option<String>,
     pub min_build: Option<String>,
-    pub max_build: Option<String>
+    pub max_build: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -146,7 +146,7 @@ pub struct MacOSPathRef {
     pub min_version: Option<String>,
     pub max_version: Option<String>,
     pub min_build: Option<String>,
-    pub max_build: Option<String>
+    pub max_build: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

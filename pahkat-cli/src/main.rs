@@ -146,40 +146,32 @@ fn request_virtual_data(cur_dir: &Path) -> Option<Virtual> {
     let opts = &[
         "Windows Registry Key",
         "macOS Package (ie, installed .pkg)",
-        "macOS Path (ie, to an app)"
+        "macOS Path (ie, to an app)",
     ];
 
     let target = match prompt_select("Which target?", opts, 0) {
-        0 => {
-            VirtualTarget::WindowsRegistryKey(RegistryKey {
-                _type: ld_type!("RegistryKey"),
-                name: prompt_line("Key name", "").unwrap(),
-                path: prompt_line("Key path", "").unwrap()
-            })
-        },
-        1 => {
-            VirtualTarget::MacOSPackage(MacOSPackageRef {
-                _type: ld_type!("MacOSPackageRef"),
-                pkg_id: prompt_line("Package identifier", "").unwrap(),
-                min_build: None,
-                max_build: None,
-                min_version: None,
-                max_version: None
-            })
-        },
-        2 => {
-            VirtualTarget::MacOSPath(MacOSPathRef {
-                _type: ld_type!("MacOSPathRef"),
-                app_paths: vec![prompt_line("App path", "").unwrap()],
-                min_build: None,
-                max_build: None,
-                min_version: None,
-                max_version: None
-            })
-        },
-        _ => {
-            panic!("ohno")
-        }
+        0 => VirtualTarget::WindowsRegistryKey(RegistryKey {
+            _type: ld_type!("RegistryKey"),
+            name: prompt_line("Key name", "").unwrap(),
+            path: prompt_line("Key path", "").unwrap(),
+        }),
+        1 => VirtualTarget::MacOSPackage(MacOSPackageRef {
+            _type: ld_type!("MacOSPackageRef"),
+            pkg_id: prompt_line("Package identifier", "").unwrap(),
+            min_build: None,
+            max_build: None,
+            min_version: None,
+            max_version: None,
+        }),
+        2 => VirtualTarget::MacOSPath(MacOSPathRef {
+            _type: ld_type!("MacOSPathRef"),
+            app_paths: vec![prompt_line("App path", "").unwrap()],
+            min_build: None,
+            max_build: None,
+            min_version: None,
+            max_version: None,
+        }),
+        _ => panic!("ohno"),
     };
 
     Some(Virtual {
@@ -256,7 +248,11 @@ fn input_repo_data() -> Repository {
     let default_channel = if channels.len() == 1 {
         channels[0].to_string()
     } else {
-        let i = prompt_select("Default channel", &channels.iter().map(|x| x.as_ref()).collect::<Vec<_>>(), 0);
+        let i = prompt_select(
+            "Default channel",
+            &channels.iter().map(|x| x.as_ref()).collect::<Vec<_>>(),
+            0,
+        );
         channels[i].to_string()
     };
 
@@ -274,7 +270,7 @@ fn input_repo_data() -> Repository {
         default_channel,
         channels,
         categories,
-        linked_repositories: vec![]
+        linked_repositories: vec![],
     }
 }
 
@@ -288,15 +284,17 @@ fn validate_repo(path: &Path) -> bool {
                         Color::Red,
                         "Error",
                         "Cannot generate outside of a repository; aborting.",
-                    ).unwrap();
-                },
+                    )
+                    .unwrap();
+                }
                 OpenIndexError::JsonError(e) => {
                     progress(Color::Red, "Error", &format!("JSON error: {}", e)).unwrap();
                     progress(
                         Color::Red,
                         "Error",
                         "Cannot parse repository JSON; aborting.",
-                    ).unwrap();
+                    )
+                    .unwrap();
                 }
             }
             false
@@ -850,31 +848,27 @@ fn main() {
     let output = StderrOutput;
 
     match matches.subcommand() {
-        ("package", Some(matches)) => {
-            match matches.subcommand() {
-                ("init", Some(matches)) => {
-                    let current_dir = &env::current_dir().unwrap();
-                    let path: &Path = matches
-                        .value_of("path")
-                        .map_or(&current_dir, |v| Path::new(v));
-                    let channel = matches.value_of("channel");
-                    package_init(&path, channel)
-                },
-                _ => {}
+        ("package", Some(matches)) => match matches.subcommand() {
+            ("init", Some(matches)) => {
+                let current_dir = &env::current_dir().unwrap();
+                let path: &Path = matches
+                    .value_of("path")
+                    .map_or(&current_dir, |v| Path::new(v));
+                let channel = matches.value_of("channel");
+                package_init(&path, channel)
             }
+            _ => {}
         },
-        ("virtual", Some(matches)) => {
-            match matches.subcommand() {
-                ("init", Some(matches)) => {
-                    let current_dir = &env::current_dir().unwrap();
-                    let path: &Path = matches
-                        .value_of("path")
-                        .map_or(&current_dir, |v| Path::new(v));
-                    let channel = matches.value_of("channel");
-                    virtual_init(&path, channel)
-                },
-                _ => {}
+        ("virtual", Some(matches)) => match matches.subcommand() {
+            ("init", Some(matches)) => {
+                let current_dir = &env::current_dir().unwrap();
+                let path: &Path = matches
+                    .value_of("path")
+                    .map_or(&current_dir, |v| Path::new(v));
+                let channel = matches.value_of("channel");
+                virtual_init(&path, channel)
             }
+            _ => {}
         },
         ("installer", Some(matches)) => {
             let current_dir = &env::current_dir().unwrap();

@@ -1,13 +1,13 @@
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool, PoolError};
-use diesel::sqlite::SqliteConnection;
 use diesel::result::Error;
+use diesel::sqlite::SqliteConnection;
 
 pub mod models;
 pub mod schema;
 
-use self::schema::downloads;
 use self::models::{Download, NewDownload};
+use self::schema::downloads;
 
 pub struct Database {
     pool: Pool<ConnectionManager<SqliteConnection>>,
@@ -25,9 +25,10 @@ impl Database {
         downloads::table.load(connection)
     }
 
-    pub fn create_download<T: Into<NewDownload>>(connection: &SqliteConnection, download: T)
-        -> std::result::Result<usize, diesel::result::Error> {
-
+    pub fn create_download<T: Into<NewDownload>>(
+        connection: &SqliteConnection,
+        download: T,
+    ) -> std::result::Result<usize, diesel::result::Error> {
         diesel::insert_into(downloads::table)
             .values(&download.into())
             .execute(connection)

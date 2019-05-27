@@ -49,8 +49,7 @@ pub fn open_repo(path: &Path) -> Result<Repository, OpenIndexError> {
 }
 
 pub fn open_package(path: &Path, channel: Option<&str>) -> Result<Package, OpenIndexError> {
-    let file =
-        File::open(path.join(index_fn(channel))).map_err(OpenIndexError::FileError)?;
+    let file = File::open(path.join(index_fn(channel))).map_err(OpenIndexError::FileError)?;
     let index = serde_json::from_reader(file).map_err(OpenIndexError::JsonError)?;
     Ok(index)
 }

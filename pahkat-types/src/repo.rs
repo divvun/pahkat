@@ -20,7 +20,7 @@ pub struct Repository {
     #[serde(default = "BTreeMap::new")]
     pub categories: BTreeMap<String, BTreeMap<String, String>>,
     #[serde(default = "Vec::new")]
-    pub linked_repositories: Vec<String>
+    pub linked_repositories: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

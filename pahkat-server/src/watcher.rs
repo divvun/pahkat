@@ -4,8 +4,8 @@ use std::io;
 use std::path::Path;
 use std::time::SystemTime;
 
-use log::info;
 use glob::glob;
+use log::info;
 
 #[derive(Debug)]
 pub enum WatcherEvent {
