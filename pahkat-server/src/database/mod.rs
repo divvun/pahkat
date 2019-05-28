@@ -2,7 +2,6 @@ use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool, PoolError};
 use diesel::sqlite::SqliteConnection;
 use failure::Error;
-use log::warn;
 
 pub mod models;
 pub mod schema;
@@ -34,9 +33,6 @@ impl Database {
         download: NewDownload,
     ) -> std::result::Result<usize, Error> {
         let connection = self.pool.get()?;
-
-        warn!("Creating Dowload");
-        warn!("{:?}", &download);
 
         Ok(diesel::insert_into(downloads::table)
             .values(&download)

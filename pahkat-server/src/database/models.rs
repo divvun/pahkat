@@ -2,7 +2,7 @@ use chrono::naive::NaiveDateTime;
 
 use super::schema::downloads;
 
-#[derive(Queryable)]
+#[derive(Queryable, Debug)]
 pub struct Download {
     pub id: Vec<u8>,
 

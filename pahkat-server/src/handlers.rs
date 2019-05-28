@@ -3,7 +3,7 @@ use std::io::prelude::*;
 use std::io::BufReader;
 
 use actix_web::{web, HttpResponse, Responder};
-use log::error;
+use log::{info, error};
 use serde_json::json;
 use chrono::offset::Utc;
 
@@ -12,6 +12,7 @@ use pahkat_common::open_package;
 use pahkat_types::Downloadable;
 
 use crate::database::models::NewDownload;
+use crate::models::Download;
 
 fn read_file(path: &str) -> std::io::Result<String> {
     let file = File::open(path)?;
@@ -126,6 +127,22 @@ pub fn download_package(state: web::Data<ServerState>, path: web::Path<String>) 
     });
 
     HttpResponse::Found().header("Location", url).finish()
+}
+
+pub fn package_stats(state: web::Data<ServerState>, path: web::Path<String>) -> impl Responder {
+    let _package_id = path.clone();
+
+    // TODO: actually implement this, i.e., filter my package id / date
+    let records: Vec<Download> = state.database.query_downloads().unwrap()
+        .into_iter().map(|rec| {
+            Download::from(rec)
+    }).collect();
+
+    for record in records {
+        info!("{}", record);
+    }
+
+    HttpResponse::Ok()
 }
 
 pub fn virtuals_index(state: web::Data<ServerState>) -> impl Responder {

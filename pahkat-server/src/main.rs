@@ -7,6 +7,7 @@ extern crate diesel;
 use actix_web::{web, App, HttpServer};
 use clap::{crate_version, App as CliApp, AppSettings, Arg, SubCommand};
 use log::{error, info, warn};
+use directories::ProjectDirs;
 
 mod database;
 mod handlers;
@@ -15,7 +16,7 @@ mod watcher;
 
 use handlers::{
     download_package, packages_index, packages_package_index, repo_index, virtuals_index,
-    virtuals_package_index,
+    virtuals_package_index, package_stats
 };
 use pahkat_common::*;
 use watcher::*;
@@ -32,7 +33,11 @@ pub struct ServerState {
 fn run_server(path: &Path, bind: &str, port: &str) {
     let system = actix::System::new("páhkat-server");
 
-    let database = match Database::new("db.sqlite3") {
+    let mut db_path = ProjectDirs::from("no", "uit", "pahkat-server")
+        .expect("No home directory found").data_dir().to_owned();
+    db_path.push("db.sqlite3");
+
+    let database = match Database::new(db_path.to_str().unwrap()) {
         Ok(database) => database,
         Err(e) => {
             panic!("Failed to create database: {}", e);
@@ -58,6 +63,10 @@ fn run_server(path: &Path, bind: &str, port: &str) {
             .service(
                 web::resource("/packages/{packageId}/download")
                     .route(web::get().to(download_package)),
+            )
+            .service(
+                web::resource("/packages/{packageId}/stats")
+                    .route(web::get().to(package_stats)),
             )
             .service(web::resource("/virtuals/index.json").route(web::get().to(virtuals_index)))
             .service(
