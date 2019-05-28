@@ -2,10 +2,13 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
 
-use actix_web::{web, HttpResponse, Responder};
+use actix_web::{http, web, HttpResponse, Responder};
 use log::error;
+use serde_json::json;
 
 use crate::ServerState;
+use pahkat_common::open_package;
+use pahkat_types::Downloadable;
 
 fn read_file(path: &str) -> std::io::Result<String> {
     let file = File::open(path)?;
@@ -84,6 +87,36 @@ pub fn packages_package_index(
             HttpResponse::NotFound().finish()
         }
     }
+}
+
+pub fn download_package(state: web::Data<ServerState>, path: web::Path<String>) -> impl Responder {
+    let package_id = path.clone();
+
+    let mut package_index_path = state.path.clone();
+    package_index_path.push("packages");
+    package_index_path.push(package_id);
+
+    let package = match open_package(package_index_path.as_path(), None) {
+        Ok(package) => package,
+        Err(_) => {
+            return HttpResponse::NotFound()
+                .content_type("application/json")
+                .json(json!({ "message": "Package not found." }))
+        }
+    };
+
+    let installer = match package.installer {
+        Some(installer) => installer,
+        _ => {
+            return HttpResponse::NotFound()
+                .content_type("application/json")
+                .json(json!({ "message": "No installer found for this package." }))
+        }
+    };
+
+    let url = installer.url();
+
+    HttpResponse::Found().header("Location", url).finish()
 }
 
 pub fn virtuals_index(state: web::Data<ServerState>) -> impl Responder {

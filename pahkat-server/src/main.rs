@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 #[macro_use]
 extern crate diesel;
 
-use actix_web::{web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{web, App, HttpServer};
 use clap::{crate_version, App as CliApp, AppSettings, Arg, SubCommand};
 use log::{error, info, warn};
 
@@ -17,7 +17,8 @@ mod models;
 mod watcher;
 
 use handlers::{
-    packages_index, packages_package_index, repo_index, virtuals_index, virtuals_package_index,
+    download_package, packages_index, packages_package_index, repo_index, virtuals_index,
+    virtuals_package_index,
 };
 use pahkat_common::*;
 use watcher::*;
@@ -46,6 +47,10 @@ fn run_server(path: &Path, bind: &str, port: &str) {
             .service(
                 web::resource("/packages/{packageId}/index.json")
                     .route(web::get().to(packages_package_index)),
+            )
+            .service(
+                web::resource("/packages/{packageId}/download")
+                    .route(web::get().to(download_package)),
             )
             .service(web::resource("/virtuals/index.json").route(web::get().to(virtuals_index)))
             .service(
