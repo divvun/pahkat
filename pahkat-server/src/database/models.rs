@@ -13,11 +13,9 @@ pub struct Download {
     pub timestamp: NaiveDateTime,
 }
 
-#[derive(Insertable)]
+#[derive(Insertable, Debug)]
 #[table_name = "downloads"]
 pub struct NewDownload {
-    pub id: Vec<u8>,
-
     pub package_id: String,
 
     pub package_version: String,

@@ -1,7 +1,4 @@
 use std::env;
-use std::fs::File;
-use std::io::prelude::*;
-use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
 #[macro_use]
@@ -22,21 +19,31 @@ use handlers::{
 };
 use pahkat_common::*;
 use watcher::*;
+use database::Database;
 
 #[derive(Clone)]
 pub struct ServerState {
     path: PathBuf,
     bind: String,
     port: String,
+    database: Database,
 }
 
 fn run_server(path: &Path, bind: &str, port: &str) {
     let system = actix::System::new("páhkat-server");
 
+    let database = match Database::new("db.sqlite3") {
+        Ok(database) => database,
+        Err(e) => {
+            panic!("Failed to create database: {}", e);
+        }
+    };
+
     let state = ServerState {
         path: path.to_path_buf(),
         bind: bind.to_string(),
         port: port.to_string(),
+        database,
     };
 
     HttpServer::new(move || {

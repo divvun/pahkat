@@ -2,13 +2,16 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
 
-use actix_web::{http, web, HttpResponse, Responder};
+use actix_web::{web, HttpResponse, Responder};
 use log::error;
 use serde_json::json;
+use chrono::offset::Utc;
 
 use crate::ServerState;
 use pahkat_common::open_package;
 use pahkat_types::Downloadable;
+
+use crate::database::models::NewDownload;
 
 fn read_file(path: &str) -> std::io::Result<String> {
     let file = File::open(path)?;
@@ -115,6 +118,12 @@ pub fn download_package(state: web::Data<ServerState>, path: web::Path<String>) 
     };
 
     let url = installer.url();
+
+    let _count = state.database.create_download(NewDownload {
+        package_id: package.id,
+        package_version: package.version,
+        timestamp: Utc::now().naive_utc(),
+    });
 
     HttpResponse::Found().header("Location", url).finish()
 }
