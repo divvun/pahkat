@@ -1,7 +1,7 @@
 use std::fmt;
 
-use uuid::Uuid;
 use chrono::naive::NaiveDateTime;
+use uuid::Uuid;
 
 pub struct Download {
     pub id: Uuid,
@@ -15,8 +15,11 @@ pub struct Download {
 
 impl fmt::Display for Download {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Download {{ package_id: \"{}\", package_version: \"{}\", timestamp: \"{}\" }}",
-               self.package_id, self.package_version, self.timestamp)
+        write!(
+            f,
+            "Download {{ package_id: \"{}\", package_version: \"{}\", timestamp: \"{}\" }}",
+            self.package_id, self.package_version, self.timestamp
+        )
     }
 }
 

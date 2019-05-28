@@ -28,10 +28,7 @@ impl Database {
         Ok(downloads::table.load(&connection)?)
     }
 
-    pub fn create_download(
-        &self,
-        download: NewDownload,
-    ) -> std::result::Result<usize, Error> {
+    pub fn create_download(&self, download: NewDownload) -> std::result::Result<usize, Error> {
         let connection = self.pool.get()?;
 
         Ok(diesel::insert_into(downloads::table)

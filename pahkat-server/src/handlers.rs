@@ -3,9 +3,9 @@ use std::io::prelude::*;
 use std::io::BufReader;
 
 use actix_web::{web, HttpResponse, Responder};
-use log::{info, error};
-use serde_json::json;
 use chrono::offset::Utc;
+use log::{error, info};
+use serde_json::json;
 
 use crate::ServerState;
 use pahkat_common::open_package;
@@ -133,10 +133,13 @@ pub fn package_stats(state: web::Data<ServerState>, path: web::Path<String>) -> 
     let _package_id = path.clone();
 
     // TODO: actually implement this, i.e., filter my package id / date
-    let records: Vec<Download> = state.database.query_downloads().unwrap()
-        .into_iter().map(|rec| {
-            Download::from(rec)
-    }).collect();
+    let records: Vec<Download> = state
+        .database
+        .query_downloads()
+        .unwrap()
+        .into_iter()
+        .map(|rec| Download::from(rec))
+        .collect();
 
     for record in records {
         info!("{}", record);
