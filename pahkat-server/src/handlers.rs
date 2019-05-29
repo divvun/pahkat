@@ -4,7 +4,8 @@ use std::io::BufReader;
 
 use actix_web::{web, HttpResponse, Responder};
 use chrono::offset::Utc;
-use log::{error, info};
+use chrono::Duration;
+use log::error;
 use serde_json::json;
 
 use crate::ServerState;
@@ -12,7 +13,6 @@ use pahkat_common::open_package;
 use pahkat_types::Downloadable;
 
 use crate::database::models::NewDownload;
-use crate::models::Download;
 
 fn read_file(path: &str) -> std::io::Result<String> {
     let file = File::open(path)?;
@@ -129,23 +129,60 @@ pub fn download_package(state: web::Data<ServerState>, path: web::Path<String>) 
     HttpResponse::Found().header("Location", url).finish()
 }
 
-pub fn package_stats(state: web::Data<ServerState>, path: web::Path<String>) -> impl Responder {
-    let _package_id = path.clone();
+pub fn package_stats(
+    state: web::Data<ServerState>,
+    path: web::Path<String>,
+) -> Result<HttpResponse, actix_web::error::Error> {
+    let database = &state.database;
 
-    // TODO: actually implement this, i.e., filter my package id / date
-    let records: Vec<Download> = state
+    let package_id = path.clone();
+
+    let mut package_index_path = state.path.clone();
+    package_index_path.push("packages");
+    package_index_path.push(&package_id);
+
+    let package = match open_package(package_index_path.as_path(), None) {
+        Ok(package) => package,
+        Err(_) => {
+            return Ok(HttpResponse::NotFound()
+                .content_type("application/json")
+                .json(json!({ "message": "Package not found." })))
+        }
+    };
+
+    Ok(HttpResponse::Ok()
+        .content_type("application/json")
+        .json(json!({
+            "today": database.query_package_download_count_since(&package, Duration::days(1))?,
+            "lastWeek": database.query_package_download_count_since(&package, Duration::days(7))?,
+            "last30Days": database.query_package_download_count_since(&package, Duration::days(30))?,
+            "thisVersion": database.query_package_version_download_count(&package)?,
+            "allTime": database.query_package_download_count(&package)? })))
+}
+
+pub fn repo_stats(state: web::Data<ServerState>) -> Result<HttpResponse, actix_web::error::Error> {
+    let limit = 5;
+    let days = 30;
+
+    let downloads_since: Vec<serde_json::Value> = (&state
         .database
-        .query_downloads()
-        .unwrap()
-        .into_iter()
-        .map(|rec| Download::from(rec))
+        .query_top_downloads_since(limit, Duration::days(days))?)
+        .iter()
+        .map(|download| json!({&download.package_id: &download.count}))
         .collect();
 
-    for record in records {
-        info!("{}", record);
-    }
+    let downloads_all: Vec<serde_json::Value> = (&state.database.query_top_downloads(limit)?)
+        .iter()
+        .map(|download| json!({&download.package_id: &download.count}))
+        .collect();
 
-    HttpResponse::Ok()
+    Ok(HttpResponse::Ok()
+        .content_type("application/json")
+        .json(json!({
+            "packagesToday": &state.database.query_distinct_downloads_since(Duration::days(1))?,
+            format!("top{}Packages{}Days", limit, days): downloads_since,
+            format!("top{}PackagesAllTime", limit): downloads_all,
+        })))
 }
 
 pub fn virtuals_index(state: web::Data<ServerState>) -> impl Responder {

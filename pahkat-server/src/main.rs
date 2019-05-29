@@ -17,7 +17,7 @@ mod watcher;
 use database::Database;
 use handlers::{
     download_package, package_stats, packages_index, packages_package_index, repo_index,
-    virtuals_index, virtuals_package_index,
+    repo_stats, virtuals_index, virtuals_package_index,
 };
 use pahkat_common::*;
 use watcher::*;
@@ -57,6 +57,7 @@ fn run_server(path: &Path, bind: &str, port: &str) {
         App::new()
             .data(state.clone())
             .service(web::resource("/index.json").route(web::get().to(repo_index)))
+            .service(web::resource("/repo/stats").route(web::get().to(repo_stats)))
             .service(web::resource("/packages/index.json").route(web::get().to(packages_index)))
             .service(
                 web::resource("/packages/{packageId}/index.json")

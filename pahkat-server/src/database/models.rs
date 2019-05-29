@@ -1,4 +1,5 @@
 use chrono::naive::NaiveDateTime;
+use diesel::sql_types::{BigInt, Text};
 
 use super::schema::downloads;
 
@@ -11,6 +12,14 @@ pub struct Download {
     pub package_version: String,
 
     pub timestamp: NaiveDateTime,
+}
+
+#[derive(QueryableByName, Debug)]
+pub struct PackageCount {
+    #[sql_type = "Text"]
+    pub package_id: String,
+    #[sql_type = "BigInt"]
+    pub count: i64,
 }
 
 #[derive(Insertable, Debug)]
