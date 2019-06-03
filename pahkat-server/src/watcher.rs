@@ -43,7 +43,7 @@ pub struct Watcher {
 impl Watcher {
     pub fn new(path: &Path) -> Result<Self, WatcherError> {
         let path_display = path.display();
-        let glob_expression = format!("{}/*/*/index.json", path_display);
+        let glob_expression = format!("{}/*/*/index*.json", path_display);
         if !path.is_dir() {
             return Err(WatcherError::IllegalPath(path.display().to_string()));
         }
