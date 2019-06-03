@@ -18,6 +18,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Repository"
+  /repo/stats:
+    get:
+      operationId: repositoryStatistics
+      summary: Repository Statistics
+      description: Statistics about top package downloads in the repository.
+      responses:
+        200:
+          description: a set of repository statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepositoryStats"
+        500:
+          description: failure to retrieve information from the database
   /packages/index.json:
     get:
       operationId: packagesIndex
@@ -61,8 +75,7 @@ paths:
       get:
         operationId: download
         summary: Download package installer
-        description: >
-          Redirects to a url to download the package installer
+        description: Redirects to a url to download the package installer
         responses:
           302:
             description: package installer url
@@ -72,6 +85,20 @@ paths:
               application/json:
                 schema:
                   $ref: "#/components/schemas/Error"
+  /packages/{packageId}/stats:
+    get:
+      operationId: packageStatistics
+      summary: Package Statistics
+      description: Statistics about package downloads.
+      responses:
+        200:
+          description: a set of package statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackageStats"
+        500:
+          description: failure to retrieve information from the database
   /virtuals/index.json:
     get:
       operationId: virtualsIndex
@@ -197,6 +224,8 @@ components:
         url:
           type: string
           format: uri
+    RepositoryStats:
+      type: object
     Packages:
       type: object
       required:
@@ -275,6 +304,8 @@ components:
             - $ref: "#/components/schemas/TarballInstaller"
           discriminator:
             propertyName: "@type"
+    PackageStats:
+      type: object
     TarballInstaller:
       type: object
       required:
