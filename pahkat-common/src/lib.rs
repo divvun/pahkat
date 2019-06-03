@@ -132,7 +132,7 @@ fn write_repo_index_meta<T: ProgressOutput>(repo_path: &Path, repo_index: &Repos
     file.write_all(&[b'\n']).unwrap();
 }
 
-pub fn generate_repo_index_packages<T: ProgressOutput>(
+fn generate_repo_index_packages<T: ProgressOutput>(
     cur_dir: &Path,
     repo: &Repository,
     channel: Option<&str>,
