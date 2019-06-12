@@ -1,0 +1,22 @@
+trigger:
+- master
+
+jobs:
+- job: 'Windows'
+  pool:
+    vmImage: 'vs2017-win2016'
+  steps:
+  - bash: |
+      set -e
+      curl -sLo rustup-init.exe https://win.rustup.rs/
+      ./rustup-init.exe -y --default-host=i686-pc-windows-msvc --default-toolchain=nightly-i686-pc-windows-msvc
+      git clone https://github.com/divvun/pahkat.git ..\pahkat
+    displayName: 'Install prerequisites'
+  - powershell: |
+      cargo build --release
+    displayName: 'Build'
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathtoPublish: '$(System.DefaultWorkingDirectory)/target/release/pahkat_client.dll'
+      artifactName: windows
+    displayName: 'Publish artifact'
