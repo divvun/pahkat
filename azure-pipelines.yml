@@ -10,7 +10,7 @@ jobs:
       set -e
       curl -sLo rustup-init.exe https://win.rustup.rs/
       ./rustup-init.exe -y --default-host=i686-pc-windows-msvc --default-toolchain=nightly-i686-pc-windows-msvc
-      git clone https://github.com/divvun/pahkat.git ..\pahkat
+      git clone https://github.com/divvun/pahkat.git ../pahkat
     displayName: 'Install prerequisites'
   - powershell: |
       cargo build --release
