@@ -1,6 +1,5 @@
 trigger:
 - master
-- feature/ci
 
 jobs:
 - job: 'Windows'
