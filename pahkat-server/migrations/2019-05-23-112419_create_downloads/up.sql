@@ -5,6 +5,6 @@ CREATE TABLE downloads (
   timestamp DATETIME NOT NULL
 );
 
-CREATE INDEX idx_package_id ON downloads (package_id);
-CREATE INDEX idx_package_package_version ON downloads (package_version);
-CREATE INDEX idx_timestamp ON downloads (timestamp);
+CREATE INDEX idx_downloads_package_id ON downloads (package_id);
+CREATE INDEX idx_downloads_package_package_version ON downloads (package_version);
+CREATE INDEX idx_downloads_timestamp ON downloads (timestamp);

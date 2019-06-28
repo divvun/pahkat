@@ -31,3 +31,12 @@ pub struct NewDownload {
 
     pub timestamp: NaiveDateTime,
 }
+
+#[derive(Queryable, Debug)]
+pub struct User {
+    pub id: Vec<u8>,
+
+    pub username: String,
+
+    pub token: Vec<u8>,
+}
