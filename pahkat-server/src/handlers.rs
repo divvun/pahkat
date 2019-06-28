@@ -168,12 +168,12 @@ pub fn repo_stats(state: web::Data<ServerState>) -> Result<HttpResponse, actix_w
         .database
         .query_top_downloads_since(limit, Duration::days(days))?)
         .iter()
-        .map(|download| json!({&download.package_id: &download.count}))
+        .map(|download| json!({download.package_id.clone(): &download.count}))
         .collect();
 
     let downloads_all: Vec<serde_json::Value> = (&state.database.query_top_downloads(limit)?)
         .iter()
-        .map(|download| json!({&download.package_id: &download.count}))
+        .map(|download| json!({download.package_id.clone(): &download.count}))
         .collect();
 
     Ok(HttpResponse::Ok()
