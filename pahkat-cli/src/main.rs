@@ -11,8 +11,8 @@ use termcolor::Color;
 
 use cli::progress;
 use commands::{
-    package_init, package_macos_installer, package_tarball_installer, package_windows_installer,
-    repo_init, virtual_init,
+    installer::{package_macos_installer, package_tarball_installer, package_windows_installer},
+    package_init, repo_init, virtual_init,
 };
 
 use pahkat_common::{repo_index, ProgressOutput};
