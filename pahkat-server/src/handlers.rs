@@ -12,7 +12,7 @@ use crate::ServerState;
 use pahkat_common::open_package;
 use pahkat_types::Downloadable;
 
-use crate::database::models::NewDownload;
+use pahkat_common::database::models::NewDownload;
 
 fn read_file(path: &str) -> std::io::Result<String> {
     let file = File::open(path)?;

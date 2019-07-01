@@ -40,3 +40,13 @@ pub struct User {
 
     pub token: Vec<u8>,
 }
+
+/*
+#[derive(Insertable, Debug)]
+#[table_name = "users"]
+pub struct NewUser {
+    pub username: String,
+
+    pub token: Vec<u8>,
+}
+*/

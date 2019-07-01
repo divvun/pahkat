@@ -1,25 +1,20 @@
 use std::env;
 use std::path::{Path, PathBuf};
 
-#[macro_use]
-extern crate diesel;
-
 use actix_web::{web, App, HttpServer};
 use clap::{crate_version, App as CliApp, AppSettings, Arg, SubCommand};
 use directories::ProjectDirs;
 use log::{error, info, warn};
 
-mod database;
 mod handlers;
-mod models;
 mod watcher;
 
-use database::Database;
 use handlers::{
     download_package, package_stats, packages_index, packages_package_index, repo_index,
     repo_stats, virtuals_index, virtuals_package_index,
 };
 use pahkat_common::*;
+use pahkat_common::database::Database;
 use watcher::*;
 
 #[derive(Clone)]

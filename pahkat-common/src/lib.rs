@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate diesel;
+
 use std::collections::BTreeMap;
 use std::fmt;
 use std::fs;
@@ -8,6 +11,9 @@ use std::path::Path;
 use serde::Serialize;
 
 use pahkat_types::*;
+
+pub mod database;
+pub mod models;
 
 #[macro_export]
 macro_rules! ld_type {
