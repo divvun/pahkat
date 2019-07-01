@@ -140,6 +140,10 @@ LIMIT ?
             .execute(&connection)?)
     }
 
+    pub fn create_user() {
+        //let connection = self.pool.get()?;
+    }
+
     fn get_bound(duration: Duration) -> NaiveDateTime {
         let now = Utc::now().naive_utc();
         now.checked_sub_signed(duration)

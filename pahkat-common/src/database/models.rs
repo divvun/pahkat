@@ -1,7 +1,7 @@
 use chrono::naive::NaiveDateTime;
 use diesel::sql_types::{BigInt, Text};
 
-use super::schema::downloads;
+use super::schema::{downloads, users};
 
 #[derive(Queryable, Debug)]
 pub struct Download {
@@ -41,7 +41,6 @@ pub struct User {
     pub token: Vec<u8>,
 }
 
-/*
 #[derive(Insertable, Debug)]
 #[table_name = "users"]
 pub struct NewUser {
@@ -49,4 +48,3 @@ pub struct NewUser {
 
     pub token: Vec<u8>,
 }
-*/

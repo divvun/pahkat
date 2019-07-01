@@ -18,11 +18,15 @@ table! {
 table! {
     users (id) {
         id -> Binary,
-        name -> Text,
+        username -> Text,
         token -> Binary,
     }
 }
 
 joinable!(user_access -> users (user_id));
 
-allow_tables_to_appear_in_same_query!(downloads, user_access, users,);
+allow_tables_to_appear_in_same_query!(
+    downloads,
+    user_access,
+    users,
+);

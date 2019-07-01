@@ -19,6 +19,7 @@ use crate::cli::{
 };
 
 pub mod installer;
+pub mod db;
 
 pub fn request_package_data(cur_dir: &Path) -> Option<Package> {
     let package_id = prompt_line("Package identifier", "").unwrap();
