@@ -8,11 +8,11 @@ use chrono::Duration;
 use log::error;
 use serde_json::json;
 
-use crate::ServerState;
+use pahkat_common::database::models::NewDownload;
 use pahkat_common::open_package;
 use pahkat_types::Downloadable;
 
-use pahkat_common::database::models::NewDownload;
+use crate::ServerState;
 
 fn read_file(path: &str) -> std::io::Result<String> {
     let file = File::open(path)?;

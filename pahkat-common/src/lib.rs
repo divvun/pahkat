@@ -10,7 +10,7 @@ use std::path::Path;
 
 use serde::Serialize;
 
-use pahkat_types::*;
+use pahkat_types::{Package, Packages, Repository, RepositoryAgent, Virtual, Virtuals};
 
 pub mod database;
 pub mod models;

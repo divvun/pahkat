@@ -6,16 +6,17 @@ use clap::{crate_version, App as CliApp, AppSettings, Arg, SubCommand};
 use directories::ProjectDirs;
 use log::{error, info, warn};
 
-mod handlers;
-mod watcher;
+use pahkat_common::database::Database;
+use pahkat_common::ProgressOutput;
+use watcher::Watcher;
 
 use handlers::{
     download_package, package_stats, packages_index, packages_package_index, repo_index,
     repo_stats, virtuals_index, virtuals_package_index,
 };
-use pahkat_common::database::Database;
-use pahkat_common::*;
-use watcher::*;
+
+mod handlers;
+mod watcher;
 
 #[derive(Clone)]
 pub struct ServerState {

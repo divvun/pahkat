@@ -1,13 +1,14 @@
 #![allow(deprecated)] // until 1.0
 
-use std::cmp::*;
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
+pub use self::repo::{Repository, RepositoryAgent};
+
 pub mod repo;
-pub use self::repo::*;
 
 #[cfg(target_os = "macos")]
 pub const OS: &str = "macos";

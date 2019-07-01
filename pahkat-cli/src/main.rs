@@ -3,21 +3,29 @@ extern crate clap;
 extern crate serde;
 extern crate serde_json;
 
-use clap::{App, AppSettings, Arg, SubCommand};
 use std::collections::BTreeMap;
 use std::env;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
+
+use clap::{App, AppSettings, Arg, SubCommand};
 use termcolor::Color;
 
-mod cli;
+use cli::{
+    parse_platform_list, progress, prompt_line, prompt_multi_select, prompt_question, prompt_select,
+};
+use pahkat_common::{
+    index_fn, ld_type, open_package, open_repo, repo_index, OpenIndexError, ProgressOutput,
+    LD_CONTEXT,
+};
+use pahkat_types::{
+    InstallTarget, Installer, MacOSInstaller, MacOSPackageRef, MacOSPathRef, Package, RegistryKey,
+    Repository, RepositoryAgent, TarballInstaller, Virtual, VirtualTarget, WindowsInstaller, OS,
+};
 
-use cli::*;
-use pahkat_common::ld_type;
-use pahkat_common::*;
-use pahkat_types::*;
+mod cli;
 
 struct StderrOutput;
 
