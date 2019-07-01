@@ -9,9 +9,11 @@ use pahkat_types::Package;
 
 pub mod models;
 pub mod schema;
+pub mod user;
 
-use self::models::{NewDownload, PackageCount};
-use self::schema::downloads;
+use self::models::{NewDownload, NewUser, PackageCount};
+use self::schema::{downloads, users};
+use crate::DatabaseError;
 
 #[derive(Clone)]
 pub struct Database {
@@ -140,8 +142,12 @@ LIMIT ?
             .execute(&connection)?)
     }
 
-    pub fn create_user() {
-        //let connection = self.pool.get()?;
+    pub fn create_user(&self, user: NewUser) -> std::result::Result<usize, DatabaseError> {
+        let connection = self.pool.get()?;
+
+        Ok(diesel::insert_into(users::table)
+            .values(&user)
+            .execute(&connection)?)
     }
 
     fn get_bound(duration: Duration) -> NaiveDateTime {

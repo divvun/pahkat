@@ -18,8 +18,8 @@ use crate::cli::{
     parse_platform_list, progress, prompt_line, prompt_multi_select, prompt_question, prompt_select,
 };
 
-pub mod installer;
 pub mod db;
+pub mod installer;
 
 pub fn request_package_data(cur_dir: &Path) -> Option<Package> {
     let package_id = prompt_line("Package identifier", "").unwrap();

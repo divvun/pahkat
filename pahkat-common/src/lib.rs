@@ -6,9 +6,10 @@ use std::fmt;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
+use directories::ProjectDirs;
 
 use pahkat_types::{Package, Packages, Repository, RepositoryAgent, Virtual, Virtuals};
 
@@ -39,6 +40,25 @@ pub enum OpenIndexError {
     JsonError(serde_json::Error),
 }
 
+#[derive(Debug)]
+pub enum DatabaseError {
+    PoolError(r2d2::Error),
+    OperationError(diesel::result::Error),
+    InputError(String, uuid::parser::ParseError),
+}
+
+impl From<diesel::result::Error> for DatabaseError {
+    fn from(item: diesel::result::Error) -> Self {
+        DatabaseError::OperationError(item)
+    }
+}
+
+impl From<r2d2::Error> for DatabaseError {
+    fn from(item: r2d2::Error) -> Self {
+        DatabaseError::PoolError(item)
+    }
+}
+
 impl fmt::Display for OpenIndexError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -46,6 +66,16 @@ impl fmt::Display for OpenIndexError {
             OpenIndexError::JsonError(ref x) => write!(f, "{}", x),
         }
     }
+}
+
+pub fn db_path() -> PathBuf {
+    let mut db_path = ProjectDirs::from("no", "uit", "pahkat-server")
+        .expect("No home directory found")
+        .data_dir()
+        .to_owned();
+    db_path.push("db.sqlite3");
+
+    db_path
 }
 
 pub fn open_repo(path: &Path) -> Result<Repository, OpenIndexError> {

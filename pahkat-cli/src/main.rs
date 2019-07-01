@@ -12,6 +12,7 @@ use termcolor::Color;
 use cli::progress;
 use commands::{
     installer::{package_macos_installer, package_tarball_installer, package_windows_installer},
+    db::create_user,
     package_init, repo_init, virtual_init,
 };
 
@@ -295,6 +296,31 @@ fn main() {
                         .long("yes")
                     ))
         )
+        .subcommand(SubCommand::with_name("database")
+            .about("Access the database")
+            .subcommand(SubCommand::with_name("user")
+                .about("Manage users")
+                .subcommand(SubCommand::with_name("create")
+                    .about("Create a user")
+                    .arg(Arg::with_name("username")
+                        .value_name("USERNAME")
+                        .help("The user name")
+                        .short("n")
+                        .long("username")
+                        .takes_value(true)
+                        .required(true)
+                    )
+                    .arg(Arg::with_name("token")
+                        .value_name("TOKEN")
+                        .help("The API access token for package uploads")
+                        .short("t")
+                        .long("token")
+                        .takes_value(true)
+                        .required(true)
+                    )
+                )
+            )
+        )
         .get_matches();
 
     let output = StderrOutput;
@@ -407,7 +433,7 @@ fn main() {
                 }
                 _ => {}
             }
-        }
+        },
         ("repo", Some(matches)) => {
             let current_dir = &env::current_dir().unwrap();
             let path: &Path = matches
@@ -419,7 +445,22 @@ fn main() {
                 ("index", _) => repo_index(&path, &output),
                 _ => {}
             }
-        }
+        },
+        ("database", Some(matches)) => match matches.subcommand() {
+            ("user", Some(matches)) => match matches.subcommand() {
+                ("create", Some(matches)) => {
+                    let username = matches
+                        .value_of("username").unwrap();
+
+                    let token = matches
+                        .value_of("token").unwrap();
+
+                    create_user(username, token)
+                },
+                _ => {}
+            },
+            _ => {}
+        },
         _ => {}
     }
 }
