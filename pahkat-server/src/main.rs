@@ -1,7 +1,7 @@
 use std::env;
 use std::path::{Path, PathBuf};
 
-use actix_web::{web, App, HttpServer};
+use actix_web::{middleware, web, App, HttpServer};
 use clap::{crate_version, App as CliApp, AppSettings, Arg, SubCommand};
 use directories::ProjectDirs;
 use log::{error, info, warn};
@@ -13,8 +13,8 @@ use handlers::{
     download_package, package_stats, packages_index, packages_package_index, repo_index,
     repo_stats, virtuals_index, virtuals_package_index,
 };
-use pahkat_common::*;
 use pahkat_common::database::Database;
+use pahkat_common::*;
 use watcher::*;
 
 #[derive(Clone)]
@@ -51,6 +51,7 @@ fn run_server(path: &Path, bind: &str, port: &str) {
     HttpServer::new(move || {
         App::new()
             .data(state.clone())
+            .wrap(middleware::Logger::default())
             .service(web::resource("/index.json").route(web::get().to(repo_index)))
             .service(web::resource("/repo/stats").route(web::get().to(repo_stats)))
             .service(web::resource("/packages/index.json").route(web::get().to(packages_index)))
