@@ -1,7 +1,8 @@
-use dialoguer::{theme::ColorfulTheme, Checkboxes, Confirmation, Input, Select};
 use std::collections::BTreeMap;
 use std::io;
 use std::io::Write;
+
+use dialoguer::{theme::ColorfulTheme, Checkboxes, Confirmation, Input, Select};
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 pub fn progress(color: Color, first: &str, rest: &str) -> Result<(), io::Error> {
