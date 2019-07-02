@@ -35,7 +35,6 @@ hashbrown = { version = "0.5.0", features = ["serde"] }
 is_executable = "0.1.2"
 
 # Prefix feature
-rhai = { version = "0.9", optional = true }
 xz2 = { version = "0.1.6", optional = true }
 rusqlite = { version = "0.19.0", features = ["bundled"], optional = true }
 tar = { version = "0.4.26", optional = true }
@@ -55,5 +54,5 @@ winapi = { version = "0.3", features = ["shellapi"] }
 winreg = { git = "https://github.com/bbqsrc/winreg-rs", branch = "master" }
 
 [features]
-prefix = ["rhai", "tar", "xz2", "rusqlite"]
+prefix = ["tar", "xz2", "rusqlite"]
 binaries = ["clap", "termcolor", "indicatif"]

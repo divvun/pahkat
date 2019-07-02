@@ -11,8 +11,6 @@ extern crate tempdir;
 extern crate dirs;
 
 #[cfg(feature = "prefix")]
-extern crate rhai;
-#[cfg(feature = "prefix")]
 extern crate xz2;
 #[cfg(feature = "prefix")]
 extern crate tar;

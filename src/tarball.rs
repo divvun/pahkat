@@ -7,14 +7,7 @@ use std::ffi::OsStr;
 use xz2::read::XzDecoder;
 use std::fs::{remove_file, read_dir, remove_dir, create_dir_all, File};
 use std::cell::RefCell;
-use rhai::RegisterFn;
 use ::{PackageStatusError, PackageStatus, StoreConfig};
-use rusqlite;
-use serde_json;
-use semver;
-use tar;
-use std;
-use rhai;
 
 pub struct TarballPackageStore {
     conn: RefCell<rusqlite::Connection>,
@@ -105,29 +98,6 @@ impl TarballPackageStore {
             record.save(tx).unwrap();
         };
 
-        let receipt = self.create_receipts().join(format!("{}.rhai", &package.id));
-
-        if receipt.exists() {
-            fn rhai_println<T: std::fmt::Display>(x: &mut T) -> () {
-                println!("{}", x)
-            }
-            
-            let mut engine = rhai::Engine::new();
-            let mut scope = rhai::Scope::new();
-            let mut chai_str = String::new();
-            File::open(receipt).unwrap().read_to_string(&mut chai_str).unwrap();
-
-            engine.register_fn("println", rhai_println as fn(x: &mut String)->());
-
-            if let Err(err) = engine.consume_with_scope(&mut scope, &chai_str) {
-                println!("An error occurred initialising receipt: {:?}", err);
-            }
-
-            if let Err(err) = engine.eval_with_scope::<bool>(&mut scope, "install()") {
-                println!("An error occurred running install() in receipt: {:?}", err);
-            }
-        };
-
         Ok(())
     }
 
@@ -138,29 +108,6 @@ impl TarballPackageStore {
             match PackageRecord::find_by_id(&conn, &package.id) {
                 None => return Err(()),
                 Some(v) => v
-            }
-        };
-
-        let receipt = self.create_receipts().join(format!("{}.rhai", &package.id));
-
-        if receipt.exists() {
-            fn rhai_println<T: std::fmt::Display>(x: &mut T) -> () {
-                println!("{}", x)
-            }
-            
-            let mut engine = rhai::Engine::new();
-            let mut scope = rhai::Scope::new();
-            let mut chai_str = String::new();
-            File::open(receipt).unwrap().read_to_string(&mut chai_str).unwrap();
-
-            engine.register_fn("println", rhai_println as fn(x: &mut String)->());
-
-            if let Err(err) = engine.consume_with_scope(&mut scope, &chai_str) {
-                println!("An error occurred initialising receipt: {:?}", err);
-            }
-
-            if let Err(err) = engine.eval_with_scope::<bool>(&mut scope, "uninstall()") {
-                println!("An error occurred running uninstall() in receipt: {:?}", err);
             }
         };
 
