@@ -3,10 +3,9 @@ use std::path::{Path, PathBuf};
 
 use actix_web::{middleware, web, App, HttpServer};
 use clap::{crate_version, App as CliApp, AppSettings, Arg, SubCommand};
-use directories::ProjectDirs;
 use log::{error, info, warn};
 
-use pahkat_common::database::Database;
+use pahkat_common::{db_path, database::Database};
 use pahkat_common::ProgressOutput;
 use watcher::Watcher;
 
@@ -29,13 +28,7 @@ pub struct ServerState {
 fn run_server(path: &Path, bind: &str, port: &str) {
     let system = actix::System::new("páhkat-server");
 
-    let mut db_path = ProjectDirs::from("no", "uit", "pahkat-server")
-        .expect("No home directory found")
-        .data_dir()
-        .to_owned();
-    db_path.push("db.sqlite3");
-
-    let database = match Database::new(db_path.to_str().unwrap()) {
+    let database = match Database::new(db_path().as_path().to_str().unwrap()) {
         Ok(database) => database,
         Err(e) => {
             panic!("Failed to create database: {}", e);
