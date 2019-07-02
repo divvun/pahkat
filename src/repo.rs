@@ -6,12 +6,11 @@ use pahkat_types::{
     Packages,
     Virtuals,
     PackageMap,
-    VirtualMap,
+    VirtualRefMap,
     Repository as RepositoryMeta
 };
 use url::Url;
 use std::path::Path;
-use crate::AbsolutePackageKey;
 use std::time::SystemTime;
 use std::fs::{self, File};
 
@@ -164,7 +163,7 @@ impl Repository {
         &self.packages.packages
     }
 
-    pub fn virtuals(&self) -> &VirtualMap {
+    pub fn virtuals(&self) -> &VirtualRefMap {
         &self.virtuals.virtuals
     }
 }

@@ -4,7 +4,7 @@ use std::io::{self, BufWriter, Write};
 use std::fs::File;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread::{self, JoinHandle};
+use std::thread::JoinHandle;
 
 pub trait Download {
     fn download<F>(&self, dir_path: &Path, progress: Option<F>) -> Result<DownloadDisposable, DownloadError>
@@ -72,7 +72,7 @@ impl Download for Package {
 
         let url_str = installer.url();
         let url = url::Url::parse(&url_str).map_err(|_| DownloadError::InvalidUrl)?;
-        let mut cancel_token = disposable.cancel_token();
+        let cancel_token = disposable.cancel_token();
 
         let handle = std::thread::spawn(move || {
             let mut res = match reqwest::get(&url_str) {

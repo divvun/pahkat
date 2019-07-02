@@ -87,7 +87,7 @@ pub struct PackageAction {
 }
 
 pub struct TransactionDisposable {
-    is_cancelled: Arc<AtomicBool>,
+    // is_cancelled: Arc<AtomicBool>,
     // result: Option<Result<PathBuf, DownloadError>>,
     // handle: Option<JoinHandle<Result<PathBuf, DownloadError>>>
 }
@@ -126,7 +126,7 @@ impl PackageTransaction {
                         dependency.id == action.id && action.action == PackageActionType::Uninstall
                     });
                     match contradiction {
-                        Some(a) => {
+                        Some(_) => {
                             return Err(PackageTransactionError::ActionContradiction(package_key.to_string()))
                         },
                         None => {
@@ -205,7 +205,7 @@ impl PackageTransaction {
             ()
         });
 
-        handle.join();
+        handle.join().expect("handle failed to join");
     }
 
     pub fn cancel(&self) -> bool {
@@ -373,7 +373,7 @@ impl MacOSPackageStore {
 
     fn find_package_dependencies_impl(
         &self,
-        key: &AbsolutePackageKey,
+        _key: &AbsolutePackageKey,
         package: &Package,
         target: InstallTarget,
         level: u8,
@@ -456,7 +456,7 @@ impl MacOSPackageStore {
             Some(v) => v
         };
 
-        let mut disposable = package.download(&self.download_path(&installer.url()), Some(progress))?;
+        let disposable = package.download(&self.download_path(&installer.url()), Some(progress))?;
         disposable.wait()
     }
 

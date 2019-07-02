@@ -139,16 +139,16 @@ pub enum PackageStatus {
     Skipped
 }
 
-impl PackageStatus {
-    fn to_u8(&self) -> u8 {
-        match self {
-            PackageStatus::NotInstalled => 0,
-            PackageStatus::UpToDate => 1,
-            PackageStatus::RequiresUpdate => 2,
-            PackageStatus::Skipped => 3
-        }
-    }
-}
+// impl PackageStatus {
+//     fn to_u8(&self) -> u8 {
+//         match self {
+//             PackageStatus::NotInstalled => 0,
+//             PackageStatus::UpToDate => 1,
+//             PackageStatus::RequiresUpdate => 2,
+//             PackageStatus::Skipped => 3
+//         }
+//     }
+// }
 
 impl fmt::Display for PackageStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -309,7 +309,6 @@ impl std::default::Default for StoreConfig {
     }
 }
 
-// TODO no unwrap
 impl StoreConfig {
     pub fn load_or_default(save_changes: bool) -> StoreConfig {
         let res = StoreConfig::load(&default_config_path().join("config.json"), save_changes);

@@ -26,12 +26,6 @@ use crate::{
 use pahkat_types::*;
 use std::sync::Arc;
 
-#[repr(C)]
-struct Repo {
-    url: *const c_char,
-    channel: *const c_char
-}
-
 macro_rules! safe_handle_mut {
     ($handle:ident) => {{
         if $handle.is_null() {
@@ -132,14 +126,14 @@ extern fn pahkat_config_set_repos(handle: *const MacOSPackageStore, repos: *cons
     let store = safe_handle!(handle);
     let repos = unsafe { CStr::from_ptr(repos).to_string_lossy() };
     let repos: Vec<RepoRecord> = serde_json::from_str(&repos).unwrap();
-    store.config().set_repos(repos);
+    store.config().set_repos(repos).unwrap();
 }
 
 #[no_mangle]
 extern fn pahkat_config_set_cache_path(handle: *const MacOSPackageStore, cache_path: *const c_char) {
     let store = safe_handle!(handle);
     let cache_path = unsafe { CStr::from_ptr(cache_path).to_string_lossy() };
-    store.config().set_cache_base_path(std::path::PathBuf::from(&*cache_path));
+    store.config().set_cache_base_path(std::path::PathBuf::from(&*cache_path)).unwrap();
 }
 
 #[no_mangle]
@@ -154,7 +148,8 @@ extern fn pahkat_client_free(handle: *const MacOSPackageStore) {
         return;
     }
     
-    unsafe { Arc::from_raw(safe_handle!(handle)); }
+    let handle = safe_handle!(handle);
+    unsafe { Arc::from_raw(handle); }
 }
 
 #[no_mangle]
@@ -163,7 +158,8 @@ extern fn pahkat_str_free(handle: *mut c_char) {
         return;
     }
 
-    unsafe { CString::from_raw(safe_handle_mut!(handle)); }
+    let handle = safe_handle_mut!(handle);
+    unsafe { CString::from_raw(handle); }
 }
 
 #[no_mangle]
@@ -195,7 +191,7 @@ unsafe impl Send for DownloadPackageKey {}
 extern fn pahkat_download_package(
     handle: *const MacOSPackageStore,
     raw_package_key: *const c_char,
-    target: u8,
+    _target: u8,
     progress: extern fn(*const c_char, u64, u64) -> (),
     error: *mut *const PahkatError
 ) -> u32 {
@@ -210,7 +206,7 @@ extern fn pahkat_download_package(
 
     let package_key = unsafe { CStr::from_ptr(raw_package_key) }.to_string_lossy();
     let package_key = AbsolutePackageKey::from_string(&package_key).unwrap();
-    let package = match store.resolve_package(&package_key) {
+    let _package = match store.resolve_package(&package_key) {
         Some(v) => v,
         None => {
             eprintln!("Resolve package error");
@@ -229,7 +225,7 @@ extern fn pahkat_download_package(
         progress(download_package_key.0, cur, max);
     }) {
         Ok(_) => 0,
-        Err(e) => {
+        Err(_e) => {
             let code = ErrorCode::PackageDownloadError.to_u32();
             set_error(error,
                 code,
@@ -281,7 +277,7 @@ extern fn pahkat_status(handle: *const MacOSPackageStore, package_key: *const c_
 
     let pkg_status = match store.status(&package_key, InstallTarget::System) {
         Ok(v) => v,
-        Err(e) => {
+        Err(_e) => {
             unsafe { *error = 10; }
             return make_json(PackageStatus::NotInstalled, InstallTarget::System);
         }
@@ -296,7 +292,7 @@ extern fn pahkat_status(handle: *const MacOSPackageStore, package_key: *const c_
 
     let pkg_status = match store.status(&package_key, InstallTarget::User) {
         Ok(v) => v,
-        Err(e) => {
+        Err(_e) => {
             unsafe { *error = 10; }
             return make_json(PackageStatus::NotInstalled, InstallTarget::System);
         }
@@ -382,20 +378,20 @@ impl Drop for PahkatError {
 
 #[no_mangle]
 extern fn pahkat_validate_package_transaction(
-    handle: *const MacOSPackageStore,
-    transaction: *const PackageTransaction,
-    error: *mut *const PahkatError
+    _handle: *const MacOSPackageStore,
+    _transaction: *const PackageTransaction,
+    _error: *mut *const PahkatError
 ) -> u32 {
     0
 }
 
 #[no_mangle]
 extern fn pahkat_run_package_transaction(
-    handle: *const MacOSPackageStore,
+    _handle: *const MacOSPackageStore,
     transaction: *mut PackageTransaction,
     tx_id: u32,
     progress: extern fn(u32, *const c_char, u32),
-    error: *mut *const PahkatError
+    _error: *mut *const PahkatError
 ) -> u32 {
     println!("pahkat_run_package_transaction");
     let transaction = safe_handle_mut!(transaction);
@@ -411,9 +407,9 @@ extern fn pahkat_run_package_transaction(
 
 #[no_mangle]
 extern fn pahkat_package_transaction_actions(
-    handle: *const MacOSPackageStore,
+    _handle: *const MacOSPackageStore,
     transaction: *const PackageTransaction,
-    error: *mut *const PahkatError
+    _error: *mut *const PahkatError
 ) -> *const c_char {
     let transaction = safe_handle!(transaction);
     
@@ -428,7 +424,7 @@ extern fn pahkat_semver_is_valid(version_str: *const c_char) -> u8 {
     let version_string = unsafe { CStr::from_ptr(version_str) }.to_string_lossy();
 
     match semver::Version::parse(&version_string) {
-        Ok(version) => 1,
+        Ok(_version) => 1,
         _ => {
             eprintln!("pahkat_semver_is_valid: failed to parse version string: {}", &version_string);
             0
@@ -467,10 +463,10 @@ extern fn pahkat_semver_compare(lhs: *const c_char, rhs: *const c_char) -> i32 {
 }
 
 enum ErrorCode {
-    None,
+    // None,
     PackageDownloadError,
-    PackageDependencyError,
-    PackageActionContradiction,
+    // PackageDependencyError,
+    // PackageActionContradiction,
     PackageResolveError,
     PackageKeyError
 }
@@ -478,10 +474,10 @@ enum ErrorCode {
 impl ErrorCode {
     fn to_u32(&self) -> u32 {
         match self {
-            ErrorCode::None => 0,
+            // ErrorCode::None => 0,
             ErrorCode::PackageDownloadError => 1,
-            ErrorCode::PackageDependencyError => 2,
-            ErrorCode::PackageActionContradiction => 3,
+            // ErrorCode::PackageDependencyError => 2,
+            // ErrorCode::PackageActionContradiction => 3,
             ErrorCode::PackageResolveError => 4,
             ErrorCode::PackageKeyError => 5
         }

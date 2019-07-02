@@ -319,11 +319,11 @@ fn main() {
                     let package_ids = matches.values_of("package-id").expect("package-id to always exist");
                     let is_user = matches.is_present("user-target");
                     
-                    let config = StoreConfig::load_or_default();
-                    let repos = config.repos()
-                        .iter()
-                        .map(|record| Repository::from_url(&record.url, record.channel.clone()).unwrap())
-                        .collect::<Vec<_>>();
+                    let config = StoreConfig::load_or_default(true);
+                    // let repos = config.repos()
+                    //     .iter()
+                    //     .map(|record| Repository::from_url(&record.url, record.channel.clone()).unwrap())
+                    //     .collect::<Vec<_>>();
 
                     let store = Arc::new(MacOSPackageStore::new(config));
                     let target = match is_user {
@@ -380,7 +380,7 @@ fn main() {
                 },
                 ("init", Some(matches)) => {
                     let urls = matches.values_of("url").unwrap();
-                    let store = StoreConfig::load_or_default();
+                    let store = StoreConfig::load_or_default(true);
                     
                     match matches.value_of("cache-dir") {
                         Some(v) => { store.set_cache_base_path(std::path::PathBuf::from(v)).expect("set cache path"); },
@@ -395,7 +395,7 @@ fn main() {
                     }
                 },
                 ("list", Some(_matches)) => {
-                    let config = StoreConfig::load_or_default();
+                    let config = StoreConfig::load_or_default(true);
                     let repos = config.repos()
                         .iter()
                         .map(|record| Repository::from_url(&record.url, record.channel.clone()).unwrap())
