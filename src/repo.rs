@@ -6,7 +6,7 @@ use pahkat_types::{
     Packages,
     Virtuals,
     PackageMap,
-    VirtualRefMap,
+    VirtualMap,
     Repository as RepositoryMeta
 };
 use url::Url;
@@ -163,7 +163,7 @@ impl Repository {
         &self.packages.packages
     }
 
-    pub fn virtuals(&self) -> &VirtualRefMap {
+    pub fn virtuals(&self) -> &VirtualMap {
         &self.virtuals.virtuals
     }
 }
