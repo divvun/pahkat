@@ -1,13 +1,17 @@
-use std::path::{Path, PathBuf};
-use pahkat_types::{Package, Downloadable};
-use std::io::{self, BufWriter, Write};
+use pahkat_types::{Downloadable, Package};
 use std::fs::File;
-use std::sync::Arc;
+use std::io::{self, BufWriter, Write};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::thread::JoinHandle;
 
 pub trait Download {
-    fn download<F>(&self, dir_path: &Path, progress: Option<F>) -> Result<DownloadDisposable, DownloadError>
+    fn download<F>(
+        &self,
+        dir_path: &Path,
+        progress: Option<F>,
+    ) -> Result<DownloadDisposable, DownloadError>
     where
         F: Fn(u64, u64) -> () + Send + 'static;
 }
@@ -19,7 +23,7 @@ pub trait Download {
 pub struct DownloadDisposable {
     is_cancelled: Arc<AtomicBool>,
     result: Option<Result<PathBuf, DownloadError>>,
-    handle: Option<JoinHandle<Result<PathBuf, DownloadError>>>
+    handle: Option<JoinHandle<Result<PathBuf, DownloadError>>>,
 }
 
 impl DownloadDisposable {
@@ -27,7 +31,7 @@ impl DownloadDisposable {
         DownloadDisposable {
             is_cancelled: Arc::new(AtomicBool::new(false)),
             handle: None,
-            result: None
+            result: None,
         }
     }
 
@@ -48,17 +52,21 @@ impl DownloadDisposable {
         match self.handle.take() {
             Some(v) => match v.join() {
                 Ok(v) => return v,
-                Err(e) => panic!(e)
+                Err(e) => panic!(e),
             },
-            None => unreachable!()
+            None => unreachable!(),
         }
     }
 }
 
 impl Download for Package {
-    fn download<F>(&self, dir_path: &Path, progress: Option<F>) -> Result<DownloadDisposable, DownloadError>
+    fn download<F>(
+        &self,
+        dir_path: &Path,
+        progress: Option<F>,
+    ) -> Result<DownloadDisposable, DownloadError>
     where
-        F: Fn(u64, u64) -> () + Send + 'static
+        F: Fn(u64, u64) -> () + Send + 'static,
     {
         let mut disposable = DownloadDisposable::new();
 
@@ -67,7 +75,7 @@ impl Download for Package {
 
         let installer = match self.installer() {
             Some(v) => v,
-            None => return Err(DownloadError::NoUrl)
+            None => return Err(DownloadError::NoUrl),
         };
 
         let url_str = installer.url();
@@ -77,11 +85,11 @@ impl Download for Package {
         let handle = std::thread::spawn(move || {
             let mut res = match reqwest::get(&url_str) {
                 Ok(v) => v,
-                Err(e) => return Err(DownloadError::ReqwestError(e))
+                Err(e) => return Err(DownloadError::ReqwestError(e)),
             };
 
             if !res.status().is_success() {
-                return Err(DownloadError::HttpStatusFailure(res.status().as_u16()))
+                return Err(DownloadError::HttpStatusFailure(res.status().as_u16()));
             }
 
             let filename = &url.path_segments().unwrap().last().unwrap();
@@ -90,21 +98,24 @@ impl Download for Package {
             }
             let tmp_path = (&dir_path).join(&filename).to_path_buf();
             let file = File::create(&tmp_path).unwrap();
-        
+
             let mut buf_writer = BufWriter::new(file);
 
             let write_res = match progress {
                 Some(cb) => {
                     let len = {
-                        res.headers().get(CONTENT_LENGTH)
-                            .map(|ct_len| ct_len.to_str().unwrap_or("").parse::<u64>().unwrap_or(0u64))
+                        res.headers()
+                            .get(CONTENT_LENGTH)
+                            .map(|ct_len| {
+                                ct_len.to_str().unwrap_or("").parse::<u64>().unwrap_or(0u64)
+                            })
                             .unwrap_or(0u64)
                     };
                     res.copy_to(&mut ProgressWriter::new(buf_writer, len, cb, cancel_token))
-                },
-                None => res.copy_to(&mut buf_writer)
+                }
+                None => res.copy_to(&mut buf_writer),
             };
-            
+
             match write_res {
                 Ok(v) if v == 0 => {
                     return Err(DownloadError::EmptyFile);
@@ -112,13 +123,13 @@ impl Download for Package {
                 Err(e) => {
                     println!("{:?}", e);
                     return Err(DownloadError::UserCancelled);
-                },
+                }
                 _ => {}
             }
 
             Ok(tmp_path)
         });
-        
+
         disposable.handle = Some(handle);
         Ok(disposable)
     }
@@ -131,23 +142,30 @@ pub enum DownloadError {
     NoUrl,
     UserCancelled,
     ReqwestError(reqwest::Error),
-    HttpStatusFailure(u16)
+    HttpStatusFailure(u16),
 }
 
 struct ProgressWriter<W: Write, F>
-    where F: Fn(u64, u64) -> ()
+where
+    F: Fn(u64, u64) -> (),
 {
     writer: W,
     callback: F,
     is_cancelled: Arc<AtomicBool>,
     max_count: u64,
-    cur_count: u64
+    cur_count: u64,
 }
 
 impl<W: Write, F> ProgressWriter<W, F>
-    where F: Fn(u64, u64) -> ()
+where
+    F: Fn(u64, u64) -> (),
 {
-    fn new(writer: W, max_count: u64, callback: F, is_cancelled: Arc<AtomicBool>) -> ProgressWriter<W, F> {
+    fn new(
+        writer: W,
+        max_count: u64,
+        callback: F,
+        is_cancelled: Arc<AtomicBool>,
+    ) -> ProgressWriter<W, F> {
         (callback)(0, max_count);
 
         ProgressWriter {
@@ -155,7 +173,7 @@ impl<W: Write, F> ProgressWriter<W, F>
             callback,
             is_cancelled,
             max_count,
-            cur_count: 0
+            cur_count: 0,
         }
     }
 }
@@ -163,7 +181,8 @@ impl<W: Write, F> ProgressWriter<W, F>
 use std::io::ErrorKind;
 
 impl<W: Write, F> Write for ProgressWriter<W, F>
-    where F: Fn(u64, u64) -> ()
+where
+    F: Fn(u64, u64) -> (),
 {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         use std::cmp;
@@ -171,7 +190,7 @@ impl<W: Write, F> Write for ProgressWriter<W, F>
         if self.is_cancelled.load(Ordering::Relaxed) == true {
             return Err(io::Error::new(ErrorKind::Interrupted, "User cancelled"));
         }
-        
+
         let new_count = self.cur_count + buf.len() as u64;
         self.cur_count = cmp::min(new_count, self.max_count);
         (self.callback)(self.cur_count, self.max_count);

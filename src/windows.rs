@@ -1,35 +1,29 @@
 #![cfg(windows)]
-use pahkat_types::{
-    WindowsInstaller,
-    Installer,
-    Package,
-    Downloadable,
-    InstallTarget
-};
+use pahkat_types::{Downloadable, InstallTarget, Installer, Package, WindowsInstaller};
 //use {Package, PackageStatus, PackageStatusError, Installer};
-use std::path::{PathBuf, Path};
-use winreg::RegKey;
-use winreg::enums::*;
-use semver;
-use std::io;
 use super::{Repository, StoreConfig};
-use std::process::{self, Command};
-use std::ffi::{OsString};
-use url;
-use std::sync::{Arc, RwLock};
+use crate::*;
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
+use semver;
+use std::ffi::OsString;
+use std::io;
+use std::path::{Path, PathBuf};
+use std::process::{self, Command};
 use std::sync::atomic::{AtomicBool, Ordering};
-use crate::*;
+use std::sync::{Arc, RwLock};
+use url;
+use winreg::enums::*;
+use winreg::RegKey;
 
 // pub fn init(url: &str, cache_dir: &str) {
-//     let config = StoreConfig { 
+//     let config = StoreConfig {
 //         url: url.to_owned(),
 //         cache_dir: cache_dir.to_owned()
 //     };
-    
+
 //     let config_path = ::default_config_path().join("config.json");
-        
+
 //     if config_path.exists() {
 //         println!("Path already exists; aborting.");
 //         return;
@@ -41,14 +35,14 @@ use crate::*;
 pub struct PackageTransaction {
     store: Arc<WindowsPackageStore>,
     actions: Arc<Vec<PackageAction>>,
-    is_cancelled: Arc<AtomicBool>
+    is_cancelled: Arc<AtomicBool>,
 }
 
 impl PackageTransaction {
     pub fn new(
         store: Arc<WindowsPackageStore>,
-        actions: Vec<PackageAction>
-     ) -> Result<PackageTransaction, PackageTransactionError> {
+        actions: Vec<PackageAction>,
+    ) -> Result<PackageTransaction, PackageTransactionError> {
         let mut new_actions: Vec<PackageAction> = vec![];
 
         for action in actions.iter() {
@@ -62,10 +56,11 @@ impl PackageTransaction {
             };
 
             if action.action == PackageActionType::Install {
-                let dependencies = match store.find_package_dependencies(&action.id, &package, action.target) {
-                    Ok(d) => d,
-                    Err(e) => return Err(PackageTransactionError::Deps(e))
-                };
+                let dependencies =
+                    match store.find_package_dependencies(&action.id, &package, action.target) {
+                        Ok(d) => d,
+                        Err(e) => return Err(PackageTransactionError::Deps(e)),
+                    };
 
                 for dependency in dependencies.into_iter() {
                     let contradiction = actions.iter().find(|action| {
@@ -73,14 +68,16 @@ impl PackageTransaction {
                     });
                     match contradiction {
                         Some(a) => {
-                            return Err(PackageTransactionError::ActionContradiction(package_key.to_string()))
-                        },
+                            return Err(PackageTransactionError::ActionContradiction(
+                                package_key.to_string(),
+                            ))
+                        }
                         None => {
                             if !new_actions.iter().any(|x| x.id == dependency.id) {
                                 new_actions.push(PackageAction {
                                     id: dependency.id,
                                     action: PackageActionType::Install,
-                                    target: action.target
+                                    target: action.target,
                                 })
                             }
                         }
@@ -95,7 +92,7 @@ impl PackageTransaction {
         Ok(PackageTransaction {
             store,
             actions: Arc::new(new_actions),
-            is_cancelled: Arc::new(AtomicBool::new(false))
+            is_cancelled: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -108,7 +105,9 @@ impl PackageTransaction {
     }
 
     pub fn process<F>(&mut self, progress: F)
-    where F: Fn(AbsolutePackageKey, TransactionEvent) -> () + 'static + Send {
+    where
+        F: Fn(AbsolutePackageKey, TransactionEvent) -> () + 'static + Send,
+    {
         if !self.validate() {
             // TODO: early return
             return;
@@ -129,14 +128,14 @@ impl PackageTransaction {
                         progress(action.id.clone(), TransactionEvent::Installing);
                         match store.install(&action.id, action.target) {
                             Ok(_) => progress(action.id.clone(), TransactionEvent::Completed),
-                            Err(_) => progress(action.id.clone(), TransactionEvent::Error)
+                            Err(_) => progress(action.id.clone(), TransactionEvent::Error),
                         };
-                    },
+                    }
                     PackageActionType::Uninstall => {
                         progress(action.id.clone(), TransactionEvent::Uninstalling);
                         match store.uninstall(&action.id, action.target) {
                             Ok(_) => progress(action.id.clone(), TransactionEvent::Completed),
-                            Err(_) => progress(action.id.clone(), TransactionEvent::Error)
+                            Err(_) => progress(action.id.clone(), TransactionEvent::Error),
                         };
                     }
                 }
@@ -157,14 +156,14 @@ impl PackageTransaction {
 }
 
 mod sys {
-    use winapi::um::shellapi::CommandLineToArgvW;
-    use winapi::um::winbase::LocalFree;
-    use winapi::ctypes::c_void;
+    use std::ffi::{OsStr, OsString};
+    use std::ops::Range;
     use std::os::windows::ffi::OsStrExt;
     use std::os::windows::ffi::OsStringExt;
-    use std::ffi::{OsString, OsStr};
-    use std::ops::Range;
     use std::slice;
+    use winapi::ctypes::c_void;
+    use winapi::um::shellapi::CommandLineToArgvW;
+    use winapi::um::winbase::LocalFree;
 
     // https://github.com/rust-lang/rust/blob/f76d9bcfc2c269452522fbbe19f66fe653325646/src/libstd/sys/windows/os.rs#L286-L289
     pub struct Args {
@@ -178,7 +177,9 @@ mod sys {
             self.range.next().map(|i| unsafe {
                 let ptr = *self.cur.offset(i);
                 let mut len = 0;
-                while *ptr.offset(len) != 0 { len += 1; }
+                while *ptr.offset(len) != 0 {
+                    len += 1;
+                }
 
                 // Push it onto the list.
                 let ptr = ptr as *const u16;
@@ -186,34 +187,45 @@ mod sys {
                 OsStringExt::from_wide(buf)
             })
         }
-        fn size_hint(&self) -> (usize, Option<usize>) { self.range.size_hint() }
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            self.range.size_hint()
+        }
     }
 
     impl ExactSizeIterator for Args {
-        fn len(&self) -> usize { self.range.len() }
+        fn len(&self) -> usize {
+            self.range.len()
+        }
     }
 
     impl Drop for Args {
         fn drop(&mut self) {
-            unsafe { LocalFree(self.cur as *mut c_void); }
+            unsafe {
+                LocalFree(self.cur as *mut c_void);
+            }
         }
     }
 
     pub fn args<S: AsRef<OsStr>>(input: S) -> Args {
-        let input_vec: Vec<u16> = OsStr::new(&input).encode_wide().chain(Some(0).into_iter()).collect();
+        let input_vec: Vec<u16> = OsStr::new(&input)
+            .encode_wide()
+            .chain(Some(0).into_iter())
+            .collect();
         let lp_cmd_line = input_vec.as_ptr();
         let mut args: i32 = 0;
         let arg_list: *mut *mut u16 = unsafe { CommandLineToArgvW(lp_cmd_line, &mut args) };
-        Args { range: 0..(args as isize), cur: arg_list }
+        Args {
+            range: 0..(args as isize),
+            cur: arg_list,
+        }
     }
 }
-
 
 #[derive(Debug, Clone, Serialize)]
 pub struct PackageAction {
     pub id: AbsolutePackageKey,
     pub action: PackageActionType,
-    pub target: InstallTarget
+    pub target: InstallTarget,
 }
 
 mod Keys {
@@ -226,7 +238,7 @@ mod Keys {
 
 pub struct WindowsPackageStore {
     repos: Arc<RwLock<HashMap<RepoRecord, Repository>>>,
-    config: Arc<RwLock<StoreConfig>>
+    config: Arc<RwLock<StoreConfig>>,
 }
 
 fn installer(package: &Package) -> Result<&WindowsInstaller, PackageStatusError> {
@@ -234,8 +246,8 @@ fn installer(package: &Package) -> Result<&WindowsInstaller, PackageStatusError>
         None => Err(PackageStatusError::NoInstaller),
         Some(v) => match v {
             &Installer::Windows(ref v) => Ok(v),
-            _ => Err(PackageStatusError::WrongInstallerType)
-        }
+            _ => Err(PackageStatusError::WrongInstallerType),
+        },
     }
 }
 
@@ -260,26 +272,24 @@ pub enum WindowsUninstallError {
     InvalidType,
     NotInstalled,
     NoUninstString,
-    Process(ProcessError)
+    Process(ProcessError),
 }
 
 #[derive(Debug)]
 pub enum ProcessError {
     Io(io::Error),
-    Unknown(process::Output)
+    Unknown(process::Output),
 }
 
 fn uninstall_regkey(installer: &WindowsInstaller) -> Option<RegKey> {
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     let path = Path::new(Keys::UninstallPath).join(&installer.product_code);
     match hklm.open_subkey(&path) {
-        Err(e) => {
-            match hklm.open_subkey_with_flags(&path, KEY_READ | KEY_WOW64_64KEY) {
-                Err(e) => None,
-                Ok(v) => Some(v)
-            }
-        }
-        Ok(v) => Some(v)
+        Err(e) => match hklm.open_subkey_with_flags(&path, KEY_READ | KEY_WOW64_64KEY) {
+            Err(e) => None,
+            Ok(v) => Some(v),
+        },
+        Ok(v) => Some(v),
     }
 }
 
@@ -287,7 +297,7 @@ impl WindowsPackageStore {
     pub fn new(config: StoreConfig) -> WindowsPackageStore {
         let store = WindowsPackageStore {
             repos: Arc::new(RwLock::new(HashMap::new())),
-            config: Arc::new(RwLock::new(config))
+            config: Arc::new(RwLock::new(config)),
         };
 
         store.refresh_repos();
@@ -302,13 +312,13 @@ impl WindowsPackageStore {
     pub(crate) fn repos_json(&self) -> String {
         serde_json::to_string(&self.repos.read().unwrap().values().collect::<Vec<_>>()).unwrap()
     }
-    
+
     // TODO: review if there is a better place to put this function...
     // fn download_path(&self, url: &str) -> PathBuf {
     //     let mut sha = Sha256::new();
     //     sha.input_str(url);
     //     let hash_id = sha.result_str();
-        
+
     //     self.config.package_cache_path().join(hash_id)
     // }
 
@@ -316,8 +326,12 @@ impl WindowsPackageStore {
         let mut sha = Sha256::new();
         sha.input_str(url);
         let hash_id = sha.result_str();
-        
-        self.config.read().unwrap().package_cache_path().join(hash_id)
+
+        self.config
+            .read()
+            .unwrap()
+            .package_cache_path()
+            .join(hash_id)
     }
 
     fn clear_cache(&self) {
@@ -326,10 +340,12 @@ impl WindowsPackageStore {
             match Repository::clear_cache(
                 &record.url,
                 record.channel.clone(),
-                &config.repo_cache_path()
+                &config.repo_cache_path(),
             ) {
-                Err(e) => { println!("{:?}", e); }
-                Ok(_) => {},
+                Err(e) => {
+                    println!("{:?}", e);
+                }
+                Ok(_) => {}
             };
         }
     }
@@ -339,42 +355,48 @@ impl WindowsPackageStore {
         self.refresh_repos();
     }
 
-    fn recurse_linked_repos(&self, url: &str, channel: String, repos: &mut HashMap<RepoRecord, Repository>, cache_path: &Path) {
+    fn recurse_linked_repos(
+        &self,
+        url: &str,
+        channel: String,
+        repos: &mut HashMap<RepoRecord, Repository>,
+        cache_path: &Path,
+    ) {
         let url = match url::Url::parse(url) {
             Ok(v) => v,
-            Err(e) => { 
+            Err(e) => {
                 eprintln!("{:?}", e);
                 return;
             }
         };
 
-        let record = RepoRecord {
-            url,
-            channel
-        };
+        let record = RepoRecord { url, channel };
 
         self.recurse_repo(&record, repos, cache_path);
     }
 
-    fn recurse_repo(&self, record: &RepoRecord, repos: &mut HashMap<RepoRecord, Repository>, cache_path: &Path) {
+    fn recurse_repo(
+        &self,
+        record: &RepoRecord,
+        repos: &mut HashMap<RepoRecord, Repository>,
+        cache_path: &Path,
+    ) {
         if repos.contains_key(&record) {
             return;
         }
 
-        match Repository::from_cache_or_url(
-            &record.url,
-            record.channel.clone(),
-            cache_path
-        ) {
+        match Repository::from_cache_or_url(&record.url, record.channel.clone(), cache_path) {
             Ok(repo) => {
                 for url in repo.meta().linked_repositories.iter() {
                     self.recurse_linked_repos(url, record.channel.clone(), repos, cache_path);
                 }
 
                 repos.insert(record.clone(), repo);
-            },
+            }
             // TODO: actual error handling omg
-            Err(e) => { eprintln!("{:?}", e); }
+            Err(e) => {
+                eprintln!("{:?}", e);
+            }
         };
     }
 
@@ -386,37 +408,54 @@ impl WindowsPackageStore {
             self.recurse_repo(record, &mut repos, &config.repo_cache_path());
         }
 
-        *self.repos.write().unwrap() = repos;        
+        *self.repos.write().unwrap() = repos;
     }
 
     pub fn add_repo(&self, url: String, channel: String) -> Result<(), ()> {
-        self.config().add_repo(RepoRecord { url: Url::parse(&url).unwrap(), channel })?;
+        self.config().add_repo(RepoRecord {
+            url: Url::parse(&url).unwrap(),
+            channel,
+        })?;
         self.refresh_repos();
         Ok(())
     }
 
     pub fn remove_repo(&self, url: String, channel: String) -> Result<(), ()> {
-        self.config().remove_repo(RepoRecord { url: Url::parse(&url).unwrap(), channel })?;
+        self.config().remove_repo(RepoRecord {
+            url: Url::parse(&url).unwrap(),
+            channel,
+        })?;
         self.refresh_repos();
         Ok(())
     }
 
     pub fn update_repo(&self, index: usize, url: String, channel: String) -> Result<(), ()> {
-        self.config().update_repo(index, RepoRecord { url: Url::parse(&url).unwrap(), channel })?;
+        self.config().update_repo(
+            index,
+            RepoRecord {
+                url: Url::parse(&url).unwrap(),
+                channel,
+            },
+        )?;
         self.refresh_repos();
         Ok(())
     }
 
     pub fn resolve_package(&self, package_key: &AbsolutePackageKey) -> Option<Package> {
-        println!("Resolving package: url: {}, channel: {}", &package_key.url, &package_key.channel);
+        println!(
+            "Resolving package: url: {}, channel: {}",
+            &package_key.url, &package_key.channel
+        );
         for k in self.repos.read().unwrap().keys() {
             println!("{:?}", k);
         }
 
-        self.repos.read().unwrap()
+        self.repos
+            .read()
+            .unwrap()
             .get(&RepoRecord {
                 url: package_key.url.clone(),
-                channel: package_key.channel.clone()
+                channel: package_key.channel.clone(),
             })
             .and_then(|r| {
                 println!("Got repo: {:?}", r);
@@ -427,7 +466,7 @@ impl WindowsPackageStore {
                 println!("My pkg id: {}", &package_key.id);
                 let pkg = match r.packages().get(&package_key.id) {
                     Some(x) => Some(x.to_owned()),
-                    None => None
+                    None => None,
                 };
                 println!("Found pkg: {:?}", &pkg);
                 pkg
@@ -435,15 +474,22 @@ impl WindowsPackageStore {
     }
 
     pub fn find_package(&self, package_id: &str) -> Option<(AbsolutePackageKey, Package)> {
-        self.repos.read().unwrap().iter()
-            .find_map(|(key, repo)| {
-                repo.packages()
-                    .get(package_id)
-                    .map(|x| (AbsolutePackageKey::new(repo.meta(), &key.channel, package_id), x.to_owned()))
+        self.repos.read().unwrap().iter().find_map(|(key, repo)| {
+            repo.packages().get(package_id).map(|x| {
+                (
+                    AbsolutePackageKey::new(repo.meta(), &key.channel, package_id),
+                    x.to_owned(),
+                )
             })
+        })
     }
 
-    pub fn find_package_dependencies(&self, key: &AbsolutePackageKey, package: &Package, target: InstallTarget) -> Result<Vec<PackageDependency>, PackageDependencyError> {
+    pub fn find_package_dependencies(
+        &self,
+        key: &AbsolutePackageKey,
+        package: &Package,
+        target: InstallTarget,
+    ) -> Result<Vec<PackageDependency>, PackageDependencyError> {
         let mut resolved = Vec::<String>::new();
         Ok(self.find_package_dependencies_impl(key, package, target, 0, &mut resolved)?)
     }
@@ -454,7 +500,7 @@ impl WindowsPackageStore {
         package: &Package,
         target: InstallTarget,
         level: u8,
-        resolved: &mut Vec<String>
+        resolved: &mut Vec<String>,
     ) -> Result<Vec<PackageDependency>, PackageDependencyError> {
         fn push_if_not_exists(dependency: PackageDependency, result: &mut Vec<PackageDependency>) {
             if result.iter().filter(|d| d.id == dependency.id).count() == 0 {
@@ -476,7 +522,13 @@ impl WindowsPackageStore {
                 Some((ref key, ref package)) => {
                     // add all the dependencies of the dependency
                     // to the list result first
-                    for dependency in self.find_package_dependencies_impl(key, package, target, level + 1, resolved)? {
+                    for dependency in self.find_package_dependencies_impl(
+                        key,
+                        package,
+                        target,
+                        level + 1,
+                        resolved,
+                    )? {
                         push_if_not_exists(dependency, &mut result);
                     }
 
@@ -487,24 +539,23 @@ impl WindowsPackageStore {
                     // }
 
                     match self.status(key, target) {
-                        Err(error) => return Err(PackageDependencyError::PackageStatusError(error)),
-                        Ok(status) => {
-                            match status {
-                                PackageStatus::UpToDate => {},
-                                _ => {
-                                    let dependency = PackageDependency {
-                                        id: key.clone(),
-                                        version: version.clone(),
-                                        level,
-                                        status
-                                    };
-                                    push_if_not_exists(dependency, &mut result);
-                                }
-                            }
-                            
+                        Err(error) => {
+                            return Err(PackageDependencyError::PackageStatusError(error))
                         }
+                        Ok(status) => match status {
+                            PackageStatus::UpToDate => {}
+                            _ => {
+                                let dependency = PackageDependency {
+                                    id: key.clone(),
+                                    version: version.clone(),
+                                    level,
+                                    status,
+                                };
+                                push_if_not_exists(dependency, &mut result);
+                            }
+                        },
                     }
-                },
+                }
                 _ => {
                     // the given package id does not exist
                     return Err(PackageDependencyError::PackageNotFound);
@@ -525,17 +576,17 @@ impl WindowsPackageStore {
 
         let installer = match package.installer() {
             None => return None,
-            Some(v) => v
+            Some(v) => v,
         };
 
         let installer = match *installer {
             Installer::Windows(ref v) => v,
-            _ => return None
+            _ => return None,
         };
 
         let url = match url::Url::parse(&installer.url) {
             Ok(v) => v,
-            Err(_) => return None
+            Err(_) => return None,
         };
         let filename = url.path_segments().unwrap().last().unwrap();
         let pkg_path = self.download_path(&url.as_str()).join(filename);
@@ -547,7 +598,11 @@ impl WindowsPackageStore {
         Some(pkg_path)
     }
 
-    pub fn install(&self, key: &AbsolutePackageKey, target: InstallTarget) -> Result<PackageStatus, WindowsInstallError> {
+    pub fn install(
+        &self,
+        key: &AbsolutePackageKey,
+        target: InstallTarget,
+    ) -> Result<PackageStatus, WindowsInstallError> {
         let package = match self.resolve_package(key) {
             Some(v) => v,
             None => {
@@ -557,12 +612,12 @@ impl WindowsPackageStore {
 
         let installer = match package.installer() {
             None => return Err(WindowsInstallError::NoInstaller),
-            Some(v) => v
+            Some(v) => v,
         };
 
         let installer = match *installer {
             Installer::Windows(ref v) => v,
-            _ => return Err(WindowsInstallError::WrongInstallerType)
+            _ => return Err(WindowsInstallError::WrongInstallerType),
         };
 
         let url = url::Url::parse(&installer.url)
@@ -571,7 +626,7 @@ impl WindowsPackageStore {
         let pkg_path = self.download_path(&url.as_str()).join(filename);
 
         if !pkg_path.exists() {
-            return Err(WindowsInstallError::PackageNotInCache)
+            return Err(WindowsInstallError::PackageNotInCache);
         }
 
         let mut args: Vec<OsString> = match (&installer.installer_type, &installer.args) {
@@ -603,7 +658,7 @@ impl WindowsPackageStore {
                 };
                 sys::args(&arg_str.as_os_str()).collect()
             }
-            _ => sys::args(&OsString::from(pkg_path)).collect()
+            _ => sys::args(&OsString::from(pkg_path)).collect(),
         };
         println!("{:?}", &args);
         let prog = args[0].clone();
@@ -611,10 +666,8 @@ impl WindowsPackageStore {
 
         // println!("Cmd line: {:?} {:?}", &pkg_path, &args);
 
-        let res = Command::new(&prog)
-            .args(&args)
-            .output();
-        
+        let res = Command::new(&prog).args(&args).output();
+
         let output = match res {
             Ok(v) => v,
             Err(e) => {
@@ -627,7 +680,7 @@ impl WindowsPackageStore {
             eprintln!("{:?}", output);
             return Err(WindowsInstallError::Process(ProcessError::Unknown(output)));
         }
-        
+
         // match install_macos_package(&pkg_path, target) {
         //     Err(e) => return Err(WindowsInstallError::InstallerFailure(e)),
         //     _ => {}
@@ -636,7 +689,11 @@ impl WindowsPackageStore {
         Ok(self.status_impl(&installer, key, &package, target).unwrap())
     }
 
-    pub fn uninstall(&self, key: &AbsolutePackageKey, target: InstallTarget) -> Result<PackageStatus, WindowsUninstallError> {
+    pub fn uninstall(
+        &self,
+        key: &AbsolutePackageKey,
+        target: InstallTarget,
+    ) -> Result<PackageStatus, WindowsUninstallError> {
         let package = match self.resolve_package(key) {
             Some(v) => v,
             None => {
@@ -646,24 +703,26 @@ impl WindowsPackageStore {
 
         let installer = match package.installer() {
             None => return Err(WindowsUninstallError::NoInstaller),
-            Some(v) => v
+            Some(v) => v,
         };
 
         let installer = match installer {
             &Installer::Windows(ref v) => v,
-            _ => return Err(WindowsUninstallError::WrongInstallerType)
-        };
-        
-        let regkey = match uninstall_regkey(&installer) {
-            Some(v) => v,
-            None => return Err(WindowsUninstallError::NotInstalled)
+            _ => return Err(WindowsUninstallError::WrongInstallerType),
         };
 
-        let uninst_string: String = match regkey.get_value(Keys::QuietUninstallString)
-                .or_else(|_| regkey.get_value(Keys::QuietUninstallString)) {
-                    Ok(v) => v,
-                    Err(_) => return Err(WindowsUninstallError::NoUninstString)
-                };
+        let regkey = match uninstall_regkey(&installer) {
+            Some(v) => v,
+            None => return Err(WindowsUninstallError::NotInstalled),
+        };
+
+        let uninst_string: String = match regkey
+            .get_value(Keys::QuietUninstallString)
+            .or_else(|_| regkey.get_value(Keys::QuietUninstallString))
+        {
+            Ok(v) => v,
+            Err(_) => return Err(WindowsUninstallError::NoUninstString),
+        };
 
         let mut raw_args: Vec<OsString> = sys::args(&uninst_string).map(|x| x.clone()).collect();
         let prog = raw_args[0].clone();
@@ -676,17 +735,15 @@ impl WindowsPackageStore {
                     "inno" => "/VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART".to_owned(),
                     "msi" => format!("/x \"{}\" /qn /norestart", &installer.product_code),
                     "nsis" => "/S".to_owned(),
-                    _ => return Err(WindowsUninstallError::InvalidType)
+                    _ => return Err(WindowsUninstallError::InvalidType),
                 };
                 sys::args(&arg_str).collect()
-            },
-            _ => return Err(WindowsUninstallError::InvalidType)
+            }
+            _ => return Err(WindowsUninstallError::InvalidType),
         };
 
-        let res = Command::new(&prog)
-            .args(&args)
-            .output();
-        
+        let res = Command::new(&prog).args(&args).output();
+
         let output = match res {
             Ok(v) => v,
             Err(e) => {
@@ -695,14 +752,22 @@ impl WindowsPackageStore {
         };
 
         if !output.status.success() {
-            return Err(WindowsUninstallError::Process(ProcessError::Unknown(output)));
+            return Err(WindowsUninstallError::Process(ProcessError::Unknown(
+                output,
+            )));
         }
 
         Ok(self.status_impl(installer, key, &package, target).unwrap())
     }
 
-    pub fn download<F>(&self, key: &AbsolutePackageKey, progress: F) -> Result<PathBuf, crate::download::DownloadError>
-            where F: Fn(u64, u64) -> () + Send + 'static {
+    pub fn download<F>(
+        &self,
+        key: &AbsolutePackageKey,
+        progress: F,
+    ) -> Result<PathBuf, crate::download::DownloadError>
+    where
+        F: Fn(u64, u64) -> () + Send + 'static,
+    {
         let package = match self.resolve_package(key) {
             Some(v) => v,
             None => {
@@ -712,15 +777,20 @@ impl WindowsPackageStore {
 
         let installer = match package.installer() {
             None => return Err(crate::download::DownloadError::NoUrl),
-            Some(v) => v
+            Some(v) => v,
         };
 
-        let mut disposable = package.download(&self.download_path(&installer.url()), Some(progress))?;
+        let mut disposable =
+            package.download(&self.download_path(&installer.url()), Some(progress))?;
         disposable.wait()
     }
 
-    pub fn status(&self, key: &AbsolutePackageKey, target: InstallTarget) -> Result<PackageStatus, PackageStatusError> {
-         let package = match self.resolve_package(key) {
+    pub fn status(
+        &self,
+        key: &AbsolutePackageKey,
+        target: InstallTarget,
+    ) -> Result<PackageStatus, PackageStatusError> {
+        let package = match self.resolve_package(key) {
             Some(v) => v,
             None => {
                 return Err(PackageStatusError::NoPackage);
@@ -729,26 +799,32 @@ impl WindowsPackageStore {
 
         let installer = match package.installer() {
             None => return Err(PackageStatusError::NoInstaller),
-            Some(v) => v
+            Some(v) => v,
         };
 
         let installer = match installer {
             &Installer::Windows(ref v) => v,
-            _ => return Err(PackageStatusError::WrongInstallerType)
+            _ => return Err(PackageStatusError::WrongInstallerType),
         };
 
         self.status_impl(installer, key, &package, target)
     }
 
-    fn status_impl(&self, installer: &WindowsInstaller, id: &AbsolutePackageKey, package: &Package, target: InstallTarget) -> Result<PackageStatus, PackageStatusError> {
+    fn status_impl(
+        &self,
+        installer: &WindowsInstaller,
+        id: &AbsolutePackageKey,
+        package: &Package,
+        target: InstallTarget,
+    ) -> Result<PackageStatus, PackageStatusError> {
         let inst_key = match uninstall_regkey(&installer) {
             Some(v) => v,
-            None => return Ok(PackageStatus::NotInstalled)
+            None => return Ok(PackageStatus::NotInstalled),
         };
 
         let disp_version: String = match inst_key.get_value(Keys::DisplayVersion) {
             Err(_) => return Err(PackageStatusError::ParsingVersion),
-            Ok(v) => v
+            Ok(v) => v,
         };
 
         let skipped_package = self.config().skipped_package(id);
@@ -756,6 +832,6 @@ impl WindowsPackageStore {
 
         self::cmp::semver_cmp(&disp_version, &package.version, skipped_package)
             .or_else(|_| self::cmp::iso8601_cmp(&disp_version, &package.version, skipped_package))
-            // .or_else(|_| self::cmp::assembly_cmp(...))
+        // .or_else(|_| self::cmp::assembly_cmp(...))
     }
 }

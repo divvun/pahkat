@@ -1,27 +1,26 @@
-
+extern crate reqwest;
 #[cfg(prefix)]
 extern crate rusqlite;
-extern crate reqwest;
-extern crate serde_json;
 extern crate serde;
+extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;
+extern crate dirs;
 extern crate semver;
 extern crate tempdir;
-extern crate dirs;
 
 #[cfg(feature = "prefix")]
-extern crate xz2;
-#[cfg(feature = "prefix")]
 extern crate tar;
+#[cfg(feature = "prefix")]
+extern crate xz2;
 
 #[cfg(windows)]
 extern crate winreg;
 
 #[cfg(target_os = "macos")]
-extern crate plist;
-#[cfg(target_os = "macos")]
 extern crate maplit;
+#[cfg(target_os = "macos")]
+extern crate plist;
 
 #[cfg(windows)]
 extern crate winapi;
@@ -29,29 +28,28 @@ extern crate winapi;
 extern crate crypto;
 extern crate sentry;
 
+use hashbrown::HashMap;
+use std::fmt;
+use std::fs::{self, create_dir_all, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::fs::{self, create_dir_all, File};
-use std::fmt;
-use hashbrown::HashMap;
-use url::Url;
 use std::sync::{Arc, RwLock};
+use url::Url;
 
-#[cfg(windows)]
-pub mod windows;
 #[cfg(target_os = "macos")]
 pub mod macos;
+// #[cfg(feature = "prefix")]
 pub mod tarball;
+#[cfg(windows)]
+pub mod windows;
 
-pub mod ffi;
 mod cmp;
 mod download;
+pub mod ffi;
 pub mod repo;
 pub use self::download::Download;
 pub use self::repo::Repository;
-use pahkat_types::{
-    Repository as RepositoryMeta
-};
+use pahkat_types::Repository as RepositoryMeta;
 
 use directories::BaseDirs;
 
@@ -61,7 +59,7 @@ pub enum TransactionEvent {
     Uninstalling,
     Installing,
     Completed,
-    Error
+    Error,
 }
 
 impl TransactionEvent {
@@ -71,7 +69,7 @@ impl TransactionEvent {
             TransactionEvent::Uninstalling => 1,
             TransactionEvent::Installing => 2,
             TransactionEvent::Completed => 3,
-            TransactionEvent::Error => 4
+            TransactionEvent::Error => 4,
         }
     }
 }
@@ -80,14 +78,14 @@ impl TransactionEvent {
 pub enum PackageTransactionError {
     NoPackage(String),
     Deps(PackageDependencyError),
-    ActionContradiction(String)
+    ActionContradiction(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PackageActionType {
     Install,
-    Uninstall
+    Uninstall,
 }
 
 impl PackageActionType {
@@ -95,20 +93,20 @@ impl PackageActionType {
         match x {
             0 => PackageActionType::Install,
             1 => PackageActionType::Uninstall,
-            _ => panic!("Invalid package action type: {}", x)
+            _ => panic!("Invalid package action type: {}", x),
         }
     }
 
     pub fn to_u8(&self) -> u8 {
         match self {
             PackageActionType::Install => 0,
-            PackageActionType::Uninstall => 1
+            PackageActionType::Uninstall => 1,
         }
     }
 }
 
+use serde::de::{self, Deserialize, Deserializer, Visitor};
 use serde::ser::{Serialize, Serializer};
-use serde::de::{self, Visitor, Deserialize, Deserializer};
 
 struct AbsolutePackageKeyVisitor;
 
@@ -127,14 +125,13 @@ impl<'de> Visitor<'de> for AbsolutePackageKeyVisitor {
     }
 }
 
-
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PackageStatus {
     NotInstalled,
     UpToDate,
     RequiresUpdate,
-    Skipped
+    Skipped,
 }
 
 // impl PackageStatus {
@@ -150,13 +147,17 @@ pub enum PackageStatus {
 
 impl fmt::Display for PackageStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", match *self {
-            // PackageStatus::NoPackage => "No package",
-            PackageStatus::NotInstalled => "Not installed",
-            PackageStatus::UpToDate => "Up to date",
-            PackageStatus::RequiresUpdate => "Requires update",
-            PackageStatus::Skipped => "Skipped"
-        })
+        write!(
+            f,
+            "{}",
+            match *self {
+                // PackageStatus::NoPackage => "No package",
+                PackageStatus::NotInstalled => "Not installed",
+                PackageStatus::UpToDate => "Up to date",
+                PackageStatus::RequiresUpdate => "Requires update",
+                PackageStatus::Skipped => "Skipped",
+            }
+        )
     }
 }
 
@@ -167,36 +168,47 @@ pub enum PackageStatusError {
     WrongInstallerType,
     ParsingVersion,
     InvalidInstallPath,
-    InvalidMetadata
+    InvalidMetadata,
 }
 
 impl fmt::Display for PackageStatusError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Error: {}", match *self {
-            PackageStatusError::NoPackage => "No package",
-            PackageStatusError::NoInstaller => "No installer",
-            PackageStatusError::WrongInstallerType => "Wrong installer type",
-            PackageStatusError::ParsingVersion => "Could not parse version",
-            PackageStatusError::InvalidInstallPath => "Invalid install path",
-            PackageStatusError::InvalidMetadata => "Invalid metadata"
-        })
+        write!(
+            f,
+            "Error: {}",
+            match *self {
+                PackageStatusError::NoPackage => "No package",
+                PackageStatusError::NoInstaller => "No installer",
+                PackageStatusError::WrongInstallerType => "Wrong installer type",
+                PackageStatusError::ParsingVersion => "Could not parse version",
+                PackageStatusError::InvalidInstallPath => "Invalid install path",
+                PackageStatusError::InvalidMetadata => "Invalid metadata",
+            }
+        )
     }
 }
 
 pub fn default_config_path() -> PathBuf {
-    BaseDirs::new().expect("base directories must be known")
-        .config_dir().join("Pahkat")
+    BaseDirs::new()
+        .expect("base directories must be known")
+        .config_dir()
+        .join("Pahkat")
 }
 
 pub fn default_cache_path() -> PathBuf {
-    BaseDirs::new().expect("base directories must be known")
-        .cache_dir().join("Pahkat")
+    BaseDirs::new()
+        .expect("base directories must be known")
+        .cache_dir()
+        .join("Pahkat")
 }
 
 #[cfg(target_os = "macos")]
 pub fn default_uninstall_path() -> PathBuf {
-    BaseDirs::new().expect("base directories must be known")
-        .data_dir().join("Pahkat").join("uninstall")
+    BaseDirs::new()
+        .expect("base directories must be known")
+        .data_dir()
+        .join("Pahkat")
+        .join("uninstall")
 }
 
 #[cfg(target_os = "macos")]
@@ -208,14 +220,14 @@ pub fn global_uninstall_path() -> PathBuf {
 pub struct RepoRecord {
     #[serde(with = "url_serde")]
     pub url: Url,
-    pub channel: String
+    pub channel: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AbsolutePackageKey {
     pub url: Url,
     pub id: String,
-    pub channel: String
+    pub channel: String,
 }
 
 impl Serialize for AbsolutePackageKey {
@@ -241,10 +253,10 @@ impl AbsolutePackageKey {
         AbsolutePackageKey {
             url: Url::parse(&repo.base).expect("repo base url must be valid"),
             id: package_id.to_string(),
-            channel: channel.to_string()
+            channel: channel.to_string(),
         }
     }
-    
+
     // TODO impl From trait.
     pub fn to_string(&self) -> String {
         format!("{}packages/{}#{}", self.url, self.id, self.channel)
@@ -260,7 +272,7 @@ impl AbsolutePackageKey {
         Ok(AbsolutePackageKey {
             url: base,
             channel,
-            id
+            id,
         })
     }
 }
@@ -275,7 +287,7 @@ struct RawStoreConfig {
     #[serde(default = "default_cache_path")]
     pub cache_path: PathBuf,
     #[serde(default = "HashMap::new")]
-    pub ui: HashMap<String, String>
+    pub ui: HashMap<String, String>,
 }
 
 impl std::default::Default for RawStoreConfig {
@@ -284,7 +296,7 @@ impl std::default::Default for RawStoreConfig {
             repos: vec![],
             skipped_packages: HashMap::new(),
             cache_path: default_cache_path(),
-            ui: HashMap::new()
+            ui: HashMap::new(),
         }
     }
 }
@@ -294,7 +306,7 @@ pub struct StoreConfig {
     /// A reference to the path for this StoreConfig
     config_path: PathBuf,
     data: Arc<RwLock<RawStoreConfig>>,
-    save_changes: bool
+    save_changes: bool,
 }
 
 impl std::default::Default for StoreConfig {
@@ -302,18 +314,20 @@ impl std::default::Default for StoreConfig {
         StoreConfig {
             config_path: default_config_path().join("config.json"),
             data: Arc::new(RwLock::new(RawStoreConfig::default())),
-            save_changes: true
+            save_changes: true,
         }
     }
 }
 
+type SaveResult = Result<(), Box<dyn std::error::Error>>;
+
 impl StoreConfig {
     pub fn load_or_default(save_changes: bool) -> StoreConfig {
         let res = StoreConfig::load(&default_config_path().join("config.json"), save_changes);
-        
+
         let mut config = match res {
             Ok(v) => v,
-            Err(_) => StoreConfig::default()
+            Err(_) => StoreConfig::default(),
         };
         config.save_changes = save_changes;
 
@@ -328,6 +342,14 @@ impl StoreConfig {
         config
     }
 
+    pub fn new(config_path: &Path) -> StoreConfig {
+        StoreConfig {
+            config_path: config_path.join("config.json"),
+            data: Arc::new(RwLock::new(RawStoreConfig::default())),
+            save_changes: true,
+        }
+    }
+
     pub fn load(config_path: &Path, save_changes: bool) -> io::Result<StoreConfig> {
         let file = File::open(config_path)?;
         let data: RawStoreConfig = serde_json::from_reader(file)?;
@@ -335,48 +357,62 @@ impl StoreConfig {
         Ok(StoreConfig {
             config_path: config_path.to_owned(),
             data: Arc::new(RwLock::new(data)),
-            save_changes
+            save_changes,
         })
     }
 
-    pub fn save(&self) -> Result<(), ()> { 
-        let cfg_str = serde_json::to_string_pretty(&*self.data.read().unwrap()).unwrap();
+    pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let cfg_str = serde_json::to_string_pretty(&*self.data.read().unwrap())?;
         {
-            create_dir_all(self.config_path.parent().unwrap()).unwrap();
+            println!("{:?}", self.config_path);
+            create_dir_all(self.config_dir()).unwrap();
             let mut file = File::create(&self.config_path).unwrap();
-            file.write_all(cfg_str.as_bytes()).unwrap();
+            file.write_all(cfg_str.as_bytes())?;
         }
 
         Ok(())
     }
-    
+
     pub fn config_path(&self) -> &Path {
         &self.config_path
     }
 
-    pub fn skipped_package(&self, key: &AbsolutePackageKey) -> Option<String> {
-        self.data.read().unwrap().skipped_packages.get(key).map(|x| x.to_string())
+    pub fn config_dir(&self) -> &Path {
+        &self.config_path.parent().expect("parent dir must exist")
     }
 
-    pub fn remove_skipped_package(&self, key: &AbsolutePackageKey) -> Result<(), ()> {
+    pub fn skipped_package(&self, key: &AbsolutePackageKey) -> Option<String> {
+        self.data
+            .read()
+            .unwrap()
+            .skipped_packages
+            .get(key)
+            .map(|x| x.to_string())
+    }
+
+    pub fn remove_skipped_package(&self, key: &AbsolutePackageKey) -> SaveResult {
         {
             self.data.write().unwrap().skipped_packages.remove(key);
         }
 
         if self.save_changes {
             self.save()
-        } else { 
+        } else {
             Ok(())
         }
     }
 
-    pub fn add_skipped_package(&self, key: AbsolutePackageKey, version: String) -> Result<(), ()> {
+    pub fn add_skipped_package(&self, key: AbsolutePackageKey, version: String) -> SaveResult {
         {
-            self.data.write().unwrap().skipped_packages.insert(key, version);
+            self.data
+                .write()
+                .unwrap()
+                .skipped_packages
+                .insert(key, version);
         }
         if self.save_changes {
             self.save()
-        } else { 
+        } else {
             Ok(())
         }
     }
@@ -393,13 +429,13 @@ impl StoreConfig {
         self.data.read().unwrap().cache_path.to_owned()
     }
 
-    pub fn set_cache_base_path(&self, cache_path: PathBuf) -> Result<(), ()> {
+    pub fn set_cache_base_path(&self, cache_path: PathBuf) -> SaveResult {
         {
             self.data.write().unwrap().cache_path = cache_path;
         }
         if self.save_changes {
             self.save()
-        } else { 
+        } else {
             Ok(())
         }
     }
@@ -408,34 +444,41 @@ impl StoreConfig {
         self.data.read().unwrap().repos.clone()
     }
 
-    pub fn set_repos(&self, repos: Vec<RepoRecord>) -> Result<(), ()> {
+    pub fn set_repos(&self, repos: Vec<RepoRecord>) -> SaveResult {
         {
             self.data.write().unwrap().repos = repos
         }
 
         if self.save_changes {
             self.save()
-        } else { 
+        } else {
             Ok(())
         }
     }
 
-    pub fn add_repo(&self, repo_record: RepoRecord) -> Result<(), ()> {
+    pub fn add_repo(&self, repo_record: RepoRecord) -> SaveResult {
         {
             self.data.write().unwrap().repos.push(repo_record);
         }
         if self.save_changes {
             self.save()
-        } else { 
+        } else {
             Ok(())
         }
     }
 
-    pub fn remove_repo(&self, repo_record: RepoRecord) -> Result<(), ()> {
-        match self.data.read().unwrap().repos.iter().position(|r| r == &repo_record) {
+    pub fn remove_repo(&self, repo_record: RepoRecord) -> SaveResult {
+        match self
+            .data
+            .read()
+            .unwrap()
+            .repos
+            .iter()
+            .position(|r| r == &repo_record)
+        {
             Some(index) => {
                 self.data.write().unwrap().repos.remove(index);
-                
+
                 let hash_id = Repository::path_hash(&repo_record.url, &repo_record.channel);
                 let cache_path = self.repo_cache_path().join(hash_id);
                 if cache_path.exists() {
@@ -443,37 +486,37 @@ impl StoreConfig {
                 }
                 if self.save_changes {
                     self.save()
-                } else { 
+                } else {
                     Ok(())
                 }
-            },
-            None => Ok(())
+            }
+            None => Ok(()),
         }
     }
 
-    pub fn update_repo(&self, index: usize, repo_record: RepoRecord) -> Result<(), ()> {
+    pub fn update_repo(&self, index: usize, repo_record: RepoRecord) -> SaveResult {
         {
             self.data.write().unwrap().repos[index] = repo_record;
         }
         if self.save_changes {
             self.save()
-        } else { 
+        } else {
             Ok(())
         }
     }
 
-    pub fn set_ui_setting(&self, key: &str, value: Option<String>) -> Result<(), ()> {
+    pub fn set_ui_setting(&self, key: &str, value: Option<String>) -> SaveResult {
         println!("Set UI setting: {} -> {:?}", key, &value);
         {
             let mut lock = self.data.write().expect("write lock");
             match value {
                 Some(v) => lock.ui.insert(key.to_string(), v),
-                None => lock.ui.remove(key)
+                None => lock.ui.remove(key),
             };
         }
         if self.save_changes {
             self.save()
-        } else { 
+        } else {
             Ok(())
         }
     }
@@ -487,14 +530,16 @@ impl StoreConfig {
 pub enum PackageDependencyError {
     PackageNotFound,
     VersionNotFound,
-    PackageStatusError(PackageStatusError)
+    PackageStatusError(PackageStatusError),
 }
 
 impl fmt::Display for PackageDependencyError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-       match *self {
+        match *self {
             PackageDependencyError::PackageNotFound => write!(f, "Error: Package not found"),
-            PackageDependencyError::VersionNotFound => write!(f, "Error: Package version not found"),
+            PackageDependencyError::VersionNotFound => {
+                write!(f, "Error: Package version not found")
+            }
             PackageDependencyError::PackageStatusError(e) => write!(f, "{}", e),
         }
     }
@@ -505,5 +550,5 @@ pub struct PackageDependency {
     pub id: AbsolutePackageKey,
     pub version: String,
     pub level: u8,
-    pub status: PackageStatus
+    pub status: PackageStatus,
 }
