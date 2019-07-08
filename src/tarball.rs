@@ -1,101 +1,116 @@
-#![cfg(prefix)]
+#![cfg(feature = "prefix")]
 
+use crate::{PackageStatus, PackageStatusError, StoreConfig};
 use pahkat_types::*;
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
-use std::ffi::OsStr;
-use xz2::read::XzDecoder;
-use std::fs::{remove_file, read_dir, remove_dir, create_dir_all, File};
+use snafu::{ensure, Backtrace, ErrorCompat, OptionExt, ResultExt, Snafu};
 use std::cell::RefCell;
-use ::{PackageStatusError, PackageStatus, StoreConfig};
+use std::ffi::OsStr;
+use std::fs::{create_dir_all, read_dir, remove_dir, remove_file, File};
+use std::os::unix::ffi::OsStrExt;
+use std::path::{Path, PathBuf};
+use xz2::read::XzDecoder;
 
 pub struct TarballPackageStore {
     conn: RefCell<rusqlite::Connection>,
-    prefix: PathBuf
+    prefix: PathBuf,
 }
+
+#[derive(Debug, Snafu)]
+pub enum Error {
+    #[snafu(display("No installer found for package: {}", id))]
+    NoInstaller {
+        id: String,
+        // source: std::io::Error
+    },
+    #[snafu(display("Wrong installer type"))]
+    WrongInstallerType,
+    #[snafu(display("Invalid extension"))]
+    InvalidExtension {
+        // source: std::io::Error
+    },
+    CreateDirFailed {
+        source: std::io::Error,
+    },
+    UnpackFailed {
+        source: std::io::Error,
+    },
+}
+
+type Result<T, E = Error> = std::result::Result<T, E>;
+
+static PKG_STORE_INIT: &'static str = include_str!("./pkgstore_init.sql");
 
 impl TarballPackageStore {
     fn init_sqlite_database(&self) -> rusqlite::Result<()> {
-        self.conn.borrow().execute_batch(include_str!("./pkgstore_init.sql"))
-    }
-
-    pub fn create_cache(&self) -> PathBuf {
-        let path = self.prefix.join("var/pahkatc/cache");
-        create_dir_all(&path).unwrap();
-        path
-    }
-
-    pub fn create_receipts(&self) -> PathBuf {
-        let path = self.prefix.join("var/pahkatc/receipts");
-        create_dir_all(&path).unwrap();
-        path
+        self.conn.borrow().execute_batch(PKG_STORE_INIT)
     }
 
     fn new(conn: rusqlite::Connection, prefix: &Path) -> TarballPackageStore {
         TarballPackageStore {
             conn: RefCell::new(conn),
-            prefix: prefix.to_owned()
+            prefix: prefix.to_owned(),
         }
     }
 
-    pub fn install(&self, package: &Package, path: &Path) -> Result<(), ()> {
-        let installer = match package.installer() {
-            None => return Err(()),
-            Some(v) => v
-        };
+    fn package_path(&self, package: &Package) -> PathBuf {
+        self.prefix.join(&package.id).join(&package.version)
+    }
+
+    pub fn install(&self, package: &Package, path: &Path) -> Result<()> {
+        let installer = package.installer().with_context(|| NoInstaller {
+            id: package.id.clone(),
+        })?;
 
         let _tarball = match installer {
             &Installer::Tarball(ref v) => v,
-            _ => return Err(())
+            _ => return Err(Error::WrongInstallerType),
         };
 
-        let ext = match path.extension().and_then(OsStr::to_str) {
-            None => return Err(()),
-            Some(v) => v
-        };
-        
+        let ext = path
+            .extension()
+            .and_then(OsStr::to_str)
+            .context(InvalidExtension)?;
+
         let file = File::open(path).unwrap();
 
         let reader = match ext {
             "txz" | "xz" => XzDecoder::new(file),
-            // "tgz" | "gz" => (),
-            _ => return Err(())
+            _ => return Err(Error::InvalidExtension {}),
         };
-        
+
         let mut tar_file = tar::Archive::new(reader);
         let mut files: Vec<PathBuf> = vec![];
+
+        let pkg_path = self.package_path(package);
+        create_dir_all(&pkg_path).context(CreateDirFailed)?;
 
         for entry in tar_file.entries().unwrap() {
             let mut entry = entry.unwrap();
             let unpack_res;
             {
-                unpack_res = entry.unpack_in(&self.prefix);
+                unpack_res = entry.unpack_in(&pkg_path).context(UnpackFailed)?;
             }
 
-            match unpack_res {
-                Ok(true) => {
-                    let entry_path = entry.header().path().unwrap();
-                    files.push(entry_path.to_path_buf());
-                },
-                Ok(false) => continue,
-                Err(_) => return Err(())
+            if unpack_res {
+                let entry_path = entry.header().path().unwrap();
+                files.push(entry_path.to_path_buf());
+            } else {
+                continue;
             }
         }
 
         let deps = &package.dependencies;
         let dependencies: Vec<String> = deps.keys().map(|x| x.to_owned()).collect();
-        
+
         {
             let record = PackageRecord {
                 id: package.id.to_owned(),
                 version: package.version.to_owned(),
                 files: files,
-                dependencies: dependencies
+                dependencies: dependencies,
             };
 
-            let mut conn = self.conn.borrow_mut();
-            let tx = conn.transaction().unwrap();
-            record.save(tx).unwrap();
+            record.save(&mut self.conn.borrow_mut()).unwrap();
         };
 
         Ok(())
@@ -103,18 +118,19 @@ impl TarballPackageStore {
 
     pub fn uninstall(&self, package: &Package) -> Result<(), ()> {
         let record = {
-            let conn = self.conn.borrow();
+            let mut conn = self.conn.borrow_mut();
 
-            match PackageRecord::find_by_id(&conn, &package.id) {
+            match PackageRecord::find_by_id(&mut conn, &package.id) {
                 None => return Err(()),
-                Some(v) => v
+                Some(v) => v,
             }
         };
 
+        let pkg_path = self.package_path(package);
         for file in &record.files {
-            let file = match self.prefix.join(file).canonicalize() {
+            let file = match pkg_path.join(file).canonicalize() {
                 Ok(v) => v,
-                Err(_) => continue
+                Err(_) => continue,
             };
 
             if file.is_dir() {
@@ -127,13 +143,13 @@ impl TarballPackageStore {
         }
 
         for file in &record.files {
-            let file = match self.prefix.join(file).canonicalize() {
+            let file = match pkg_path.join(file).canonicalize() {
                 Ok(v) => v,
-                Err(_) => continue
+                Err(_) => continue,
             };
-            
+
             if !file.is_dir() {
-                continue
+                continue;
             }
 
             let dir = read_dir(&file).unwrap();
@@ -142,27 +158,26 @@ impl TarballPackageStore {
             }
         }
 
-        let mut conn = self.conn.borrow_mut();
-        let tx = conn.transaction().unwrap();
-        record.delete(tx).unwrap();
+        record.delete(&mut self.conn.borrow_mut()).unwrap();
 
         Ok(())
     }
 
     pub fn status(&self, package: &Package) -> Result<PackageStatus, PackageStatusError> {
-        let installed_pkg = match PackageRecord::find_by_id(&self.conn.borrow(), &package.id) {
-            None => return Ok(PackageStatus::NotInstalled),
-            Some(v) => v
-        };
+        let installed_pkg =
+            match PackageRecord::find_by_id(&mut self.conn.borrow_mut(), &package.id) {
+                None => return Ok(PackageStatus::NotInstalled),
+                Some(v) => v,
+            };
 
         let installed_version = match semver::Version::parse(&installed_pkg.version) {
             Err(_) => return Err(PackageStatusError::ParsingVersion),
-            Ok(v) => v
+            Ok(v) => v,
         };
-        
+
         let candidate_version = match semver::Version::parse(&package.version) {
             Err(_) => return Err(PackageStatusError::ParsingVersion),
-            Ok(v) => v
+            Ok(v) => v,
         };
 
         if candidate_version > installed_version {
@@ -177,7 +192,7 @@ impl TarballPackageStore {
 pub struct Prefix {
     prefix: PathBuf,
     store: TarballPackageStore,
-    config: StoreConfig
+    config: StoreConfig,
 }
 
 impl Prefix {
@@ -189,98 +204,76 @@ impl Prefix {
         &self.config
     }
 
-    pub fn create(prefix: &Path, url: &str) -> Result<Prefix, ()> {
-        let cache_dir = prefix.join("var/pahkatc/cache");
-        let config = StoreConfig {
-            url: url.to_owned(),
-            cache_dir: cache_dir.to_str().unwrap().to_owned()
-        };
+    fn package_db_path(config: &StoreConfig) -> PathBuf {
+        config.config_dir().join("packages.sqlite")
+    }
 
-        if !cache_dir.exists() {
-            create_dir_all(cache_dir).unwrap()
-        }
+    pub fn create(prefix_path: &Path) -> Result<Prefix, Box<dyn std::error::Error>> {
+        create_dir_all(&prefix_path)?;
+        create_dir_all(&prefix_path.join("prefix"))?;
+        create_dir_all(&prefix_path.join("packages"))?;
+        let config = StoreConfig::new(prefix_path);
+        config.save()?;
 
-        let config_path = prefix.join("etc/pahkatc/config.json");
-        if config_path.exists() {
-            return Err(())
-        }
-
-        let db_path = prefix.join("var/pahkatc/packages.sqlite");
-        if db_path.exists() {
-            return Err(())
-        }
-
-        let cfg_str = serde_json::to_string_pretty(&config).unwrap();
-        {
-            create_dir_all(config_path.parent().unwrap()).unwrap();
-            let mut file = File::create(config_path).unwrap();
-            file.write_all(cfg_str.as_bytes()).unwrap();
-        }
-
-        create_dir_all(db_path.parent().unwrap()).unwrap();
-        let conn = rusqlite::Connection::open(&db_path).unwrap();
-        let store = TarballPackageStore::new(conn, &prefix);
+        let conn = rusqlite::Connection::open(Prefix::package_db_path(&config)).unwrap();
+        let store = TarballPackageStore::new(conn, &prefix_path);
         store.init_sqlite_database().unwrap();
 
         Ok(Prefix {
-            prefix: prefix.to_owned(),
+            prefix: prefix_path.to_owned(),
             store: store,
-            config: config
+            config: config,
         })
     }
 
-    pub fn open(prefix: &Path) -> Result<Prefix, ()> {
-        let prefix = prefix.canonicalize().unwrap().to_owned();
+    pub fn open(prefix: &Path) -> Result<Prefix, Box<dyn std::error::Error>> {
+        let prefix = prefix.canonicalize().unwrap();
+        println!("{:?}", &prefix);
+        let config = StoreConfig::load(&prefix.join("config.json"), true).unwrap();
 
-        let config_path = prefix.join("etc/pahkatc/config.json");
-        if !config_path.exists() {
-            return Err(())
-        }
-
-        let db_path = prefix.join("var/pahkatc/packages.sqlite");
-        if !db_path.exists() {
-            return Err(())
-        }
-
-        let conn = rusqlite::Connection::open(&db_path).unwrap();
-
-        let file = File::open(config_path).unwrap();
-        let config: StoreConfig = serde_json::from_reader(file).unwrap();
-
+        let db_path = Prefix::package_db_path(&config);
+        println!("{:?}", &db_path);
+        let conn = rusqlite::Connection::open(&db_path)?;
         let store = TarballPackageStore::new(conn, &prefix);
 
         Ok(Prefix {
             prefix: prefix,
             store: store,
-            config: config
+            config: config,
         })
     }
 }
-
 
 #[derive(Debug)]
 struct PackageRecord {
     id: String,
     version: String,
     files: Vec<PathBuf>,
-    dependencies: Vec<String>
+    dependencies: Vec<String>,
 }
 
-impl PackageRecord {
-    fn sql_dependencies(conn: &rusqlite::Connection, id: &str) -> Vec<String> {
-        let mut stmt = conn.prepare("SELECT dependency_id FROM packages_dependencies WHERE package_id = ?")
+struct PackageDbConnection<'a>(&'a mut rusqlite::Connection);
+
+impl<'a> PackageDbConnection<'a> {
+    fn dependencies(&self, id: &str) -> Vec<String> {
+        let mut stmt = self
+            .0
+            .prepare("SELECT dependency_id FROM packages_dependencies WHERE package_id = ?")
             .unwrap();
 
         let res = stmt
             .query_map(&[&id], |row| row.get(0))
             .unwrap()
-            .map(|x| x.unwrap()).collect();
+            .map(|x| x.unwrap())
+            .collect();
 
         res
     }
 
-    fn sql_files(conn: &rusqlite::Connection, id: &str) -> Vec<PathBuf> {
-        let mut stmt = conn.prepare("SELECT file_path FROM packages_files WHERE package_id = ?")
+    fn files(&self, id: &str) -> Vec<PathBuf> {
+        let mut stmt = self
+            .0
+            .prepare("SELECT file_path FROM packages_files WHERE package_id = ?")
             .unwrap();
 
         let res = stmt
@@ -292,67 +285,100 @@ impl PackageRecord {
         res
     }
 
-    fn sql_version(conn: &rusqlite::Connection, id: &str) -> Option<String> {
-        match conn.query_row("SELECT version FROM packages WHERE id = ? LIMIT 1", &[&id], |row| row.get(0)) {
+    fn version(&self, id: &str) -> Option<String> {
+        match self.0.query_row(
+            "SELECT version FROM packages WHERE id = ? LIMIT 1",
+            &[&id],
+            |row| row.get(0),
+        ) {
             Ok(v) => v,
-            Err(_) => return None
+            Err(_) => return None,
         }
     }
 
-    fn sql_replace_pkg(&self, tx: &rusqlite::Transaction) -> rusqlite::Result<()> {
-        tx.execute("REPLACE INTO packages(id, version) VALUES (?, ?)", &[&self.id, &self.version])?;
-        tx.execute("DELETE FROM packages_dependencies WHERE package_id = ?", &[&self.id])?;
-        tx.execute("DELETE FROM packages_files WHERE package_id = ?", &[&self.id])?;
-        
-        let mut dep_stmt = tx.prepare("INSERT INTO packages_dependencies(package_id, dependency_id) VALUES (?, ?)")?;
-        for id in &self.dependencies {
-            dep_stmt.execute(&[&self.id, &*id])?;
+    fn replace_pkg(&mut self, pkg: &PackageRecord) -> rusqlite::Result<()> {
+        let tx = self.0.transaction().unwrap();
+
+        tx.execute(
+            "REPLACE INTO packages(id, version) VALUES (?, ?)",
+            &[&pkg.id, &pkg.version],
+        )?;
+        tx.execute(
+            "DELETE FROM packages_dependencies WHERE package_id = ?",
+            &[&pkg.id],
+        )?;
+        tx.execute(
+            "DELETE FROM packages_files WHERE package_id = ?",
+            &[&pkg.id],
+        )?;
+
+        {
+            let mut dep_stmt = tx.prepare(
+                "INSERT INTO packages_dependencies(package_id, dependency_id) VALUES (?, ?)",
+            )?;
+            for dep_id in &pkg.dependencies {
+                dep_stmt.execute(&[&pkg.id, &*dep_id])?;
+            }
+
+            let mut file_stmt = tx
+                .prepare("INSERT INTO packages_files(package_id, file_path) VALUES (:id, :path)")?;
+
+            for file_path in &pkg.files {
+                file_stmt.execute_named(&[
+                    ("id", &pkg.id),
+                    ("path", &file_path.as_os_str().as_bytes()),
+                ])?;
+            }
         }
 
-        let mut file_stmt = tx.prepare("INSERT INTO packages_files(package_id, file_path) VALUES (?, ?)")?;
-        for file_path in &self.files {
-            file_stmt.execute(&[&self.id, &file_path.to_str()])?;
-        }
-
-        Ok(())
+        tx.commit()
     }
 
-    fn sql_remove_pkg(&self, tx: &rusqlite::Transaction) -> rusqlite::Result<()> {
-        tx.execute("DELETE FROM packages WHERE id = ?", &[&self.id])?;
-        tx.execute("DELETE FROM packages_dependencies WHERE package_id = ?", &[&self.id])?;
-        tx.execute("DELETE FROM packages_files WHERE package_id = ?", &[&self.id])?;
+    fn remove_pkg(&mut self, pkg: &PackageRecord) -> rusqlite::Result<()> {
+        let tx = self.0.transaction().unwrap();
 
-        Ok(())
+        tx.execute("DELETE FROM packages WHERE id = ?", &[&pkg.id])?;
+        tx.execute(
+            "DELETE FROM packages_dependencies WHERE package_id = ?",
+            &[&pkg.id],
+        )?;
+        tx.execute(
+            "DELETE FROM packages_files WHERE package_id = ?",
+            &[&pkg.id],
+        )?;
+
+        tx.commit()
     }
+}
 
-    pub fn find_by_id(conn: &rusqlite::Connection, id: &str) -> Option<PackageRecord> {
-        let version = match Self::sql_version(conn, id) {
+impl PackageRecord {
+    pub fn find_by_id(conn: &mut rusqlite::Connection, id: &str) -> Option<PackageRecord> {
+        let conn = PackageDbConnection(conn);
+
+        let version = match conn.version(id) {
             Some(v) => v,
-            None => return None
+            None => return None,
         };
-        
-        let files = Self::sql_files(conn, id);
-        let dependencies = Self::sql_dependencies(conn, id);
+
+        let files = conn.files(id);
+        let dependencies = conn.dependencies(id);
 
         Some(PackageRecord {
             id: id.to_owned(),
             version: version,
             files: files,
-            dependencies: dependencies
+            dependencies: dependencies,
         })
     }
 
-    pub fn save(&self, tx: rusqlite::Transaction) -> rusqlite::Result<()> {
-        self.sql_replace_pkg(&tx)?;
-        tx.commit()
+    pub fn save(&self, conn: &mut rusqlite::Connection) -> rusqlite::Result<()> {
+        PackageDbConnection(conn).replace_pkg(self)
     }
 
-    pub fn delete(self, tx: rusqlite::Transaction) -> rusqlite::Result<()> {
-        self.sql_remove_pkg(&tx)?;
-        tx.commit()
+    pub fn delete(self, conn: &mut rusqlite::Connection) -> rusqlite::Result<()> {
+        PackageDbConnection(conn).remove_pkg(&self)
     }
 }
-
 
 // #[test]
 // fn test_create_database() {

@@ -1,26 +1,27 @@
 #[macro_use]
 extern crate clap;
-extern crate pahkat_types as pahkat;
 extern crate pahkat_client;
+extern crate pahkat_types as pahkat;
 extern crate sentry;
 
 use clap::{App, AppSettings, Arg, SubCommand};
 #[cfg(prefix)]
 use std::path::{Path, PathBuf};
 
-use pahkat_types::{Package, InstallTarget};
 use pahkat_client::*;
+use pahkat_types::{InstallTarget, Package};
 use sentry::integrations::panic::register_panic_handler;
 use std::sync::Arc;
 
-#[cfg(prefix)]
-use pahkat_client::tarball::*;
 #[cfg(target_os = "macos")]
 use pahkat_client::macos::*;
+#[cfg(prefix)]
+use pahkat_client::tarball::*;
 #[cfg(windows)]
 use pahkat_client::windows::*;
 
-const DSN: &'static str = "https://0a0fc86e9d2447e8b0b807087575e8c6:3d610a0fea7b49d6803061efa16c2ddc@sentry.io/301711";
+const DSN: &'static str =
+    "https://0a0fc86e9d2447e8b0b807087575e8c6:3d610a0fea7b49d6803061efa16c2ddc@sentry.io/301711";
 
 fn main() {
     std::mem::forget(sentry::init(DSN));
@@ -38,217 +39,258 @@ fn main() {
     if cfg!(target_os = "macos") {
         app = app.subcommand(
             SubCommand::with_name("macos")
-            .about("MacOS-specific commands")
-            .subcommand(
-                SubCommand::with_name("init")
-                    .about("Create config")
-                    .arg(Arg::with_name("url")
-                        .value_name("URL")
-                        .help("URL for repository to use.")
-                        .short("u")
-                        .long("url")
-                        .takes_value(true)
-                        .multiple(true)
-                        .required(true))
-                    .arg(Arg::with_name("cache-dir")
-                        .value_name("CACHE")
-                        .short("c")
-                        .long("cache-dir")
-                        .takes_value(true))
-            )
-            .subcommand(
-                SubCommand::with_name("list")
-                    .about("List packages in repository.")
-            )
-            .subcommand(
-                SubCommand::with_name("install")
-                .about("Install a package.")
-                .arg(Arg::with_name("package-id")
-                    .value_name("PKGID")
-                    .help("The package identifier to install")
-                    .multiple(true)
-                    .required(true))
-                .arg(Arg::with_name("user-target")
-                    .help("Install into user target")
-                    .short("u")
-                    .long("user"))
-            )
-            .subcommand(
-                SubCommand::with_name("uninstall")
-                .about("Uninstall a package.")
-                .arg(Arg::with_name("package-id")
-                    .value_name("PKGID")
-                    .help("The package identifier to install")
-                    .required(true))
-                .arg(Arg::with_name("user-target")
-                    .help("Install into user target")
-                    .short("u")
-                    .long("user"))
-            )
-            .subcommand(
-                SubCommand::with_name("status")
-                .about("Query status of a package identifier")
-                .arg(Arg::with_name("package-id")
-                    .value_name("PKGID")
-                    .help("The package identifier to query")
-                    .required(true))
-                .arg(Arg::with_name("user-target")
-                    .help("Install into user target")
-                    .short("u")
-                    .long("user"))
-            )
-            .subcommand(
-                SubCommand::with_name("list-dependencies")
-                .about("List dependencies for a package.")
-                .arg(Arg::with_name("package-id")
-                    .value_name("PKGID")
-                    .help("The package identifier to install")
-                    .required(true))
-            )
+                .about("MacOS-specific commands")
+                .subcommand(
+                    SubCommand::with_name("init")
+                        .about("Create config")
+                        .arg(
+                            Arg::with_name("url")
+                                .value_name("URL")
+                                .help("URL for repository to use.")
+                                .short("u")
+                                .long("url")
+                                .takes_value(true)
+                                .multiple(true)
+                                .required(true),
+                        )
+                        .arg(
+                            Arg::with_name("cache-dir")
+                                .value_name("CACHE")
+                                .short("c")
+                                .long("cache-dir")
+                                .takes_value(true),
+                        ),
+                )
+                .subcommand(SubCommand::with_name("list").about("List packages in repository."))
+                .subcommand(
+                    SubCommand::with_name("install")
+                        .about("Install a package.")
+                        .arg(
+                            Arg::with_name("package-id")
+                                .value_name("PKGID")
+                                .help("The package identifier to install")
+                                .multiple(true)
+                                .required(true),
+                        )
+                        .arg(
+                            Arg::with_name("user-target")
+                                .help("Install into user target")
+                                .short("u")
+                                .long("user"),
+                        ),
+                )
+                .subcommand(
+                    SubCommand::with_name("uninstall")
+                        .about("Uninstall a package.")
+                        .arg(
+                            Arg::with_name("package-id")
+                                .value_name("PKGID")
+                                .help("The package identifier to install")
+                                .required(true),
+                        )
+                        .arg(
+                            Arg::with_name("user-target")
+                                .help("Install into user target")
+                                .short("u")
+                                .long("user"),
+                        ),
+                )
+                .subcommand(
+                    SubCommand::with_name("status")
+                        .about("Query status of a package identifier")
+                        .arg(
+                            Arg::with_name("package-id")
+                                .value_name("PKGID")
+                                .help("The package identifier to query")
+                                .required(true),
+                        )
+                        .arg(
+                            Arg::with_name("user-target")
+                                .help("Install into user target")
+                                .short("u")
+                                .long("user"),
+                        ),
+                )
+                .subcommand(
+                    SubCommand::with_name("list-dependencies")
+                        .about("List dependencies for a package.")
+                        .arg(
+                            Arg::with_name("package-id")
+                                .value_name("PKGID")
+                                .help("The package identifier to install")
+                                .required(true),
+                        ),
+                ),
         );
     }
 
     if cfg!(windows) {
         app = app.subcommand(
             SubCommand::with_name("windows")
-            .about("Windows-specific commands")
-            .subcommand(
-                SubCommand::with_name("init")
-                    .about("Create config")
-                    .arg(Arg::with_name("url")
-                        .value_name("URL")
-                        .help("URL for repository to use.")
-                        .short("u")
-                        .long("url")
-                        .multiple(true)
-                        .takes_value(true)
-                        .required(true))
-                    .arg(Arg::with_name("cache-dir")
-                        .value_name("CACHE")
-                        .short("c")
-                        .long("cache-dir")
-                        .takes_value(true)
-                        .required(true))
-            )
-            .subcommand(
-                SubCommand::with_name("list")
-                    .about("List packages in repository.")
-            )
-            .subcommand(
-                SubCommand::with_name("install")
-                .about("Install a package.")
-                .arg(Arg::with_name("package-id")
-                    .value_name("PKGID")
-                    .help("The package identifier to install")
-                    .required(true))
-                .arg(Arg::with_name("user-target")
-                    .help("Install into user target")
-                    .short("u")
-                    .long("user"))
-            )
-            .subcommand(
-                SubCommand::with_name("uninstall")
-                .about("Uninstall a package.")
-                .arg(Arg::with_name("package-id")
-                    .value_name("PKGID")
-                    .help("The package identifier to install")
-                    .required(true))
-            )
-            .subcommand(
-                SubCommand::with_name("status")
-                .about("Query status of a package identifier")
-                .arg(Arg::with_name("package-id")
-                    .value_name("PKGID")
-                    .help("The package identifier to query")
-                    .required(true))
-            ));
+                .about("Windows-specific commands")
+                .subcommand(
+                    SubCommand::with_name("init")
+                        .about("Create config")
+                        .arg(
+                            Arg::with_name("url")
+                                .value_name("URL")
+                                .help("URL for repository to use.")
+                                .short("u")
+                                .long("url")
+                                .multiple(true)
+                                .takes_value(true)
+                                .required(true),
+                        )
+                        .arg(
+                            Arg::with_name("cache-dir")
+                                .value_name("CACHE")
+                                .short("c")
+                                .long("cache-dir")
+                                .takes_value(true)
+                                .required(true),
+                        ),
+                )
+                .subcommand(SubCommand::with_name("list").about("List packages in repository."))
+                .subcommand(
+                    SubCommand::with_name("install")
+                        .about("Install a package.")
+                        .arg(
+                            Arg::with_name("package-id")
+                                .value_name("PKGID")
+                                .help("The package identifier to install")
+                                .required(true),
+                        )
+                        .arg(
+                            Arg::with_name("user-target")
+                                .help("Install into user target")
+                                .short("u")
+                                .long("user"),
+                        ),
+                )
+                .subcommand(
+                    SubCommand::with_name("uninstall")
+                        .about("Uninstall a package.")
+                        .arg(
+                            Arg::with_name("package-id")
+                                .value_name("PKGID")
+                                .help("The package identifier to install")
+                                .required(true),
+                        ),
+                )
+                .subcommand(
+                    SubCommand::with_name("status")
+                        .about("Query status of a package identifier")
+                        .arg(
+                            Arg::with_name("package-id")
+                                .value_name("PKGID")
+                                .help("The package identifier to query")
+                                .required(true),
+                        ),
+                ),
+        );
     }
 
     if cfg!(prefix) {
         app = app.subcommand(
             SubCommand::with_name("prefix")
                 .about("Commands for managing an installation prefix")
-            .subcommand(
-                SubCommand::with_name("init")
-                    .about("Create prefix.")
-                    .arg(Arg::with_name("prefix")
-                        .value_name("PREFIX")
-                        .help("The prefix for managing repository.")
-                        .short("p")
-                        .long("prefix")
-                        .takes_value(true)
-                        .required(true))
-                    .arg(Arg::with_name("url")
-                        .value_name("URL")
-                        .help("URL to repository to use.")
-                        .short("u")
-                        .long("url")
-                        .takes_value(true)
-                        .required(true))
-                    .arg(Arg::with_name("cache-dir")
-                        .value_name("CACHE")
-                        .help("Cache directory to use.")
-                        .short("c")
-                        .long("cache-dir")
-                        .takes_value(true)
-                        .required(true))
-            )
-            .subcommand(
-                SubCommand::with_name("list")
-                    .about("List packages in repository.")
-                    .arg(Arg::with_name("prefix")
-                        .value_name("PREFIX")
-                        .help("The prefix for managing repository.")
-                        .short("p")
-                        .long("prefix")
-                        .takes_value(true)
-                        .required(true))
-            )
-            .subcommand(
-                SubCommand::with_name("install")
-                    .about("Install a package.")
-                    .arg(Arg::with_name("prefix")
-                        .value_name("PREFIX")
-                        .help("The prefix for managing repository.")
-                        .short("p")
-                        .long("prefix")
-                        .takes_value(true)
-                        .required(true))
-                    .arg(Arg::with_name("package")
-                        .value_name("PKGID")
-                        .help("The package identifier to install")
-                        .required(true))
-            )
-            .subcommand(
-                SubCommand::with_name("uninstall")
-                    .about("Uninstall a package.")
-                    .arg(Arg::with_name("prefix")
-                        .value_name("PREFIX")
-                        .help("The prefix for managing repository.")
-                        .short("p")
-                        .long("prefix")
-                        .takes_value(true)
-                        .required(true))
-                    .arg(Arg::with_name("package")
-                        .value_name("PKGID")
-                        .help("The package identifier to uninstall")
-                        .required(true))
-            )
+                .subcommand(
+                    SubCommand::with_name("init")
+                        .about("Create prefix.")
+                        .arg(
+                            Arg::with_name("prefix")
+                                .value_name("PREFIX")
+                                .help("The prefix for managing repository.")
+                                .short("p")
+                                .long("prefix")
+                                .takes_value(true)
+                                .required(true),
+                        )
+                        .arg(
+                            Arg::with_name("url")
+                                .value_name("URL")
+                                .help("URL to repository to use.")
+                                .short("u")
+                                .long("url")
+                                .takes_value(true)
+                                .required(true),
+                        )
+                        .arg(
+                            Arg::with_name("cache-dir")
+                                .value_name("CACHE")
+                                .help("Cache directory to use.")
+                                .short("c")
+                                .long("cache-dir")
+                                .takes_value(true)
+                                .required(true),
+                        ),
+                )
+                .subcommand(
+                    SubCommand::with_name("list")
+                        .about("List packages in repository.")
+                        .arg(
+                            Arg::with_name("prefix")
+                                .value_name("PREFIX")
+                                .help("The prefix for managing repository.")
+                                .short("p")
+                                .long("prefix")
+                                .takes_value(true)
+                                .required(true),
+                        ),
+                )
+                .subcommand(
+                    SubCommand::with_name("install")
+                        .about("Install a package.")
+                        .arg(
+                            Arg::with_name("prefix")
+                                .value_name("PREFIX")
+                                .help("The prefix for managing repository.")
+                                .short("p")
+                                .long("prefix")
+                                .takes_value(true)
+                                .required(true),
+                        )
+                        .arg(
+                            Arg::with_name("package")
+                                .value_name("PKGID")
+                                .help("The package identifier to install")
+                                .required(true),
+                        ),
+                )
+                .subcommand(
+                    SubCommand::with_name("uninstall")
+                        .about("Uninstall a package.")
+                        .arg(
+                            Arg::with_name("prefix")
+                                .value_name("PREFIX")
+                                .help("The prefix for managing repository.")
+                                .short("p")
+                                .long("prefix")
+                                .takes_value(true)
+                                .required(true),
+                        )
+                        .arg(
+                            Arg::with_name("package")
+                                .value_name("PKGID")
+                                .help("The package identifier to uninstall")
+                                .required(true),
+                        ),
+                ),
         );
     }
 
     match app.get_matches().subcommand() {
-        #[cfg(feature="ipc")]
+        #[cfg(feature = "ipc")]
         ("ipc", _) => {
             ipc::start();
-        },
-        #[cfg(target_os="macos")]
+        }
+        #[cfg(target_os = "macos")]
         ("macos", Some(matches)) => {
             match matches.subcommand() {
                 // ("status", Some(matches)) => {
                 //     let package_id = matches.value_of("package-id").expect("package-id to always exist");
                 //     let is_user = matches.is_present("user-target");
-                    
+
                 //     let config = StoreConfig::load_or_default();
                 //     let repos = config.repos()
                 //         .iter()
@@ -267,7 +309,7 @@ fn main() {
                 //         true => InstallTarget::User,
                 //         false => InstallTarget::System
                 //     };
-                    
+
                 //     let status = store.status(&key, target);
 
                 //     match status {
@@ -278,7 +320,7 @@ fn main() {
                 // ("uninstall", Some(matches)) => {
                 //     let package_id = matches.value_of("package-id").expect("package-id to always exist");
                 //     let is_user = matches.is_present("user-target");
-                    
+
                 //     let config = StoreConfig::load_or_default();
                 //     let repos = config.repos()
                 //         .iter()
@@ -316,9 +358,11 @@ fn main() {
                 //     }
                 // }
                 ("install", Some(matches)) => {
-                    let package_ids = matches.values_of("package-id").expect("package-id to always exist");
+                    let package_ids = matches
+                        .values_of("package-id")
+                        .expect("package-id to always exist");
                     let is_user = matches.is_present("user-target");
-                    
+
                     let config = StoreConfig::load_or_default(true);
                     // let repos = config.repos()
                     //     .iter()
@@ -328,7 +372,7 @@ fn main() {
                     let store = Arc::new(MacOSPackageStore::new(config));
                     let target = match is_user {
                         true => InstallTarget::User,
-                        false => InstallTarget::System
+                        false => InstallTarget::System,
                     };
 
                     let mut keys = vec![];
@@ -341,11 +385,14 @@ fn main() {
                             }
                         }
                     }
-                    let actions = keys.into_iter().map(|k| PackageAction {
-                        id: k,
-                        action: PackageActionType::Install,
-                        target
-                    }).collect::<Vec<_>>();
+                    let actions = keys
+                        .into_iter()
+                        .map(|k| PackageAction {
+                            id: k,
+                            action: PackageActionType::Install,
+                            target,
+                        })
+                        .collect::<Vec<_>>();
 
                     let mut transaction = match PackageTransaction::new(store.clone(), actions) {
                         Ok(v) => v,
@@ -362,7 +409,7 @@ fn main() {
                             .template("{spinner:.green} {prefix} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
                             .progress_chars("#>-"));
                         pb.set_prefix(&action.id.id);
-                        
+
                         let progress = move |cur, max| {
                             pb.set_length(max);
                             pb.set_position(cur);
@@ -377,46 +424,61 @@ fn main() {
                     transaction.process(|key, event| {
                         println!("{}: {:?}", key.id, event);
                     });
-                },
+                }
                 ("init", Some(matches)) => {
                     let urls = matches.values_of("url").unwrap();
                     let store = StoreConfig::load_or_default(true);
-                    
+
                     match matches.value_of("cache-dir") {
-                        Some(v) => { store.set_cache_base_path(std::path::PathBuf::from(v)).expect("set cache path"); },
+                        Some(v) => {
+                            store
+                                .set_cache_base_path(std::path::PathBuf::from(v))
+                                .expect("set cache path");
+                        }
                         None => {}
                     };
 
                     for url in urls {
-                        store.add_repo(RepoRecord {
-                            url: url::Url::parse(url).unwrap(),
-                            channel: "stable".into()
-                        }).expect("add repo");
+                        store
+                            .add_repo(RepoRecord {
+                                url: url::Url::parse(url).unwrap(),
+                                channel: "stable".into(),
+                            })
+                            .expect("add repo");
                     }
-                },
+                }
                 ("list", Some(_matches)) => {
                     let config = StoreConfig::load_or_default(true);
-                    let repos = config.repos()
+                    let repos = config
+                        .repos()
                         .iter()
-                        .map(|record| Repository::from_url(&record.url, record.channel.clone()).unwrap())
+                        .map(|record| {
+                            Repository::from_url(&record.url, record.channel.clone()).unwrap()
+                        })
                         .collect::<Vec<_>>();
-                        
+
                     for (n, repo) in repos.iter().enumerate() {
-                        println!("== Repository {}: {} ==", n, repo.meta().name.get("en").unwrap_or(&String::from("")));
+                        println!(
+                            "== Repository {}: {} ==",
+                            n,
+                            repo.meta().name.get("en").unwrap_or(&String::from(""))
+                        );
                         let mut packages: Vec<&Package> = repo.packages().values().collect();
                         packages.sort_unstable_by(|a, b| a.id.cmp(&b.id));
                         for pkg in packages {
-                            println!("{} {} ({}) — {}", pkg.id,
+                            println!(
+                                "{} {} ({}) — {}",
+                                pkg.id,
                                 pkg.version,
                                 pkg.name.get("en").unwrap_or(&"???".to_owned()),
                                 pkg.description.get("en").unwrap_or(&"???".to_owned())
                             );
                         }
                     }
-                },
+                }
                 _ => {}
             }
-        },
+        }
         #[cfg(windows)]
         ("windows", Some(matches)) => {
             match matches.subcommand() {
@@ -478,19 +540,24 @@ fn main() {
                     //     }
                     // }
 
-                    let package_ids = matches.values_of("package-id").expect("package-id to always exist");
+                    let package_ids = matches
+                        .values_of("package-id")
+                        .expect("package-id to always exist");
                     let is_user = matches.is_present("user-target");
-                    
+
                     let config = StoreConfig::load_or_default();
-                    let repos = config.repos()
+                    let repos = config
+                        .repos()
                         .iter()
-                        .map(|record| Repository::from_url(&record.url, record.channel.clone()).unwrap())
+                        .map(|record| {
+                            Repository::from_url(&record.url, record.channel.clone()).unwrap()
+                        })
                         .collect::<Vec<_>>();
 
                     let store = Arc::new(WindowsPackageStore::new(config));
                     let target = match is_user {
                         true => InstallTarget::User,
-                        false => InstallTarget::System
+                        false => InstallTarget::System,
                     };
 
                     let mut keys = vec![];
@@ -503,11 +570,14 @@ fn main() {
                             }
                         }
                     }
-                    let actions = keys.into_iter().map(|k| PackageAction {
-                        id: k,
-                        action: PackageActionType::Install,
-                        target
-                    }).collect::<Vec<_>>();
+                    let actions = keys
+                        .into_iter()
+                        .map(|k| PackageAction {
+                            id: k,
+                            action: PackageActionType::Install,
+                            target,
+                        })
+                        .collect::<Vec<_>>();
 
                     let mut transaction = match PackageTransaction::new(store.clone(), actions) {
                         Ok(v) => v,
@@ -524,7 +594,7 @@ fn main() {
                             .template("{spinner:.green} {prefix} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
                             .progress_chars("#>-"));
                         pb.set_prefix(&action.id.id);
-                        
+
                         let progress = move |cur, max| {
                             pb.set_length(max);
                             pb.set_position(cur);
@@ -539,7 +609,7 @@ fn main() {
                     transaction.process(|key, event| {
                         println!("{}: {:?}", key.id, event);
                     });
-                },
+                }
                 // ("uninstall", Some(matches)) => {
                 //     let package_id = matches.value_of("package-id").expect("package-id to always exist");
                 //     let config = StoreConfig::load_or_default();
@@ -594,95 +664,97 @@ fn main() {
             }
         }
         #[cfg(prefix)]
-        ("prefix", Some(matches)) => {
-            match matches.subcommand() {
-                ("init", Some(matches)) => {
-                    let prefix = matches.value_of("prefix").unwrap();
-                    let url = matches.value_of("url").unwrap();
-                    Prefix::create(Path::new(prefix), url).unwrap();
-                },
-                ("list", Some(matches)) => {
-                    let prefix_str = matches.value_of("prefix").unwrap();
-                    let prefix = Prefix::open(Path::new(prefix_str)).unwrap();
+        ("prefix", Some(matches)) => match matches.subcommand() {
+            ("init", Some(matches)) => {
+                let prefix = matches.value_of("prefix").unwrap();
+                let url = matches.value_of("url").unwrap();
+                Prefix::create(Path::new(prefix), url).unwrap();
+            }
+            ("list", Some(matches)) => {
+                let prefix_str = matches.value_of("prefix").unwrap();
+                let prefix = Prefix::open(Path::new(prefix_str)).unwrap();
 
-                    let repo = Repository::from_url(&prefix.config().url).unwrap();
-                    let mut packages: Vec<&Package> = repo.packages().values().collect();
-                    packages.sort_unstable_by(|a, b| a.id.cmp(&b.id));
-                    for pkg in packages {
-                        println!("{} {} ({}) — {}", pkg.id,
-                            pkg.version,
-                            pkg.name.get("en").unwrap_or(&"???".to_owned()),
-                            pkg.description.get("en").unwrap_or(&"???".to_owned())
-                        );
+                let repo = Repository::from_url(&prefix.config().url).unwrap();
+                let mut packages: Vec<&Package> = repo.packages().values().collect();
+                packages.sort_unstable_by(|a, b| a.id.cmp(&b.id));
+                for pkg in packages {
+                    println!(
+                        "{} {} ({}) — {}",
+                        pkg.id,
+                        pkg.version,
+                        pkg.name.get("en").unwrap_or(&"???".to_owned()),
+                        pkg.description.get("en").unwrap_or(&"???".to_owned())
+                    );
+                }
+            }
+            ("install", Some(matches)) => {
+                let package_id = matches.value_of("package").unwrap();
+                let prefix = open_prefix(matches.value_of("prefix").unwrap()).unwrap();
+                let repo = Repository::from_url(&prefix.config().url).unwrap();
+
+                let package = match repo.package(&package_id) {
+                    Some(v) => v,
+                    None => {
+                        println!("No package found with identifier {}.", package_id);
+                        return;
                     }
-                },
-                ("install", Some(matches)) => {
-                    let package_id = matches.value_of("package").unwrap();
-                    let prefix = open_prefix(matches.value_of("prefix").unwrap()).unwrap();
-                    let repo = Repository::from_url(&prefix.config().url).unwrap();
+                };
 
-                    let package = match repo.package(&package_id) {
-                        Some(v) => v,
-                        None => {
-                            println!("No package found with identifier {}.", package_id);
-                            return;
-                        }
-                    };
-
-                    let status = match prefix.store().status(package) {
-                        Ok(v) => v,
-                        Err(_) => {
-                            println!("An error occurred checking the status of the package.");
-                            return;
-                        }
-                    };
-
-                    match status {
-                        PackageStatus::NotInstalled | PackageStatus::RequiresUpdate => {
-                            let pkg_dir = prefix.store().create_cache();
-                            let pkg_path = package.download(&pkg_dir, Some(|cur, max| println!("{}/{}", cur, max))).unwrap();
-                            prefix.store().install(package, &pkg_path).unwrap();
-                        },
-                        _ => {
-                            println!("Nothing to do for identifier {}", package_id);
-                            return;
-                        }
+                let status = match prefix.store().status(package) {
+                    Ok(v) => v,
+                    Err(_) => {
+                        println!("An error occurred checking the status of the package.");
+                        return;
                     }
-                },
-                ("uninstall", Some(matches)) => {
-                    let package_id = matches.value_of("package").unwrap();
-                    let prefix = open_prefix(matches.value_of("prefix").unwrap()).unwrap();
-                    let repo = Repository::from_url(&prefix.config().url).unwrap();
+                };
 
-                    let package = match repo.package(&package_id) {
-                        Some(v) => v,
-                        None => {
-                            println!("No package found with identifier {}.", package_id);
-                            return;
-                        }
-                    };
-
-                    let status = match prefix.store().status(package) {
-                        Ok(v) => v,
-                        Err(_) => {
-                            println!("An error occurred checking the status of the package.");
-                            return;
-                        }
-                    };
-
-                    match status {
-                        PackageStatus::UpToDate | PackageStatus::RequiresUpdate => {
-                            prefix.store().uninstall(package).unwrap();
-                        },
-                        _ => {
-                            println!("Nothing to do for identifier {}", package_id);
-                            return;
-                        }
+                match status {
+                    PackageStatus::NotInstalled | PackageStatus::RequiresUpdate => {
+                        let pkg_dir = prefix.store().create_cache();
+                        let pkg_path = package
+                            .download(&pkg_dir, Some(|cur, max| println!("{}/{}", cur, max)))
+                            .unwrap();
+                        prefix.store().install(package, &pkg_path).unwrap();
+                    }
+                    _ => {
+                        println!("Nothing to do for identifier {}", package_id);
+                        return;
                     }
                 }
-                _ => {}
             }
-        }
+            ("uninstall", Some(matches)) => {
+                let package_id = matches.value_of("package").unwrap();
+                let prefix = open_prefix(matches.value_of("prefix").unwrap()).unwrap();
+                let repo = Repository::from_url(&prefix.config().url).unwrap();
+
+                let package = match repo.package(&package_id) {
+                    Some(v) => v,
+                    None => {
+                        println!("No package found with identifier {}.", package_id);
+                        return;
+                    }
+                };
+
+                let status = match prefix.store().status(package) {
+                    Ok(v) => v,
+                    Err(_) => {
+                        println!("An error occurred checking the status of the package.");
+                        return;
+                    }
+                };
+
+                match status {
+                    PackageStatus::UpToDate | PackageStatus::RequiresUpdate => {
+                        prefix.store().uninstall(package).unwrap();
+                    }
+                    _ => {
+                        println!("Nothing to do for identifier {}", package_id);
+                        return;
+                    }
+                }
+            }
+            _ => {}
+        },
         _ => {}
     }
 }

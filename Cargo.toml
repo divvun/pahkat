@@ -12,6 +12,16 @@ name = "pahkatc"
 path = "src/bin/pahkatc.rs"
 required-features = ["binaries"]
 
+[[bin]]
+name = "pahkat-prefix"
+path = "src/bin/pahkat-prefix.rs"
+required-features = ["binaries", "prefix"]
+
+[[bin]]
+name = "pahkat-mac"
+path = "src/bin/pahkat-mac.rs"
+required-features = ["binaries"]
+
 [dependencies]
 pahkat-types = { git = "https://github.com/divvun/pahkat", branch = "develop" }
 reqwest = "0.9.18"
@@ -33,6 +43,8 @@ directories = "2.0.1"
 chrono = "0.4.7"
 hashbrown = { version = "0.5.0", features = ["serde"] }
 is_executable = "0.1.2"
+better-panic = { git = "https://github.com/mitsuhiko/better-panic" }
+snafu = "0.4.1"
 
 # Prefix feature
 xz2 = { version = "0.1.6", optional = true }
