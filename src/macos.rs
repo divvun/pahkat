@@ -15,15 +15,21 @@ use crypto::digest::Digest;
 use crypto::sha2::Sha256;
 use pahkat_types::{Downloadable, InstallTarget, Installer, MacOSInstaller, Package};
 use serde::de::{self, Deserialize, Deserializer};
+use snafu::{OptionExt, ResultExt};
 use url::Url;
 
 use crate::{
     cmp, default_uninstall_path, download::Download, global_uninstall_path, repo::Repository,
-    AbsolutePackageKey, PackageActionType, PackageDependency, PackageDependencyError,
-    PackageStatus, PackageStatusError, PackageTransactionError, RepoRecord, StoreConfig,
-    TransactionEvent,
+    AbsolutePackageKey, PackageDependency, PackageStatus, PackageStatusError, RepoRecord,
+    StoreConfig,
 };
 
+use crate::transaction::PackageTransaction;
+
+use crate::transaction::{
+    install::InstallError, install::InvalidUrl, install::ProcessError, uninstall::UninstallError,
+    PackageActionType, PackageDependencyError, PackageStore,
+};
 fn from_str<'de, T, D>(deserializer: D) -> Result<T, D::Error>
 where
     T: FromStr,
@@ -46,31 +52,31 @@ struct BundlePlistInfo {
     pub short_version: Option<String>,
 }
 
-#[derive(Debug)]
-pub enum InstallError {
-    NoPackage,
-    NoInstaller,
-    WrongInstallerType,
-    InvalidFileType,
-    PackageNotInCache,
-    InvalidUrl(String),
-    InstallerFailure(ProcessError),
-}
+// #[derive(Debug)]
+// pub enum InstallError {
+//     NoPackage,
+//     NoInstaller,
+//     WrongInstallerType,
+//     InvalidFileType,
+//     PackageNotInCache,
+//     InvalidUrl(String),
+//     InstallerFailure(ProcessError),
+// }
 
-#[derive(Debug)]
-pub enum UninstallError {
-    NoPackage,
-    NoInstaller,
-    WrongInstallerType,
-    PkgutilFailure(ProcessError),
-}
+// #[derive(Debug)]
+// pub enum UninstallError {
+//     NoPackage,
+//     NoInstaller,
+//     WrongInstallerType,
+//     PkgutilFailure(ProcessError),
+// }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct PackageAction {
-    pub id: AbsolutePackageKey,
-    pub action: PackageActionType,
-    pub target: InstallTarget,
-}
+// #[derive(Debug, Clone, Serialize)]
+// pub struct PackageAction {
+//     pub id: AbsolutePackageKey,
+//     pub action: PackageActionType,
+//     pub target: InstallTarget,
+// }
 
 pub struct TransactionDisposable {
     // is_cancelled: Arc<AtomicBool>,
@@ -78,138 +84,138 @@ pub struct TransactionDisposable {
 // handle: Option<JoinHandle<Result<PathBuf, DownloadError>>>
 }
 
-pub struct PackageTransaction {
-    store: Arc<MacOSPackageStore>,
-    actions: Arc<Vec<PackageAction>>,
-    is_cancelled: Arc<AtomicBool>,
-}
-
-impl PackageTransaction {
-    pub fn new(
-        store: Arc<MacOSPackageStore>,
-        actions: Vec<PackageAction>,
-    ) -> Result<PackageTransaction, PackageTransactionError> {
-        let mut new_actions: Vec<PackageAction> = vec![];
-
-        for action in actions.iter() {
-            let package_key = &action.id;
-
-            let package = match store.resolve_package(&package_key) {
-                Some(p) => p,
-                None => {
-                    return Err(PackageTransactionError::NoPackage(package_key.to_string()));
-                }
-            };
-
-            if action.action == PackageActionType::Install {
-                let dependencies =
-                    match store.find_package_dependencies(&action.id, &package, action.target) {
-                        Ok(d) => d,
-                        Err(e) => return Err(PackageTransactionError::Deps(e)),
-                    };
-
-                for dependency in dependencies.into_iter() {
-                    let contradiction = actions.iter().find(|action| {
-                        dependency.id == action.id && action.action == PackageActionType::Uninstall
-                    });
-                    match contradiction {
-                        Some(_) => {
-                            return Err(PackageTransactionError::ActionContradiction(
-                                package_key.to_string(),
-                            ))
-                        }
-                        None => {
-                            if !new_actions.iter().any(|x| x.id == dependency.id) {
-                                new_actions.push(PackageAction {
-                                    id: dependency.id,
-                                    action: PackageActionType::Install,
-                                    target: action.target,
-                                })
-                            }
-                        }
-                    }
-                }
-            }
-            if !new_actions.iter().any(|x| x.id == action.id) {
-                new_actions.push(action.clone());
-            }
-        }
-
-        Ok(PackageTransaction {
-            store,
-            actions: Arc::new(new_actions),
-            is_cancelled: Arc::new(AtomicBool::new(false)),
-        })
-    }
-
-    pub fn actions(&self) -> Arc<Vec<PackageAction>> {
-        self.actions.clone()
-    }
-
-    pub fn validate(&self) -> bool {
-        true
-    }
-
-    pub fn process<F>(&mut self, progress: F)
-    where
-        F: Fn(AbsolutePackageKey, TransactionEvent) -> () + 'static + Send,
-    {
-        if !self.validate() {
-            // TODO: early return
-            return;
-        }
-
-        let is_cancelled = self.is_cancelled.clone();
-        let store = self.store.clone();
-        let actions = self.actions.clone();
-
-        let handle = std::thread::spawn(move || {
-            for action in actions.iter() {
-                if is_cancelled.load(Ordering::Relaxed) == true {
-                    return;
-                }
-
-                match action.action {
-                    PackageActionType::Install => {
-                        progress(action.id.clone(), TransactionEvent::Installing);
-                        match store.install(&action.id, action.target) {
-                            Ok(_) => progress(action.id.clone(), TransactionEvent::Completed),
-                            Err(e) => {
-                                eprintln!("{:?}", &e);
-                                progress(action.id.clone(), TransactionEvent::Error)
-                            }
-                        };
-                    }
-                    PackageActionType::Uninstall => {
-                        progress(action.id.clone(), TransactionEvent::Uninstalling);
-                        match store.uninstall(&action.id, action.target) {
-                            Ok(_) => progress(action.id.clone(), TransactionEvent::Completed),
-                            Err(e) => {
-                                eprintln!("{:?}", &e);
-                                progress(action.id.clone(), TransactionEvent::Error)
-                            }
-                        };
-                    }
-                }
-            }
-
-            ()
-        });
-
-        handle.join().expect("handle failed to join");
-    }
-
-    pub fn cancel(&self) -> bool {
-        // let prev_value = *self.is_cancelled.read().unwrap();
-        // *self.is_cancelled.write().unwrap() = true;
-        // prev_value
-        unimplemented!()
-    }
-}
-
 pub struct MacOSPackageStore {
     repos: Arc<RwLock<HashMap<RepoRecord, Repository>>>,
     config: Arc<RwLock<StoreConfig>>,
+}
+
+impl PackageStore for MacOSPackageStore {
+    type Target = InstallTarget;
+
+    fn resolve_package(&self, package_key: &AbsolutePackageKey) -> Option<Package> {
+        println!(
+            "Resolving package: url: {}, channel: {}",
+            &package_key.url, &package_key.channel
+        );
+
+        for k in self.repos.read().unwrap().keys() {
+            println!("{:?}", k);
+        }
+
+        crate::repo::resolve_package(package_key, &self.repos)
+
+        // self.repos
+        //     .read()
+        //     .unwrap()
+        //     .get(&RepoRecord {
+        //         url: package_key.url.clone(),
+        //         channel: package_key.channel.clone(),
+        //     })
+        //     .and_then(|r| {
+        //         println!("Got repo: {:?}", r);
+        //         for k in r.packages().keys() {
+        //             println!("Pkg id: {}, {}", &k, k == &package_key.id);
+        //         }
+
+        //         println!("My pkg id: {}", &package_key.id);
+        //         let pkg = match r.packages().get(&package_key.id) {
+        //             Some(x) => Some(x.to_owned()),
+        //             None => None,
+        //         };
+        //         println!("Found pkg: {:?}", &pkg);
+        //         pkg
+        //     })
+    }
+
+    fn install(
+        &self,
+        key: &AbsolutePackageKey,
+        target: &InstallTarget,
+    ) -> Result<PackageStatus, InstallError> {
+        let package = match self.resolve_package(key) {
+            Some(v) => v,
+            None => {
+                return Err(InstallError::NoPackage);
+            }
+        };
+
+        let installer = match package.installer() {
+            None => return Err(InstallError::NoInstaller),
+            Some(v) => v,
+        };
+
+        let installer = match installer {
+            Installer::MacOS(ref v) => v,
+            _ => return Err(InstallError::WrongInstallerType),
+        };
+
+        let url = url::Url::parse(&installer.url).with_context(|| InvalidUrl {
+            url: installer.url.to_owned(),
+        })?;
+        let filename = url.path_segments().unwrap().last().unwrap();
+        let pkg_path = self.download_path(&url.as_str()).join(filename);
+
+        if !pkg_path.exists() {
+            eprintln!("Package path doesn't exist: {:?}", &pkg_path);
+            return Err(InstallError::PackageNotInCache);
+        }
+
+        install_macos_package(&pkg_path, &target)
+            .context(crate::transaction::install::InstallerFailure {})?;
+        //     Err(e) => return Err(InstallError::InstallerFailure { source: e }),
+        //     _ => {}
+        // };
+
+        Ok(self.status_impl(&installer, key, &package, target).unwrap())
+    }
+
+    fn uninstall(
+        &self,
+        key: &AbsolutePackageKey,
+        target: &InstallTarget,
+    ) -> Result<PackageStatus, UninstallError> {
+        let package = match self.resolve_package(key) {
+            Some(v) => v,
+            None => {
+                return Err(UninstallError::NoPackage);
+            }
+        };
+
+        let installer = match package.installer() {
+            None => return Err(UninstallError::NoInstaller),
+            Some(v) => v,
+        };
+
+        let installer = match installer {
+            &Installer::MacOS(ref v) => v,
+            _ => return Err(UninstallError::WrongInstallerType),
+        };
+
+        match uninstall_macos_package(&installer.pkg_id, &target) {
+            Err(e) => return Err(UninstallError::ProcessFailed { source: e }),
+            _ => {}
+        };
+
+        Ok(self.status_impl(installer, key, &package, target).unwrap())
+    }
+
+    /// Get the dependencies for a given package
+    fn find_package_dependencies(
+        &self,
+        key: &AbsolutePackageKey,
+        package: &Package,
+        target: &InstallTarget,
+    ) -> Result<Vec<PackageDependency>, PackageDependencyError> {
+        let mut resolved = Vec::<String>::new();
+        Ok(self.find_package_dependencies_impl(key, package, target, 0, &mut resolved)?)
+    }
+    fn download(
+        &self,
+        key: &AbsolutePackageKey,
+        progress: Box<dyn Fn(u64, u64) -> () + Send + 'static>,
+    ) -> Result<PathBuf, crate::download::DownloadError> {
+        unimplemented!()
+    }
 }
 
 impl MacOSPackageStore {
@@ -226,10 +232,6 @@ impl MacOSPackageStore {
 
     pub fn config(&self) -> StoreConfig {
         self.config.read().unwrap().clone()
-    }
-
-    pub(crate) fn repos_json(&self) -> String {
-        serde_json::to_string(&self.repos.read().unwrap().values().collect::<Vec<_>>()).unwrap()
     }
 
     fn clear_cache(&self) {
@@ -253,60 +255,8 @@ impl MacOSPackageStore {
         self.refresh_repos();
     }
 
-    fn recurse_linked_repos(
-        &self,
-        url: &str,
-        channel: String,
-        repos: &mut HashMap<RepoRecord, Repository>,
-        cache_path: &Path,
-    ) {
-        let url = match url::Url::parse(url) {
-            Ok(v) => v,
-            Err(e) => {
-                eprintln!("{:?}", e);
-                return;
-            }
-        };
-
-        let record = RepoRecord { url, channel };
-
-        self.recurse_repo(&record, repos, cache_path);
-    }
-
-    fn recurse_repo(
-        &self,
-        record: &RepoRecord,
-        repos: &mut HashMap<RepoRecord, Repository>,
-        cache_path: &Path,
-    ) {
-        if repos.contains_key(&record) {
-            return;
-        }
-
-        match Repository::from_cache_or_url(&record.url, record.channel.clone(), cache_path) {
-            Ok(repo) => {
-                for url in repo.meta().linked_repositories.iter() {
-                    self.recurse_linked_repos(url, record.channel.clone(), repos, cache_path);
-                }
-
-                repos.insert(record.clone(), repo);
-            }
-            // TODO: actual error handling omg
-            Err(e) => {
-                eprintln!("{:?}", e);
-            }
-        };
-    }
-
     pub fn refresh_repos(&self) {
-        let mut repos = HashMap::new();
-        let config = self.config.read().unwrap();
-
-        for record in config.repos().iter() {
-            self.recurse_repo(record, &mut repos, &config.repo_cache_path());
-        }
-
-        *self.repos.write().unwrap() = repos;
+        *self.repos.write().unwrap() = crate::repo::refresh_repos(&*self.config.read().unwrap());
     }
 
     pub fn add_repo(&self, url: String, channel: String) -> Result<(), Box<dyn std::error::Error>> {
@@ -348,38 +298,6 @@ impl MacOSPackageStore {
         Ok(())
     }
 
-    pub fn resolve_package(&self, package_key: &AbsolutePackageKey) -> Option<Package> {
-        println!(
-            "Resolving package: url: {}, channel: {}",
-            &package_key.url, &package_key.channel
-        );
-        for k in self.repos.read().unwrap().keys() {
-            println!("{:?}", k);
-        }
-
-        self.repos
-            .read()
-            .unwrap()
-            .get(&RepoRecord {
-                url: package_key.url.clone(),
-                channel: package_key.channel.clone(),
-            })
-            .and_then(|r| {
-                println!("Got repo: {:?}", r);
-                for k in r.packages().keys() {
-                    println!("Pkg id: {}, {}", &k, k == &package_key.id);
-                }
-
-                println!("My pkg id: {}", &package_key.id);
-                let pkg = match r.packages().get(&package_key.id) {
-                    Some(x) => Some(x.to_owned()),
-                    None => None,
-                };
-                println!("Found pkg: {:?}", &pkg);
-                pkg
-            })
-    }
-
     pub fn find_package(&self, package_id: &str) -> Option<(AbsolutePackageKey, Package)> {
         self.repos.read().unwrap().iter().find_map(|(key, repo)| {
             repo.packages().get(package_id).map(|x| {
@@ -391,22 +309,11 @@ impl MacOSPackageStore {
         })
     }
 
-    /// Get the dependencies for a given package
-    pub fn find_package_dependencies(
-        &self,
-        key: &AbsolutePackageKey,
-        package: &Package,
-        target: InstallTarget,
-    ) -> Result<Vec<PackageDependency>, PackageDependencyError> {
-        let mut resolved = Vec::<String>::new();
-        Ok(self.find_package_dependencies_impl(key, package, target, 0, &mut resolved)?)
-    }
-
     fn find_package_dependencies_impl(
         &self,
         _key: &AbsolutePackageKey,
         package: &Package,
-        target: InstallTarget,
+        target: &InstallTarget,
         level: u8,
         resolved: &mut Vec<String>,
     ) -> Result<Vec<PackageDependency>, PackageDependencyError> {
@@ -502,80 +409,10 @@ impl MacOSPackageStore {
         disposable.wait()
     }
 
-    pub fn install(
-        &self,
-        key: &AbsolutePackageKey,
-        target: InstallTarget,
-    ) -> Result<PackageStatus, InstallError> {
-        let package = match self.resolve_package(key) {
-            Some(v) => v,
-            None => {
-                return Err(InstallError::NoPackage);
-            }
-        };
-
-        let installer = match package.installer() {
-            None => return Err(InstallError::NoInstaller),
-            Some(v) => v,
-        };
-
-        let installer = match *installer {
-            Installer::MacOS(ref v) => v,
-            _ => return Err(InstallError::WrongInstallerType),
-        };
-
-        let url = url::Url::parse(&installer.url)
-            .map_err(|_| InstallError::InvalidUrl(installer.url.to_owned()))?;
-        let filename = url.path_segments().unwrap().last().unwrap();
-        let pkg_path = self.download_path(&url.as_str()).join(filename);
-
-        if !pkg_path.exists() {
-            eprintln!("Package path doesn't exist: {:?}", &pkg_path);
-            return Err(InstallError::PackageNotInCache);
-        }
-
-        match install_macos_package(&pkg_path, target) {
-            Err(e) => return Err(InstallError::InstallerFailure(e)),
-            _ => {}
-        };
-
-        Ok(self.status_impl(&installer, key, &package, target).unwrap())
-    }
-
-    pub fn uninstall(
-        &self,
-        key: &AbsolutePackageKey,
-        target: InstallTarget,
-    ) -> Result<PackageStatus, UninstallError> {
-        let package = match self.resolve_package(key) {
-            Some(v) => v,
-            None => {
-                return Err(UninstallError::NoPackage);
-            }
-        };
-
-        let installer = match package.installer() {
-            None => return Err(UninstallError::NoInstaller),
-            Some(v) => v,
-        };
-
-        let installer = match installer {
-            &Installer::MacOS(ref v) => v,
-            _ => return Err(UninstallError::WrongInstallerType),
-        };
-
-        match uninstall_macos_package(&installer.pkg_id, target) {
-            Err(e) => return Err(UninstallError::PkgutilFailure(e)),
-            _ => {}
-        };
-
-        Ok(self.status_impl(installer, key, &package, target).unwrap())
-    }
-
     pub fn status(
         &self,
         key: &AbsolutePackageKey,
-        target: InstallTarget,
+        target: &InstallTarget,
     ) -> Result<PackageStatus, PackageStatusError> {
         let package = match self.resolve_package(key) {
             Some(v) => v,
@@ -594,19 +431,11 @@ impl MacOSPackageStore {
             _ => return Err(PackageStatusError::WrongInstallerType),
         };
 
-        self.status_impl(installer, key, &package, target)
+        self.status_impl(installer, key, &package, &target)
     }
 
     fn download_path(&self, url: &str) -> PathBuf {
-        let mut sha = Sha256::new();
-        sha.input_str(url);
-        let hash_id = sha.result_str();
-
-        self.config
-            .read()
-            .unwrap()
-            .package_cache_path()
-            .join(hash_id)
+        crate::repo::download_path(&*self.config.read().unwrap(), url)
     }
 
     fn status_impl(
@@ -614,7 +443,7 @@ impl MacOSPackageStore {
         installer: &MacOSInstaller,
         id: &AbsolutePackageKey,
         package: &Package,
-        target: InstallTarget,
+        target: &InstallTarget,
     ) -> Result<PackageStatus, PackageStatusError> {
         let pkg_info = match get_package_info(&installer.pkg_id, target) {
             Ok(v) => v,
@@ -679,7 +508,7 @@ impl MacOSPackageExportPlist {
 
 fn get_package_info(
     bundle_id: &str,
-    target: InstallTarget,
+    target: &InstallTarget,
 ) -> Result<MacOSPackageExportPlist, ProcessError> {
     use std::io::Cursor;
 
@@ -694,7 +523,7 @@ fn get_package_info(
         Ok(v) => v,
         Err(e) => {
             eprintln!("{:?}", &e);
-            return Err(ProcessError::Io(e));
+            return Err(ProcessError::Io { source: e });
         }
     };
 
@@ -707,7 +536,7 @@ fn get_package_info(
         }
 
         eprintln!("{:?}", &output);
-        return Err(ProcessError::Unknown(output));
+        return Err(ProcessError::Unknown { output });
     }
 
     let plist_data = String::from_utf8(output.stdout).expect("plist should always be valid UTF-8");
@@ -717,14 +546,7 @@ fn get_package_info(
     return Ok(plist);
 }
 
-#[derive(Debug)]
-pub enum ProcessError {
-    Io(io::Error),
-    Unknown(process::Output),
-    NotFound,
-}
-
-fn install_macos_package(pkg_path: &Path, target: InstallTarget) -> Result<(), ProcessError> {
+fn install_macos_package(pkg_path: &Path, target: &InstallTarget) -> Result<(), ProcessError> {
     let target_str = match target {
         InstallTarget::User => "CurrentUserHomeDirectory",
         InstallTarget::System => "LocalSystem",
@@ -737,18 +559,18 @@ fn install_macos_package(pkg_path: &Path, target: InstallTarget) -> Result<(), P
         Ok(v) => v,
         Err(e) => {
             eprintln!("{:?}", &e);
-            return Err(ProcessError::Io(e));
+            return Err(ProcessError::Io { source: e });
         }
     };
     if !output.status.success() {
         eprintln!("{:?}", &output);
         let _msg = format!("Exit code: {}", output.status.code().unwrap());
-        return Err(ProcessError::Unknown(output));
+        return Err(ProcessError::Unknown { output });
     }
     Ok(())
 }
 
-fn run_script(name: &str, bundle_id: &str, target: InstallTarget) -> Result<(), ProcessError> {
+fn run_script(name: &str, bundle_id: &str, target: &InstallTarget) -> Result<(), ProcessError> {
     let path = match target {
         InstallTarget::User => default_uninstall_path(),
         InstallTarget::System => global_uninstall_path(),
@@ -764,26 +586,26 @@ fn run_script(name: &str, bundle_id: &str, target: InstallTarget) -> Result<(), 
         Ok(v) => v,
         Err(e) => {
             eprintln!("{:?}", &e);
-            return Err(ProcessError::Io(e));
+            return Err(ProcessError::Io { source: e });
         }
     };
     if !output.status.success() {
         eprintln!("{:?}", &output);
         let _msg = format!("Exit code: {}", output.status.code().unwrap());
-        return Err(ProcessError::Unknown(output));
+        return Err(ProcessError::Unknown { output });
     }
     Ok(())
 }
 
-fn run_pre_uninstall_script(bundle_id: &str, target: InstallTarget) -> Result<(), ProcessError> {
+fn run_pre_uninstall_script(bundle_id: &str, target: &InstallTarget) -> Result<(), ProcessError> {
     run_script("pre-uninstall", bundle_id, target)
 }
 
-fn run_post_uninstall_script(bundle_id: &str, target: InstallTarget) -> Result<(), ProcessError> {
+fn run_post_uninstall_script(bundle_id: &str, target: &InstallTarget) -> Result<(), ProcessError> {
     run_script("post-uninstall", bundle_id, target)
 }
 
-fn uninstall_macos_package(bundle_id: &str, target: InstallTarget) -> Result<(), ProcessError> {
+fn uninstall_macos_package(bundle_id: &str, target: &InstallTarget) -> Result<(), ProcessError> {
     let package_info = get_package_info(bundle_id, target)?;
 
     run_pre_uninstall_script(bundle_id, target)?;
@@ -845,7 +667,7 @@ fn uninstall_macos_package(bundle_id: &str, target: InstallTarget) -> Result<(),
     Ok(())
 }
 
-fn forget_pkg_id(bundle_id: &str, target: InstallTarget) -> Result<(), ProcessError> {
+fn forget_pkg_id(bundle_id: &str, target: &InstallTarget) -> Result<(), ProcessError> {
     let home_dir = dirs::home_dir().expect("Always find home directory");
     let mut args = vec!["--forget", bundle_id];
     if let InstallTarget::User = target {
@@ -858,12 +680,12 @@ fn forget_pkg_id(bundle_id: &str, target: InstallTarget) -> Result<(), ProcessEr
         Ok(v) => v,
         Err(e) => {
             eprintln!("{:?}", e);
-            return Err(ProcessError::Io(e));
+            return Err(ProcessError::Io { source: e });
         }
     };
     if !output.status.success() {
         eprintln!("{:?}", output.status.code().unwrap());
-        return Err(ProcessError::Unknown(output));
+        return Err(ProcessError::Unknown { output });
     }
     Ok(())
 }

@@ -195,11 +195,7 @@ fn main() {
             }
             let actions = keys
                 .into_iter()
-                .map(|k| PackageAction {
-                    id: k,
-                    action: PackageActionType::Install,
-                    target,
-                })
+                .map(|k| PackageAction::install(k, target))
                 .collect::<Vec<_>>();
 
             let mut transaction = match PackageTransaction::new(store.clone(), actions) {

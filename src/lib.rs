@@ -36,7 +36,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use url::Url;
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", feature = "macos"))]
 pub mod macos;
 // #[cfg(feature = "prefix")]
 pub mod tarball;
@@ -47,63 +47,14 @@ mod cmp;
 mod download;
 pub mod ffi;
 pub mod repo;
+pub mod transaction;
+
 pub use self::download::Download;
 pub use self::repo::Repository;
+pub use self::transaction::PackageAction;
 use pahkat_types::Repository as RepositoryMeta;
 
 use directories::BaseDirs;
-
-#[derive(Debug)]
-pub enum TransactionEvent {
-    NotStarted,
-    Uninstalling,
-    Installing,
-    Completed,
-    Error,
-}
-
-impl TransactionEvent {
-    pub fn to_u32(&self) -> u32 {
-        match self {
-            TransactionEvent::NotStarted => 0,
-            TransactionEvent::Uninstalling => 1,
-            TransactionEvent::Installing => 2,
-            TransactionEvent::Completed => 3,
-            TransactionEvent::Error => 4,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum PackageTransactionError {
-    NoPackage(String),
-    Deps(PackageDependencyError),
-    ActionContradiction(String),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum PackageActionType {
-    Install,
-    Uninstall,
-}
-
-impl PackageActionType {
-    pub fn from_u8(x: u8) -> PackageActionType {
-        match x {
-            0 => PackageActionType::Install,
-            1 => PackageActionType::Uninstall,
-            _ => panic!("Invalid package action type: {}", x),
-        }
-    }
-
-    pub fn to_u8(&self) -> u8 {
-        match self {
-            PackageActionType::Install => 0,
-            PackageActionType::Uninstall => 1,
-        }
-    }
-}
 
 use serde::de::{self, Deserialize, Deserializer, Visitor};
 use serde::ser::{Serialize, Serializer};
@@ -277,6 +228,34 @@ impl AbsolutePackageKey {
     }
 }
 
+// use url::Url;
+
+pub enum ConfigPath {
+    Container(Url),
+    File(Url),
+}
+
+impl ConfigPath {
+    fn container_to_file(&self) -> Option<Url> {
+        let url = match self {
+            ConfigPath::File(v) => return Some(v.to_owned()),
+            ConfigPath::Container(v) => v,
+        };
+
+        let container_path = dirs::home_dir().expect("valid home dir").join(url.path());
+        Url::from_file_path(container_path).ok()
+    }
+
+    fn try_as_path(&self) -> Option<PathBuf> {
+        let url = match self {
+            ConfigPath::File(ref v) => v.to_owned(),
+            ConfigPath::Container(v) => self.container_to_file()?,
+        };
+
+        url.to_file_path().ok()
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct RawStoreConfig {
@@ -425,9 +404,9 @@ impl StoreConfig {
         self.data.read().unwrap().cache_path.join("repos")
     }
 
-    pub(crate) fn cache_base_path(&self) -> PathBuf {
-        self.data.read().unwrap().cache_path.to_owned()
-    }
+    // pub(crate) fn cache_base_path(&self) -> PathBuf {
+    //     self.data.read().unwrap().cache_path.to_owned()
+    // }
 
     pub fn set_cache_base_path(&self, cache_path: PathBuf) -> SaveResult {
         {
@@ -523,25 +502,6 @@ impl StoreConfig {
 
     pub fn ui_setting(&self, key: &str) -> Option<String> {
         self.data.read().unwrap().ui.get(key).map(|x| x.to_string())
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum PackageDependencyError {
-    PackageNotFound,
-    VersionNotFound,
-    PackageStatusError(PackageStatusError),
-}
-
-impl fmt::Display for PackageDependencyError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match *self {
-            PackageDependencyError::PackageNotFound => write!(f, "Error: Package not found"),
-            PackageDependencyError::VersionNotFound => {
-                write!(f, "Error: Package version not found")
-            }
-            PackageDependencyError::PackageStatusError(e) => write!(f, "{}", e),
-        }
     }
 }
 

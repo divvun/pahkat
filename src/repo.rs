@@ -29,6 +29,52 @@ fn last_modified_cache(repo_cache_path: &Path) -> SystemTime {
     }
 }
 
+use crate::{AbsolutePackageKey, RepoRecord};
+use hashbrown::HashMap;
+use std::sync::{Arc, RwLock};
+
+pub(crate) fn download_path(config: &StoreConfig, url: &str) -> std::path::PathBuf {
+    let mut sha = Sha256::new();
+    sha.input_str(url);
+    let hash_id = sha.result_str();
+    let part1 = &hash_id[0..2];
+    let part2 = &hash_id[2..4];
+    let part3 = &hash_id[4..];
+
+    config
+        .package_cache_path()
+        .join(part1)
+        .join(part2)
+        .join(part3)
+}
+
+pub(crate) fn resolve_package(
+    package_key: &AbsolutePackageKey,
+    repos: &Arc<RwLock<HashMap<RepoRecord, Repository>>>,
+) -> Option<Package> {
+    repos
+        .read()
+        .unwrap()
+        .get(&RepoRecord {
+            url: package_key.url.clone(),
+            channel: package_key.channel.clone(),
+        })
+        .and_then(|r| {
+            println!("Got repo: {:?}", r);
+            for k in r.packages().keys() {
+                println!("Pkg id: {}, {}", &k, k == &package_key.id);
+            }
+
+            println!("My pkg id: {}", &package_key.id);
+            let pkg = match r.packages().get(&package_key.id) {
+                Some(x) => Some(x.to_owned()),
+                None => None,
+            };
+            println!("Found pkg: {:?}", &pkg);
+            pkg
+        })
+}
+
 impl Repository {
     pub fn path_hash(url: &Url, channel: &str) -> String {
         let mut sha = Sha256::new();
@@ -191,4 +237,73 @@ impl std::fmt::Display for RepoDownloadError {
             RepoDownloadError::IoError(ref e) => e.fmt(f),
         }
     }
+}
+
+use crate::StoreConfig;
+
+pub(crate) fn refresh_repos(config: &StoreConfig) -> HashMap<RepoRecord, Repository> {
+    let mut repos = HashMap::new();
+
+    for record in config.repos().iter() {
+        recurse_repo(record, &mut repos, &config.repo_cache_path());
+    }
+
+    repos
+}
+
+fn recurse_linked_repos(
+    url: &str,
+    channel: String,
+    repos: &mut HashMap<RepoRecord, Repository>,
+    cache_path: &Path,
+) {
+    let url = match url::Url::parse(url) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("{:?}", e);
+            return;
+        }
+    };
+
+    let record = RepoRecord { url, channel };
+
+    recurse_repo(&record, repos, cache_path);
+}
+
+fn recurse_repo(
+    record: &RepoRecord,
+    repos: &mut HashMap<RepoRecord, Repository>,
+    cache_path: &Path,
+) {
+    if repos.contains_key(&record) {
+        return;
+    }
+
+    match Repository::from_cache_or_url(&record.url, record.channel.clone(), cache_path) {
+        Ok(repo) => {
+            for url in repo.meta().linked_repositories.iter() {
+                recurse_linked_repos(url, record.channel.clone(), repos, cache_path);
+            }
+
+            repos.insert(record.clone(), repo);
+        }
+        // TODO: actual error handling omg
+        Err(e) => {
+            eprintln!("{:?}", e);
+        }
+    };
+}
+
+pub(crate) fn find_package_by_id(
+    repos: &HashMap<RepoRecord, Repository>,
+    package_id: &str,
+) -> Option<(AbsolutePackageKey, Package)> {
+    repos.iter().find_map(|(key, repo)| {
+        repo.packages().get(package_id).map(|x| {
+            (
+                AbsolutePackageKey::new(repo.meta(), &key.channel, package_id),
+                x.to_owned(),
+            )
+        })
+    })
 }

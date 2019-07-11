@@ -32,128 +32,7 @@ use winreg::RegKey;
 //     config.save(&config_path).unwrap();
 // }
 
-pub struct PackageTransaction {
-    store: Arc<WindowsPackageStore>,
-    actions: Arc<Vec<PackageAction>>,
-    is_cancelled: Arc<AtomicBool>,
-}
-
-impl PackageTransaction {
-    pub fn new(
-        store: Arc<WindowsPackageStore>,
-        actions: Vec<PackageAction>,
-    ) -> Result<PackageTransaction, PackageTransactionError> {
-        let mut new_actions: Vec<PackageAction> = vec![];
-
-        for action in actions.iter() {
-            let package_key = &action.id;
-
-            let package = match store.resolve_package(&package_key) {
-                Some(p) => p,
-                None => {
-                    return Err(PackageTransactionError::NoPackage(package_key.to_string()));
-                }
-            };
-
-            if action.action == PackageActionType::Install {
-                let dependencies =
-                    match store.find_package_dependencies(&action.id, &package, action.target) {
-                        Ok(d) => d,
-                        Err(e) => return Err(PackageTransactionError::Deps(e)),
-                    };
-
-                for dependency in dependencies.into_iter() {
-                    let contradiction = actions.iter().find(|action| {
-                        dependency.id == action.id && action.action == PackageActionType::Uninstall
-                    });
-                    match contradiction {
-                        Some(a) => {
-                            return Err(PackageTransactionError::ActionContradiction(
-                                package_key.to_string(),
-                            ))
-                        }
-                        None => {
-                            if !new_actions.iter().any(|x| x.id == dependency.id) {
-                                new_actions.push(PackageAction {
-                                    id: dependency.id,
-                                    action: PackageActionType::Install,
-                                    target: action.target,
-                                })
-                            }
-                        }
-                    }
-                }
-            }
-            if !new_actions.iter().any(|x| x.id == action.id) {
-                new_actions.push(action.clone());
-            }
-        }
-
-        Ok(PackageTransaction {
-            store,
-            actions: Arc::new(new_actions),
-            is_cancelled: Arc::new(AtomicBool::new(false)),
-        })
-    }
-
-    pub fn actions(&self) -> Arc<Vec<PackageAction>> {
-        self.actions.clone()
-    }
-
-    pub fn validate(&self) -> bool {
-        true
-    }
-
-    pub fn process<F>(&mut self, progress: F)
-    where
-        F: Fn(AbsolutePackageKey, TransactionEvent) -> () + 'static + Send,
-    {
-        if !self.validate() {
-            // TODO: early return
-            return;
-        }
-
-        let is_cancelled = self.is_cancelled.clone();
-        let store = self.store.clone();
-        let actions = self.actions.clone();
-
-        let handle = std::thread::spawn(move || {
-            for action in actions.iter() {
-                if is_cancelled.load(Ordering::Relaxed) == true {
-                    return;
-                }
-
-                match action.action {
-                    PackageActionType::Install => {
-                        progress(action.id.clone(), TransactionEvent::Installing);
-                        match store.install(&action.id, action.target) {
-                            Ok(_) => progress(action.id.clone(), TransactionEvent::Completed),
-                            Err(_) => progress(action.id.clone(), TransactionEvent::Error),
-                        };
-                    }
-                    PackageActionType::Uninstall => {
-                        progress(action.id.clone(), TransactionEvent::Uninstalling);
-                        match store.uninstall(&action.id, action.target) {
-                            Ok(_) => progress(action.id.clone(), TransactionEvent::Completed),
-                            Err(_) => progress(action.id.clone(), TransactionEvent::Error),
-                        };
-                    }
-                }
-            }
-
-            ()
-        });
-
-        handle.join();
-    }
-
-    pub fn cancel(&self) -> bool {
-        // let prev_value = *self.is_cancelled.read().unwrap();
-        // *self.is_cancelled.write().unwrap() = true;
-        // prev_value
-        unimplemented!()
-    }
-}
+use crate::transaction::PackageTransaction;
 
 mod sys {
     use std::ffi::{OsStr, OsString};
@@ -221,12 +100,12 @@ mod sys {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct PackageAction {
-    pub id: AbsolutePackageKey,
-    pub action: PackageActionType,
-    pub target: InstallTarget,
-}
+// #[derive(Debug, Clone, Serialize)]
+// pub struct PackageAction {
+//     pub id: AbsolutePackageKey,
+//     pub action: PackageActionType,
+//     pub target: InstallTarget,
+// }
 
 mod Keys {
     pub const UninstallPath: &'static str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall";
