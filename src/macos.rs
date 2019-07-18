@@ -93,38 +93,16 @@ impl PackageStore for MacOSPackageStore {
     type Target = InstallTarget;
 
     fn resolve_package(&self, package_key: &AbsolutePackageKey) -> Option<Package> {
-        println!(
+        log::debug!(
             "Resolving package: url: {}, channel: {}",
             &package_key.url, &package_key.channel
         );
 
         for k in self.repos.read().unwrap().keys() {
-            println!("{:?}", k);
+            log::debug!("{:?}", k);
         }
 
         crate::repo::resolve_package(package_key, &self.repos)
-
-        // self.repos
-        //     .read()
-        //     .unwrap()
-        //     .get(&RepoRecord {
-        //         url: package_key.url.clone(),
-        //         channel: package_key.channel.clone(),
-        //     })
-        //     .and_then(|r| {
-        //         println!("Got repo: {:?}", r);
-        //         for k in r.packages().keys() {
-        //             println!("Pkg id: {}, {}", &k, k == &package_key.id);
-        //         }
-
-        //         println!("My pkg id: {}", &package_key.id);
-        //         let pkg = match r.packages().get(&package_key.id) {
-        //             Some(x) => Some(x.to_owned()),
-        //             None => None,
-        //         };
-        //         println!("Found pkg: {:?}", &pkg);
-        //         pkg
-        //     })
     }
 
     fn install(
@@ -156,7 +134,7 @@ impl PackageStore for MacOSPackageStore {
         let pkg_path = self.download_path(&url.as_str()).join(filename);
 
         if !pkg_path.exists() {
-            eprintln!("Package path doesn't exist: {:?}", &pkg_path);
+            log::error!("Package path doesn't exist: {:?}", &pkg_path);
             return Err(InstallError::PackageNotInCache);
         }
 
@@ -243,7 +221,7 @@ impl MacOSPackageStore {
                 &config.repo_cache_path(),
             ) {
                 Err(e) => {
-                    println!("{:?}", e);
+                    log::debug!("{:?}", e);
                 }
                 Ok(_) => {}
             };
@@ -451,7 +429,7 @@ impl MacOSPackageStore {
                 match e {
                     ProcessError::NotFound => {}
                     _ => {
-                        eprintln!("{:?}", e);
+                        log::error!("{:?}", e);
                     }
                 };
 
@@ -522,7 +500,7 @@ fn get_package_info(
     let output = match res {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("{:?}", &e);
+            log::error!("{:?}", &e);
             return Err(ProcessError::Io { source: e });
         }
     };
@@ -530,12 +508,12 @@ fn get_package_info(
     if !output.status.success() {
         if let Some(code) = output.status.code() {
             if code == 1 {
-                eprintln!("pkgutil pkg not found");
+                log::error!("pkgutil pkg not found");
                 return Err(ProcessError::NotFound);
             }
         }
 
-        eprintln!("{:?}", &output);
+        log::error!("{:?}", &output);
         return Err(ProcessError::Unknown { output });
     }
 
@@ -558,12 +536,12 @@ fn install_macos_package(pkg_path: &Path, target: &InstallTarget) -> Result<(), 
     let output = match res {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("{:?}", &e);
+            log::error!("{:?}", &e);
             return Err(ProcessError::Io { source: e });
         }
     };
     if !output.status.success() {
-        eprintln!("{:?}", &output);
+        log::error!("{:?}", &output);
         let _msg = format!("Exit code: {}", output.status.code().unwrap());
         return Err(ProcessError::Unknown { output });
     }
@@ -585,12 +563,12 @@ fn run_script(name: &str, bundle_id: &str, target: &InstallTarget) -> Result<(),
     let output = match res {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("{:?}", &e);
+            log::error!("{:?}", &e);
             return Err(ProcessError::Io { source: e });
         }
     };
     if !output.status.success() {
-        eprintln!("{:?}", &output);
+        log::error!("{:?}", &output);
         let _msg = format!("Exit code: {}", output.status.code().unwrap());
         return Err(ProcessError::Unknown { output });
     }
@@ -627,12 +605,12 @@ fn uninstall_macos_package(bundle_id: &str, target: &InstallTarget) -> Result<()
             continue;
         }
 
-        eprintln!("Deleting: {:?}", &path);
+        log::error!("Deleting: {:?}", &path);
         match remove_file(&path) {
             Err(err) => match err.kind() {
                 io::ErrorKind::NotFound => {}
                 _ => {
-                    eprintln!("{:?}: {:?}", &path, &err);
+                    log::error!("{:?}: {:?}", &path, &err);
                     errors.push(err);
                 }
             },
@@ -648,17 +626,17 @@ fn uninstall_macos_package(bundle_id: &str, target: &InstallTarget) -> Result<()
     });
 
     for dir in directories {
-        eprintln!("Deleting: {:?}", &dir);
+        log::error!("Deleting: {:?}", &dir);
         match remove_dir(&dir) {
             Err(err) => {
-                eprintln!("{:?}: {:?}", &dir, &err);
+                log::error!("{:?}: {:?}", &dir, &err);
                 errors.push(err);
             }
             Ok(_) => {}
         }
     }
 
-    eprintln!("{:?}", errors);
+    log::error!("{:?}", errors);
 
     forget_pkg_id(bundle_id, target)?;
 
@@ -679,12 +657,12 @@ fn forget_pkg_id(bundle_id: &str, target: &InstallTarget) -> Result<(), ProcessE
     let output = match res {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("{:?}", e);
+            log::error!("{:?}", e);
             return Err(ProcessError::Io { source: e });
         }
     };
     if !output.status.success() {
-        eprintln!("{:?}", output.status.code().unwrap());
+        log::error!("{:?}", output.status.code().unwrap());
         return Err(ProcessError::Unknown { output });
     }
     Ok(())

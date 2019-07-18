@@ -2,7 +2,8 @@
 
 #[cfg(all(target_os = "macos", feature = "macos"))]
 pub mod macos;
-#[cfg(windows)]
+
+#[cfg(all(windows, feature = "windows"))]
 pub mod windows;
 
 #[cfg(feature = "prefix")]

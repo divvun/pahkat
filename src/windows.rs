@@ -1,10 +1,11 @@
 #![cfg(windows)]
-use pahkat_types::{Downloadable, InstallTarget, Installer, Package, WindowsInstaller};
-//use {Package, PackageStatus, PackageStatusError, Installer};
 use super::{Repository, StoreConfig};
+use crate::transaction::PackageTransaction;
+use crate::transaction::{PackageStatus, PackageStatusError};
 use crate::*;
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
+use pahkat_types::{Downloadable, InstallTarget, Installer, Package, WindowsInstaller};
 use semver;
 use std::ffi::OsString;
 use std::io;
@@ -15,24 +16,6 @@ use std::sync::{Arc, RwLock};
 use url;
 use winreg::enums::*;
 use winreg::RegKey;
-
-// pub fn init(url: &str, cache_dir: &str) {
-//     let config = StoreConfig {
-//         url: url.to_owned(),
-//         cache_dir: cache_dir.to_owned()
-//     };
-
-//     let config_path = ::default_config_path().join("config.json");
-
-//     if config_path.exists() {
-//         println!("Path already exists; aborting.");
-//         return;
-//     }
-
-//     config.save(&config_path).unwrap();
-// }
-
-use crate::transaction::PackageTransaction;
 
 mod sys {
     use std::ffi::{OsStr, OsString};
@@ -100,13 +83,6 @@ mod sys {
     }
 }
 
-// #[derive(Debug, Clone, Serialize)]
-// pub struct PackageAction {
-//     pub id: AbsolutePackageKey,
-//     pub action: PackageActionType,
-//     pub target: InstallTarget,
-// }
-
 mod Keys {
     pub const UninstallPath: &'static str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall";
     pub const DisplayVersion: &'static str = "DisplayVersion";
@@ -115,9 +91,19 @@ mod Keys {
     pub const UninstallString: &'static str = "UninstallString";
 }
 
+type SharedStoreConfig = Arc<RwLock<StoreConfig>>;
+type SharedRepos = Arc<RwLock<HashMap<RepoRecord, Repository>>>;
+
+#[derive(Debug)]
 pub struct WindowsPackageStore {
-    repos: Arc<RwLock<HashMap<RepoRecord, Repository>>>,
-    config: Arc<RwLock<StoreConfig>>,
+    repos: SharedRepos,
+    config: SharedStoreConfig,
+}
+
+impl WindowsPackageStore {
+    pub fn derp(&self) {
+        log::debug!("DERP: {:?}", self);
+    }
 }
 
 fn installer(package: &Package) -> Result<&WindowsInstaller, PackageStatusError> {
@@ -128,36 +114,6 @@ fn installer(package: &Package) -> Result<&WindowsInstaller, PackageStatusError>
             _ => Err(PackageStatusError::WrongInstallerType),
         },
     }
-}
-
-#[derive(Debug)]
-pub enum WindowsInstallError {
-    NoPackage,
-    NoInstaller,
-    WrongInstallerType,
-    InvalidInstaller,
-    InvalidType,
-    PackageNotInCache,
-    InvalidUrl(String),
-    Process(ProcessError),
-}
-
-#[derive(Debug)]
-pub enum WindowsUninstallError {
-    NoPackage,
-    NoInstaller,
-    WrongInstallerType,
-    InvalidInstaller,
-    InvalidType,
-    NotInstalled,
-    NoUninstString,
-    Process(ProcessError),
-}
-
-#[derive(Debug)]
-pub enum ProcessError {
-    Io(io::Error),
-    Unknown(process::Output),
 }
 
 fn uninstall_regkey(installer: &WindowsInstaller) -> Option<RegKey> {
@@ -172,340 +128,78 @@ fn uninstall_regkey(installer: &WindowsInstaller) -> Option<RegKey> {
     }
 }
 
-impl WindowsPackageStore {
-    pub fn new(config: StoreConfig) -> WindowsPackageStore {
-        let store = WindowsPackageStore {
-            repos: Arc::new(RwLock::new(HashMap::new())),
-            config: Arc::new(RwLock::new(config)),
-        };
+use crate::transaction::PackageStore;
 
-        store.refresh_repos();
+use crate::transaction::{
+    install::InstallError, install::InvalidUrl, install::ProcessError, uninstall::UninstallError,
+    PackageActionType, PackageDependencyError,
+};
 
-        store
+impl PackageStore for WindowsPackageStore {
+    type Target = InstallTarget;
+
+    fn repos(&self) -> SharedRepos {
+        Arc::clone(&self.repos)
     }
 
-    pub fn config(&self) -> StoreConfig {
-        self.config.read().unwrap().clone()
-    }
-
-    pub(crate) fn repos_json(&self) -> String {
-        serde_json::to_string(&self.repos.read().unwrap().values().collect::<Vec<_>>()).unwrap()
-    }
-
-    // TODO: review if there is a better place to put this function...
-    // fn download_path(&self, url: &str) -> PathBuf {
-    //     let mut sha = Sha256::new();
-    //     sha.input_str(url);
-    //     let hash_id = sha.result_str();
-
-    //     self.config.package_cache_path().join(hash_id)
-    // }
-
-    fn download_path(&self, url: &str) -> PathBuf {
-        let mut sha = Sha256::new();
-        sha.input_str(url);
-        let hash_id = sha.result_str();
-
-        self.config
-            .read()
-            .unwrap()
-            .package_cache_path()
-            .join(hash_id)
-    }
-
-    fn clear_cache(&self) {
-        let config = self.config.read().unwrap();
-        for record in config.repos().iter() {
-            match Repository::clear_cache(
-                &record.url,
-                record.channel.clone(),
-                &config.repo_cache_path(),
-            ) {
-                Err(e) => {
-                    println!("{:?}", e);
-                }
-                Ok(_) => {}
-            };
-        }
-    }
-
-    pub fn force_refresh_repos(&self) {
-        self.clear_cache();
-        self.refresh_repos();
-    }
-
-    fn recurse_linked_repos(
-        &self,
-        url: &str,
-        channel: String,
-        repos: &mut HashMap<RepoRecord, Repository>,
-        cache_path: &Path,
-    ) {
-        let url = match url::Url::parse(url) {
-            Ok(v) => v,
-            Err(e) => {
-                eprintln!("{:?}", e);
-                return;
-            }
-        };
-
-        let record = RepoRecord { url, channel };
-
-        self.recurse_repo(&record, repos, cache_path);
-    }
-
-    fn recurse_repo(
-        &self,
-        record: &RepoRecord,
-        repos: &mut HashMap<RepoRecord, Repository>,
-        cache_path: &Path,
-    ) {
-        if repos.contains_key(&record) {
-            return;
-        }
-
-        match Repository::from_cache_or_url(&record.url, record.channel.clone(), cache_path) {
-            Ok(repo) => {
-                for url in repo.meta().linked_repositories.iter() {
-                    self.recurse_linked_repos(url, record.channel.clone(), repos, cache_path);
-                }
-
-                repos.insert(record.clone(), repo);
-            }
-            // TODO: actual error handling omg
-            Err(e) => {
-                eprintln!("{:?}", e);
-            }
-        };
-    }
-
-    pub fn refresh_repos(&self) {
-        let mut repos = HashMap::new();
-        let config = self.config.read().unwrap();
-
-        for record in config.repos().iter() {
-            self.recurse_repo(record, &mut repos, &config.repo_cache_path());
-        }
-
-        *self.repos.write().unwrap() = repos;
-    }
-
-    pub fn add_repo(&self, url: String, channel: String) -> Result<(), ()> {
-        self.config().add_repo(RepoRecord {
-            url: Url::parse(&url).unwrap(),
-            channel,
-        })?;
-        self.refresh_repos();
-        Ok(())
-    }
-
-    pub fn remove_repo(&self, url: String, channel: String) -> Result<(), ()> {
-        self.config().remove_repo(RepoRecord {
-            url: Url::parse(&url).unwrap(),
-            channel,
-        })?;
-        self.refresh_repos();
-        Ok(())
-    }
-
-    pub fn update_repo(&self, index: usize, url: String, channel: String) -> Result<(), ()> {
-        self.config().update_repo(
-            index,
-            RepoRecord {
-                url: Url::parse(&url).unwrap(),
-                channel,
-            },
-        )?;
-        self.refresh_repos();
-        Ok(())
-    }
-
-    pub fn resolve_package(&self, package_key: &AbsolutePackageKey) -> Option<Package> {
-        println!(
-            "Resolving package: url: {}, channel: {}",
-            &package_key.url, &package_key.channel
-        );
-        for k in self.repos.read().unwrap().keys() {
-            println!("{:?}", k);
-        }
-
-        self.repos
-            .read()
-            .unwrap()
-            .get(&RepoRecord {
-                url: package_key.url.clone(),
-                channel: package_key.channel.clone(),
-            })
-            .and_then(|r| {
-                println!("Got repo: {:?}", r);
-                for k in r.packages().keys() {
-                    println!("Pkg id: {}, {}", &k, k == &package_key.id);
-                }
-
-                println!("My pkg id: {}", &package_key.id);
-                let pkg = match r.packages().get(&package_key.id) {
-                    Some(x) => Some(x.to_owned()),
-                    None => None,
-                };
-                println!("Found pkg: {:?}", &pkg);
-                pkg
-            })
-    }
-
-    pub fn find_package(&self, package_id: &str) -> Option<(AbsolutePackageKey, Package)> {
-        self.repos.read().unwrap().iter().find_map(|(key, repo)| {
-            repo.packages().get(package_id).map(|x| {
-                (
-                    AbsolutePackageKey::new(repo.meta(), &key.channel, package_id),
-                    x.to_owned(),
-                )
-            })
-        })
-    }
-
-    pub fn find_package_dependencies(
+    fn download(
         &self,
         key: &AbsolutePackageKey,
-        package: &Package,
-        target: InstallTarget,
-    ) -> Result<Vec<PackageDependency>, PackageDependencyError> {
-        let mut resolved = Vec::<String>::new();
-        Ok(self.find_package_dependencies_impl(key, package, target, 0, &mut resolved)?)
-    }
-
-    fn find_package_dependencies_impl(
-        &self,
-        key: &AbsolutePackageKey,
-        package: &Package,
-        target: InstallTarget,
-        level: u8,
-        resolved: &mut Vec<String>,
-    ) -> Result<Vec<PackageDependency>, PackageDependencyError> {
-        fn push_if_not_exists(dependency: PackageDependency, result: &mut Vec<PackageDependency>) {
-            if result.iter().filter(|d| d.id == dependency.id).count() == 0 {
-                result.push(dependency);
-            }
-        }
-
-        let mut result = Vec::<PackageDependency>::new();
-
-        for (package_id, version) in package.dependencies.iter() {
-            // avoid circular references by keeping
-            // track of package ids that have already been processed
-            if resolved.contains(package_id) {
-                continue;
-            }
-            resolved.push(package_id.clone());
-
-            match self.find_package(package_id.as_str()) {
-                Some((ref key, ref package)) => {
-                    // add all the dependencies of the dependency
-                    // to the list result first
-                    for dependency in self.find_package_dependencies_impl(
-                        key,
-                        package,
-                        target,
-                        level + 1,
-                        resolved,
-                    )? {
-                        push_if_not_exists(dependency, &mut result);
-                    }
-
-                    // make sure the version requirement is correct
-                    // TODO: equality isn't how version comparisons work.
-                    // if package.version.as_str() != version {
-                    //     return Err(PackageDependencyError::VersionNotFound);
-                    // }
-
-                    match self.status(key, target) {
-                        Err(error) => {
-                            return Err(PackageDependencyError::PackageStatusError(error))
-                        }
-                        Ok(status) => match status {
-                            PackageStatus::UpToDate => {}
-                            _ => {
-                                let dependency = PackageDependency {
-                                    id: key.clone(),
-                                    version: version.clone(),
-                                    level,
-                                    status,
-                                };
-                                push_if_not_exists(dependency, &mut result);
-                            }
-                        },
-                    }
-                }
-                _ => {
-                    // the given package id does not exist
-                    return Err(PackageDependencyError::PackageNotFound);
-                }
-            }
-        }
-
-        return Ok(result);
-    }
-
-    pub fn package_path(&self, key: &AbsolutePackageKey) -> Option<PathBuf> {
+        progress: Box<dyn Fn(u64, u64) -> () + Send + 'static>,
+    ) -> Result<PathBuf, crate::download::DownloadError> {
         let package = match self.resolve_package(key) {
             Some(v) => v,
             None => {
-                return None;
+                return Err(crate::download::DownloadError::NoUrl);
             }
         };
 
         let installer = match package.installer() {
-            None => return None,
+            None => return Err(crate::download::DownloadError::NoUrl),
+            Some(v) => v,
+        };
+
+        let config = &self.config.read().unwrap();
+
+        let download_path =
+            crate::repo::download_path(config, &installer.url());
+        let tmp_path = config.tmp_path().to_path_buf();
+        let disposable = package.download(tmp_path, &download_path, Some(progress))?;
+        disposable.wait()
+    }
+
+    fn install(
+        &self,
+        key: &AbsolutePackageKey,
+        target: &Self::Target,
+    ) -> Result<PackageStatus, InstallError> {
+        let package = match self.resolve_package(key) {
+            Some(v) => v,
+            None => {
+                return Err(InstallError::NoPackage);
+            }
+        };
+
+        let installer = match package.installer() {
+            None => return Err(InstallError::NoInstaller),
             Some(v) => v,
         };
 
         let installer = match *installer {
             Installer::Windows(ref v) => v,
-            _ => return None,
+            _ => return Err(InstallError::WrongInstallerType),
         };
 
-        let url = match url::Url::parse(&installer.url) {
-            Ok(v) => v,
-            Err(_) => return None,
-        };
+        let url = url::Url::parse(&installer.url).map_err(|source| InstallError::InvalidUrl {
+            source,
+            url: installer.url.to_owned(),
+        })?;
         let filename = url.path_segments().unwrap().last().unwrap();
-        let pkg_path = self.download_path(&url.as_str()).join(filename);
+        let pkg_path =
+            crate::repo::download_path(&self.config.read().unwrap(), &url.as_str()).join(filename);
 
         if !pkg_path.exists() {
-            return None;
-        }
-
-        Some(pkg_path)
-    }
-
-    pub fn install(
-        &self,
-        key: &AbsolutePackageKey,
-        target: InstallTarget,
-    ) -> Result<PackageStatus, WindowsInstallError> {
-        let package = match self.resolve_package(key) {
-            Some(v) => v,
-            None => {
-                return Err(WindowsInstallError::NoPackage);
-            }
-        };
-
-        let installer = match package.installer() {
-            None => return Err(WindowsInstallError::NoInstaller),
-            Some(v) => v,
-        };
-
-        let installer = match *installer {
-            Installer::Windows(ref v) => v,
-            _ => return Err(WindowsInstallError::WrongInstallerType),
-        };
-
-        let url = url::Url::parse(&installer.url)
-            .map_err(|_| WindowsInstallError::InvalidUrl(installer.url.to_owned()))?;
-        let filename = url.path_segments().unwrap().last().unwrap();
-        let pkg_path = self.download_path(&url.as_str()).join(filename);
-
-        if !pkg_path.exists() {
-            return Err(WindowsInstallError::PackageNotInCache);
+            return Err(InstallError::PackageNotInCache);
         }
 
         let mut args: Vec<OsString> = match (&installer.installer_type, &installer.args) {
@@ -539,60 +233,61 @@ impl WindowsPackageStore {
             }
             _ => sys::args(&OsString::from(pkg_path)).collect(),
         };
-        println!("{:?}", &args);
+        log::debug!("{:?}", &args);
         let prog = args[0].clone();
         args.remove(0);
 
-        // println!("Cmd line: {:?} {:?}", &pkg_path, &args);
+        // log::debug!("Cmd line: {:?} {:?}", &pkg_path, &args);
 
         let res = Command::new(&prog).args(&args).output();
 
         let output = match res {
             Ok(v) => v,
             Err(e) => {
-                eprintln!("{:?}", e);
-                return Err(WindowsInstallError::Process(ProcessError::Io(e)));
+                log::error!("{:?}", e);
+                return Err(InstallError::InstallerFailure {
+                    source: ProcessError::Io { source: e },
+                });
             }
         };
 
         if !output.status.success() {
-            eprintln!("{:?}", output);
-            return Err(WindowsInstallError::Process(ProcessError::Unknown(output)));
+            log::error!("{:?}", output);
+            return Err(InstallError::InstallerFailure {
+                source: ProcessError::Unknown { output },
+            });
         }
 
-        // match install_macos_package(&pkg_path, target) {
-        //     Err(e) => return Err(WindowsInstallError::InstallerFailure(e)),
-        //     _ => {}
-        // };
-
-        Ok(self.status_impl(&installer, key, &package, target).unwrap())
+        Ok(self
+            .status_impl(&installer, key, &package, target.clone())
+            .unwrap())
     }
 
-    pub fn uninstall(
+    fn uninstall(
         &self,
         key: &AbsolutePackageKey,
-        target: InstallTarget,
-    ) -> Result<PackageStatus, WindowsUninstallError> {
+        target: &Self::Target,
+    ) -> Result<PackageStatus, UninstallError> {
         let package = match self.resolve_package(key) {
             Some(v) => v,
             None => {
-                return Err(WindowsUninstallError::NoPackage);
+                return Err(UninstallError::NoPackage);
             }
         };
 
         let installer = match package.installer() {
-            None => return Err(WindowsUninstallError::NoInstaller),
+            None => return Err(UninstallError::NoInstaller),
             Some(v) => v,
         };
 
         let installer = match installer {
             &Installer::Windows(ref v) => v,
-            _ => return Err(WindowsUninstallError::WrongInstallerType),
+            _ => return Err(UninstallError::WrongInstallerType),
         };
 
         let regkey = match uninstall_regkey(&installer) {
             Some(v) => v,
-            None => return Err(WindowsUninstallError::NotInstalled),
+            None => return Err(UninstallError::NotInstalled),
         };
 
         let uninst_string: String = match regkey
@@ -600,7 +295,11 @@ impl WindowsPackageStore {
             .or_else(|_| regkey.get_value(Keys::QuietUninstallString))
         {
             Ok(v) => v,
-            Err(_) => return Err(WindowsUninstallError::NoUninstString),
+            Err(_) => {
+                return Err(UninstallError::PlatformFailure {
+                    message: "No compatible uninstallation method found.",
+                })
+            }
         };
 
         let mut raw_args: Vec<OsString> = sys::args(&uninst_string).map(|x| x.clone()).collect();
@@ -614,61 +313,50 @@ impl WindowsPackageStore {
                     "inno" => "/VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART".to_owned(),
                     "msi" => format!("/x \"{}\" /qn /norestart", &installer.product_code),
                     "nsis" => "/S".to_owned(),
-                    _ => return Err(WindowsUninstallError::InvalidType),
+                    _ => {
+                        return Err(UninstallError::PlatformFailure {
+                            message: "Invalid type specified for package installer.",
+                        })
+                    }
                 };
                 sys::args(&arg_str).collect()
             }
-            _ => return Err(WindowsUninstallError::InvalidType),
+            _ => {
+                return Err(UninstallError::PlatformFailure {
+                    message: "Invalid type specified for package installer.",
+                })
+            }
         };
 
         let res = Command::new(&prog).args(&args).output();
 
         let output = match res {
             Ok(v) => v,
-            Err(e) => {
-                return Err(WindowsUninstallError::Process(ProcessError::Io(e)));
+            Err(source) => {
+                return Err(UninstallError::ProcessFailed {
+                    source: ProcessError::Io { source },
+                });
             }
         };
 
         if !output.status.success() {
-            return Err(WindowsUninstallError::Process(ProcessError::Unknown(
-                output,
-            )));
+            return Err(UninstallError::ProcessFailed {
+                source: ProcessError::Unknown { output },
+            });
         }
 
-        Ok(self.status_impl(installer, key, &package, target).unwrap())
+        Ok(self
+            .status_impl(installer, key, &package, target.clone())
+            .unwrap())
     }
 
-    pub fn download<F>(
+    fn status(
         &self,
         key: &AbsolutePackageKey,
-        progress: F,
-    ) -> Result<PathBuf, crate::download::DownloadError>
-    where
-        F: Fn(u64, u64) -> () + Send + 'static,
-    {
-        let package = match self.resolve_package(key) {
-            Some(v) => v,
-            None => {
-                return Err(crate::download::DownloadError::NoUrl);
-            }
-        };
-
-        let installer = match package.installer() {
-            None => return Err(crate::download::DownloadError::NoUrl),
-            Some(v) => v,
-        };
-
-        let mut disposable =
-            package.download(&self.download_path(&installer.url()), Some(progress))?;
-        disposable.wait()
-    }
-
-    pub fn status(
-        &self,
-        key: &AbsolutePackageKey,
-        target: InstallTarget,
+        target: &InstallTarget,
     ) -> Result<PackageStatus, PackageStatusError> {
+        log::debug!("status: {}, target: {:?}", &key.to_string(), target);
+
         let package = match self.resolve_package(key) {
             Some(v) => v,
             None => {
@@ -686,8 +374,143 @@ impl WindowsPackageStore {
             _ => return Err(PackageStatusError::WrongInstallerType),
         };
 
-        self.status_impl(installer, key, &package, target)
+        self.status_impl(installer, key, &package, target.clone())
     }
+
+    fn resolve_package(&self, key: &AbsolutePackageKey) -> Option<Package> {
+        crate::repo::resolve_package(key, &self.repos)
+    }
+
+    fn find_package_by_id(&self, package_id: &str) -> Option<(AbsolutePackageKey, Package)> {
+        crate::repo::find_package_by_id(self, package_id, &self.repos)
+    }
+
+    // fn find_package_dependencies(
+    //     &self,
+    //     key: &AbsolutePackageKey,
+    //     // package: &Package,
+    //     target: &Self::Target,
+    // ) -> Result<Vec<???>, PackageDependencyError> {
+    //     unimplemented!()
+    //     // let mut resolved = Vec::<String>::new();
+    //     // Ok(self.find_package_dependencies_impl(key, package, target.clone(), 0, &mut resolved)?)
+    // }
+
+    fn refresh_repos(&self) {
+        let config = self.config.read().unwrap();
+        *self.repos.write().unwrap() = crate::repo::refresh_repos(&self.config.read().unwrap());
+    }
+
+    fn clear_cache(&self) {
+        crate::repo::clear_cache(&self.config.read().unwrap())
+    }
+
+    fn add_repo(&self, url: String, channel: String) -> Result<bool, Box<dyn std::error::Error>> {
+        &self.config.read().unwrap().add_repo(RepoRecord {
+            url: Url::parse(&url).unwrap(),
+            channel,
+        })?;
+        self.refresh_repos();
+        Ok(true)
+    }
+
+    fn remove_repo(
+        &self,
+        url: String,
+        channel: String,
+    ) -> Result<bool, Box<dyn std::error::Error>> {
+        self.config.read().unwrap().remove_repo(RepoRecord {
+            url: Url::parse(&url).unwrap(),
+            channel,
+        })?;
+        self.refresh_repos();
+        Ok(true)
+    }
+
+    fn update_repo(
+        &self,
+        index: usize,
+        url: String,
+        channel: String,
+    ) -> Result<bool, Box<dyn std::error::Error>> {
+        self.config.read().unwrap().update_repo(
+            index,
+            RepoRecord {
+                url: Url::parse(&url).unwrap(),
+                channel,
+            },
+        )?;
+        self.refresh_repos();
+        Ok(true)
+    }
+}
+
+impl std::default::Default for WindowsPackageStore {
+    fn default() -> Self {
+        let config = StoreConfig::load_or_default(true);
+        WindowsPackageStore::new(config)
+    }
+}
+
+impl WindowsPackageStore {
+    pub fn new(config: StoreConfig) -> WindowsPackageStore {
+        let store = WindowsPackageStore {
+            repos: Arc::new(RwLock::new(HashMap::new())),
+            config: Arc::new(RwLock::new(config)),
+        };
+
+        store.refresh_repos();
+
+        store
+    }
+
+    pub fn config(&self) -> SharedStoreConfig {
+        Arc::clone(&self.config)
+    }
+
+    // fn find_package_dependencies_impl(
+    //     &self,
+    //     key: &AbsolutePackageKey,
+    //     package: &Package,
+    //     target: InstallTarget,
+    //     level: u8,
+    //     resolved: &mut Vec<String>,
+    // ) -> Result<Vec<???>, PackageDependencyError> {
+    //     unimplemented!()
+    // }
+
+    // TODO: this is a sneaky FFI hack, booooo
+    // pub fn package_path(&self, key: &AbsolutePackageKey) -> Option<PathBuf> {
+    //     let package = match self.resolve_package(key) {
+    //         Some(v) => v,
+    //         None => {
+    //             return None;
+    //         }
+    //     };
+
+    //     let installer = match package.installer() {
+    //         None => return None,
+    //         Some(v) => v,
+    //     };
+
+    //     let installer = match *installer {
+    //         Installer::Windows(ref v) => v,
+    //         _ => return None,
+    //     };
+
+    //     let url = match url::Url::parse(&installer.url) {
+    //         Ok(v) => v,
+    //         Err(_) => return None,
+    //     };
+    //     let filename = url.path_segments().unwrap().last().unwrap();
+    //     let pkg_path = crate::repo::download_path(&self.config(), &url.as_str()).join(filename);
+
+    //     if !pkg_path.exists() {
+    //         return None;
+    //     }
+
+    //     Some(pkg_path)
+    // }
 
     fn status_impl(
         &self,
@@ -706,11 +529,16 @@ impl WindowsPackageStore {
             Ok(v) => v,
         };
 
-        let skipped_package = self.config().skipped_package(id);
+        let config = self.config.read().unwrap();
+
+        let skipped_package = config.skipped_package(id);
         let skipped_package = skipped_package.as_ref().map(String::as_ref);
 
-        self::cmp::semver_cmp(&disp_version, &package.version, skipped_package)
-            .or_else(|_| self::cmp::iso8601_cmp(&disp_version, &package.version, skipped_package))
+        let status = self::cmp::semver_cmp(&disp_version, &package.version, skipped_package)
+            .or_else(|_| self::cmp::iso8601_cmp(&disp_version, &package.version, skipped_package));
+
+        log::debug!("Status: {:?}", &status);
+        status
         // .or_else(|_| self::cmp::assembly_cmp(...))
     }
 }

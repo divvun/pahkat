@@ -7,14 +7,17 @@ use snafu::{ensure, Backtrace, ErrorCompat, OptionExt, ResultExt, Snafu};
 use std::cell::RefCell;
 use std::ffi::OsStr;
 use std::fs::{create_dir_all, read_dir, remove_dir, remove_file, File};
+#[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
+#[cfg(windows)]
+use std::os::windows::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use xz2::read::XzDecoder;
 
 use crate::transaction::PackageTransaction;
 use crate::{
-    cmp, download::Download, repo::Repository, AbsolutePackageKey, PackageDependency,
+    cmp, download::Download, repo::Repository, AbsolutePackageKey,
     PackageStatus, PackageStatusError, RepoRecord, StoreConfig,
 };
 
@@ -69,11 +72,11 @@ impl PrefixPackageStore {
         prefix_path: P,
     ) -> Result<PrefixPackageStore, Box<dyn std::error::Error>> {
         let prefix_path = prefix_path.as_ref().canonicalize()?;
-        println!("{:?}", &prefix_path);
+        log::debug!("{:?}", &prefix_path);
         let config = StoreConfig::load(&prefix_path.join("config.json"), true)?;
 
         let db_file_path = PrefixPackageStore::package_db_path(&config);
-        println!("{:?}", &db_file_path);
+        log::debug!("{:?}", &db_file_path);
         let manager = SqliteConnectionManager::file(&db_file_path);
         let pool = r2d2::Pool::new(manager)?;
 
@@ -171,7 +174,7 @@ impl PackageStore for PrefixPackageStore {
             crate::repo::download_path(&*self.config.read().unwrap(), &url.as_str()).join(filename);
 
         if !pkg_path.exists() {
-            eprintln!("Package path doesn't exist: {:?}", &pkg_path);
+            log::error!("Package path doesn't exist: {:?}", &pkg_path);
             return Err(crate::transaction::install::InstallError::PackageNotInCache);
         }
 
@@ -223,15 +226,13 @@ impl PackageStore for PrefixPackageStore {
 
         Ok(PackageStatus::UpToDate)
     }
-    
+
     fn uninstall(
         &self,
         key: &AbsolutePackageKey,
         target: &Self::Target,
     ) -> Result<PackageStatus, UninstallError> {
-        let package = self
-            .resolve_package(key)
-            .ok_or(UninstallError::NoPackage)?;
+        let package = self.resolve_package(key).ok_or(UninstallError::NoPackage)?;
 
         let mut conn = self.pool.get().unwrap();
         let record = match PackageRecord::find_by_id(&mut conn, &package.id) {
@@ -275,7 +276,7 @@ impl PackageStore for PrefixPackageStore {
 
         Ok(PackageStatus::NotInstalled)
     }
-    
+
     fn find_package_dependencies(
         &self,
         key: &AbsolutePackageKey,
@@ -285,7 +286,7 @@ impl PackageStore for PrefixPackageStore {
         // TODO!
         Ok(vec![])
     }
-    
+
     fn status(
         &self,
         key: &AbsolutePackageKey,
@@ -293,23 +294,23 @@ impl PackageStore for PrefixPackageStore {
     ) -> Result<PackageStatus, PackageStatusError> {
         unimplemented!()
     }
-    
+
     fn find_package_by_id(&self, package_id: &str) -> Option<(AbsolutePackageKey, Package)> {
         unimplemented!()
     }
-    
+
     fn refresh_repos(&self) {
         unimplemented!()
     }
-    
+
     fn clear_cache(&self) {
         unimplemented!()
     }
-    
+
     fn add_repo(&self, url: String, channel: String) -> Result<bool, Box<dyn std::error::Error>> {
         unimplemented!()
     }
-    
+
     fn remove_repo(
         &self,
         url: String,
@@ -469,11 +470,11 @@ static PKG_STORE_INIT: &'static str = include_str!("./pkgstore_init.sql");
 
 //     pub fn open(prefix: &Path) -> Result<Prefix, Box<dyn std::error::Error>> {
 //         let prefix = prefix.canonicalize().unwrap();
-//         println!("{:?}", &prefix);
+//         log::debug!("{:?}", &prefix);
 //         let config = StoreConfig::load(&prefix.join("config.json"), true).unwrap();
 
 //         let db_path = Prefix::package_db_path(&config);
-//         println!("{:?}", &db_path);
+//         log::debug!("{:?}", &db_path);
 //         let conn = rusqlite::Connection::open(&db_path)?;
 //         let store = TarballPackageStore::new(conn, &prefix);
 
@@ -573,7 +574,13 @@ impl<'a> PackageDbConnection<'a> {
                 file_stmt
                     .execute_named(&[
                         (":id", &pkg.id),
-                        (":path", &file_path.as_os_str().as_bytes()),
+                        if cfg!(unix) {
+                            (":path", &file_path.as_os_str().as_bytes())
+                        } else if cfg!(windows) {
+                            (":path", &file_path.as_os_str().encode_wide().flat_map(u16::to_le_bytes).collect())
+                        } else {
+                            unreachable!()
+                        }
                     ])
                     .unwrap();
             }

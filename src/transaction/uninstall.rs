@@ -5,6 +5,8 @@ use snafu::Snafu;
 pub enum UninstallError {
     NoPackage,
     NoInstaller,
+    NotInstalled,
     WrongInstallerType,
     ProcessFailed { source: ProcessError },
+    PlatformFailure { message: &'static str },
 }

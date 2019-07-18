@@ -125,12 +125,12 @@ fn main() {
                 .map(|record| Repository::from_url(&record.url, record.channel.clone()).unwrap())
                 .collect::<Vec<_>>();
             for repo in repos {
-                println!("Repo: {}", &repo.meta().base);
+                log::debug!("Repo: {}", &repo.meta().base);
 
                 let mut packages: Vec<&Package> = repo.packages().values().collect();
                 packages.sort_unstable_by(|a, b| a.id.cmp(&b.id));
                 for pkg in packages {
-                    println!(
+                    log::debug!(
                         "{} {} ({}) — {}",
                         pkg.id,
                         pkg.version,
@@ -155,7 +155,7 @@ fn main() {
                 match store.find_package_by_id(id) {
                     Some(v) => keys.push(v.0),
                     None => {
-                        eprintln!("No package found with id: {}", id);
+                        log::error!("No package found with id: {}", id);
                         return;
                     }
                 }
@@ -170,7 +170,7 @@ fn main() {
             let mut transaction = match PackageTransaction::new(Arc::clone(&store), actions) {
                 Ok(v) => v,
                 Err(e) => {
-                    eprintln!("{:?}", e);
+                    log::error!("{:?}", e);
                     return;
                 }
             };
@@ -196,7 +196,7 @@ fn main() {
             }
 
             transaction.process(|key, event| {
-                println!("{}: {:?}", key.id, event);
+                log::debug!("{}: {:?}", key.id, event);
             });
         }
         // ("uninstall", Some(matches)) => {
@@ -207,7 +207,7 @@ fn main() {
         // let package = match repo.package(&package_id) {
         //     Some(v) => v,
         //     None => {
-        //         println!("No package found with identifier {}.", package_id);
+        //         log::debug!("No package found with identifier {}.", package_id);
         //         return;
         //     }
         // };
@@ -215,7 +215,7 @@ fn main() {
         // let status = match prefix.store().status(package) {
         //     Ok(v) => v,
         //     Err(_) => {
-        //         println!("An error occurred checking the status of the package.");
+        //         log::debug!("An error occurred checking the status of the package.");
         //         return;
         //     }
         // };
@@ -225,7 +225,7 @@ fn main() {
         //         prefix.store().uninstall(package).unwrap();
         //     }
         //     _ => {
-        //         println!("Nothing to do for identifier {}", package_id);
+        //         log::debug!("Nothing to do for identifier {}", package_id);
         //         return;
         //     }
         // }

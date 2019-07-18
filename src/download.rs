@@ -1,6 +1,6 @@
 use pahkat_types::{Downloadable, Package};
 use std::fs::File;
-use std::io::{self, BufWriter, Write};
+use std::io::{self, copy, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -9,6 +9,7 @@ use std::thread::JoinHandle;
 pub trait Download {
     fn download<F>(
         &self,
+        tmp_path: PathBuf,
         dir_path: &Path,
         progress: Option<F>,
     ) -> Result<DownloadDisposable, DownloadError>
@@ -62,16 +63,17 @@ impl DownloadDisposable {
 impl Download for Package {
     fn download<F>(
         &self,
+        tmp_path: PathBuf,
         dir_path: &Path,
         progress: Option<F>,
     ) -> Result<DownloadDisposable, DownloadError>
     where
         F: Fn(u64, u64) -> () + Send + 'static,
     {
-        let mut disposable = DownloadDisposable::new();
-
-        let dir_path = dir_path.to_owned();
         use reqwest::header::CONTENT_LENGTH;
+
+        let mut disposable = DownloadDisposable::new();
+        let dir_path = dir_path.to_owned();
 
         let installer = match self.installer() {
             Some(v) => v,
@@ -80,9 +82,19 @@ impl Download for Package {
 
         let url_str = installer.url();
         let url = url::Url::parse(&url_str).map_err(|_| DownloadError::InvalidUrl)?;
+        let filename = Path::new(url.path_segments().unwrap().last().unwrap()).to_path_buf();
+
         let cancel_token = disposable.cancel_token();
 
         let handle = std::thread::spawn(move || {
+            if filename.exists() {
+                if let Some(cb) = progress {
+                    cb(0, 0);
+                }
+
+                return Ok(filename);
+            }
+
             let mut res = match reqwest::get(&url_str) {
                 Ok(v) => v,
                 Err(e) => return Err(DownloadError::ReqwestError(e)),
@@ -92,14 +104,16 @@ impl Download for Package {
                 return Err(DownloadError::HttpStatusFailure(res.status().as_u16()));
             }
 
-            let filename = &url.path_segments().unwrap().last().unwrap();
+            if !tmp_path.exists() {
+                std::fs::create_dir_all(&tmp_path).unwrap();
+            }
+
             if !dir_path.exists() {
                 std::fs::create_dir_all(&dir_path).unwrap();
             }
-            let tmp_path = (&dir_path).join(&filename).to_path_buf();
-            let file = File::create(&tmp_path).unwrap();
 
-            let mut buf_writer = BufWriter::new(file);
+            let file = tempfile::NamedTempFile::new_in(tmp_path).expect("temp files");
+            let mut buf_writer = BufWriter::new(file.reopen().unwrap());
 
             let write_res = match progress {
                 Some(cb) => {
@@ -121,13 +135,16 @@ impl Download for Package {
                     return Err(DownloadError::EmptyFile);
                 }
                 Err(e) => {
-                    println!("{:?}", e);
+                    log::debug!("{:?}", e);
                     return Err(DownloadError::UserCancelled);
                 }
                 _ => {}
             }
 
-            Ok(tmp_path)
+            let out_path = (&dir_path).join(&filename).to_path_buf();
+            file.persist(&out_path);
+
+            Ok(out_path)
         });
 
         disposable.handle = Some(handle);
@@ -143,6 +160,17 @@ pub enum DownloadError {
     UserCancelled,
     ReqwestError(reqwest::Error),
     HttpStatusFailure(u16),
+}
+
+impl std::error::Error for DownloadError {}
+impl std::fmt::Display for DownloadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "{:?}",
+            self
+        )
+    }
 }
 
 struct ProgressWriter<W: Write, F>

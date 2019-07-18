@@ -43,7 +43,7 @@ extern "C" fn pahkat_client_new(
     config_path: *const c_char,
     save_changes: u8,
 ) -> *const MacOSPackageStore {
-    println!("pahkat_client_new");
+    log::debug!("pahkat_client_new");
     let config = if config_path.is_null() {
         Ok(StoreConfig::load_or_default(save_changes != 0))
     } else {
@@ -67,7 +67,7 @@ extern "C" fn pahkat_client_new(
 
 #[no_mangle]
 extern "C" fn pahkat_error_free(error: *const *mut PahkatError) {
-    println!("pahkat_error_free");
+    log::debug!("pahkat_error_free");
     unsafe { Box::from_raw(*error) };
 }
 
@@ -98,7 +98,7 @@ extern "C" fn pahkat_config_ui_set(
 
     store
         .config()
-        .set_ui_setting(&*key, value.map(|x| x.to_string()))
+        .set_ui_value(&*key, value.map(|x| x.to_string()))
         .unwrap();
 }
 
@@ -116,7 +116,7 @@ extern "C" fn pahkat_config_ui_get(
 
     store
         .config()
-        .ui_setting(&*key)
+        .ui_value(&*key)
         .map_or_else(|| std::ptr::null(), |x| CString::new(x).unwrap().into_raw())
 }
 
@@ -213,7 +213,7 @@ extern "C" fn pahkat_download_package(
     progress: extern "C" fn(*const c_char, u64, u64) -> (),
     error: *mut *const PahkatError,
 ) -> u32 {
-    println!("pahkat_download_package");
+    log::debug!("pahkat_download_package");
     let store = safe_handle!(handle);
 
     if raw_package_key.is_null() {
@@ -227,7 +227,7 @@ extern "C" fn pahkat_download_package(
     let _package = match store.resolve_package(&package_key) {
         Some(v) => v,
         None => {
-            eprintln!("Resolve package error");
+            log::error!("Resolve package error");
             let code = ErrorCode::PackageResolveError.to_u32();
             set_error(
                 error,
@@ -435,12 +435,12 @@ extern "C" fn pahkat_run_package_transaction(
     progress: extern "C" fn(u32, *const c_char, u32),
     _error: *mut *const PahkatError,
 ) -> u32 {
-    println!("pahkat_run_package_transaction");
+    log::debug!("pahkat_run_package_transaction");
     let transaction = safe_handle_mut!(transaction);
 
     // TODO: package transaction should also return index of package and total package numbers...
     transaction.process(move |key, event| {
-        eprintln!("{:?}", event);
+        log::error!("{:?}", event);
         progress(
             tx_id,
             CString::new(key.to_string()).unwrap().into_raw(),
@@ -470,7 +470,7 @@ extern "C" fn pahkat_semver_is_valid(version_str: *const c_char) -> u8 {
     match semver::Version::parse(&version_string) {
         Ok(_version) => 1,
         _ => {
-            eprintln!(
+            log::error!(
                 "pahkat_semver_is_valid: failed to parse version string: {}",
                 &version_string
             );
@@ -487,7 +487,7 @@ extern "C" fn pahkat_semver_compare(lhs: *const c_char, rhs: *const c_char) -> i
     let lhs_version = match semver::Version::parse(&lhs_string) {
         Ok(version) => version,
         _ => {
-            eprintln!("pahkat_semver_compare: lhs is not a valid semver");
+            log::error!("pahkat_semver_compare: lhs is not a valid semver");
             return 0;
         }
     };
@@ -495,7 +495,7 @@ extern "C" fn pahkat_semver_compare(lhs: *const c_char, rhs: *const c_char) -> i
     let rhs_version = match semver::Version::parse(&rhs_string) {
         Ok(version) => version,
         _ => {
-            eprintln!("pahkat_semver_compare: rhs is not a valid semver");
+            log::error!("pahkat_semver_compare: rhs is not a valid semver");
             return 0;
         }
     };
@@ -539,7 +539,7 @@ fn set_error(error: *mut *const PahkatError, code: u32, message: &str) {
 
     unsafe {
         if error.is_null() {
-            eprintln!("{}", message);
+            log::error!("{}", message);
         } else {
             *error = Box::into_raw(Box::new(PahkatError {
                 code,

@@ -4,13 +4,13 @@
 extern crate clap;
 extern crate pahkat_client;
 extern crate pahkat_types as pahkat;
-extern crate sentry;
+// extern crate sentry;
 
 use clap::{App, AppSettings, Arg, SubCommand};
 
 use pahkat_client::*;
 use pahkat_types::{InstallTarget, Package};
-use sentry::integrations::panic::register_panic_handler;
+// use sentry::integrations::panic::register_panic_handler;
 use std::sync::Arc;
 
 use pahkat_client::macos::*;
@@ -19,8 +19,8 @@ const DSN: &'static str =
     "https://0a0fc86e9d2447e8b0b807087575e8c6:3d610a0fea7b49d6803061efa16c2ddc@sentry.io/301711";
 
 fn main() {
-    std::mem::forget(sentry::init(DSN));
-    register_panic_handler();
+    // std::mem::forget(sentry::init(DSN));
+    // register_panic_handler();
 
     let app = App::new("Páhkat")
         .setting(AppSettings::SubcommandRequiredElseHelp)
@@ -109,7 +109,7 @@ fn main() {
         //     let (key, package) = match store.find_package(package_id) {
         //         Some(v) => v,
         //         None => {
-        //             println!("{}: No package found", &package_id);
+        //             log::debug!("{}: No package found", &package_id);
         //             return;
         //         }
         //     };
@@ -121,8 +121,8 @@ fn main() {
         //     let status = store.status(&key, target);
 
         //     match status {
-        //         Ok(v) => println!("{}: {}", &package_id, v),
-        //         Err(e) => println!("{}: {}", &package_id, e)
+        //         Ok(v) => log::debug!("{}: {}", &package_id, v),
+        //         Err(e) => log::debug!("{}: {}", &package_id, e)
         //     };
         // },
         // ("uninstall", Some(matches)) => {
@@ -139,7 +139,7 @@ fn main() {
         //     let (key, package) = match store.find_package(package_id) {
         //         Some(v) => v,
         //         None => {
-        //             println!("{}: No package found", &package_id);
+        //             log::debug!("{}: No package found", &package_id);
         //             return;
         //         }
         //     };
@@ -155,12 +155,12 @@ fn main() {
         //             let res = store.uninstall(&package, target);
 
         //             match res {
-        //                 Ok(v) => println!("{}: {}", &package_id, v),
-        //                 Err(e) => println!("{}: error - {:?}", &package_id, e)
+        //                 Ok(v) => log::debug!("{}: {}", &package_id, v),
+        //                 Err(e) => log::debug!("{}: error - {:?}", &package_id, e)
         //             };
         //         },
         //         _ => {
-        //             println!("Nothing to do for identifier {}", package_id);
+        //             log::debug!("Nothing to do for identifier {}", package_id);
         //             return;
         //         }
         //     }
@@ -188,7 +188,7 @@ fn main() {
                 match store.find_package(id) {
                     Some(v) => keys.push(v.0),
                     None => {
-                        eprintln!("No package found with id: {}", id);
+                        log::error!("No package found with id: {}", id);
                         return;
                     }
                 }
@@ -201,7 +201,7 @@ fn main() {
             let mut transaction = match PackageTransaction::new(store.clone(), actions) {
                 Ok(v) => v,
                 Err(e) => {
-                    eprintln!("{:?}", e);
+                    log::error!("{:?}", e);
                     return;
                 }
             };
@@ -226,7 +226,7 @@ fn main() {
             }
 
             transaction.process(|key, event| {
-                println!("{}: {:?}", key.id, event);
+                log::debug!("{}: {:?}", key.id, event);
             });
         }
         ("init", Some(matches)) => {
@@ -260,7 +260,7 @@ fn main() {
                 .collect::<Vec<_>>();
 
             for (n, repo) in repos.iter().enumerate() {
-                println!(
+                log::debug!(
                     "== Repository {}: {} ==",
                     n,
                     repo.meta().name.get("en").unwrap_or(&String::from(""))
@@ -268,7 +268,7 @@ fn main() {
                 let mut packages: Vec<&Package> = repo.packages().values().collect();
                 packages.sort_unstable_by(|a, b| a.id.cmp(&b.id));
                 for pkg in packages {
-                    println!(
+                    log::debug!(
                         "{} {} ({}) — {}",
                         pkg.id,
                         pkg.version,

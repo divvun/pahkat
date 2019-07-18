@@ -1,32 +1,26 @@
-extern crate reqwest;
-#[cfg(prefix)]
-extern crate rusqlite;
-extern crate serde;
-extern crate serde_json;
-#[macro_use]
-extern crate serde_derive;
-extern crate dirs;
-extern crate semver;
-extern crate tempdir;
+// extern crate reqwest;
+// #[cfg(prefix)]
+// extern crate rusqlite;
+// extern crate serde;
+// extern crate serde_json;
+// #[macro_use]
+// extern crate serde_derive;
+// extern crate dirs;
+// extern crate semver;
+// extern crate tempdir;
 
-#[cfg(feature = "prefix")]
-extern crate tar;
-#[cfg(feature = "prefix")]
-extern crate xz2;
+// #[cfg(feature = "prefix")]
+// extern crate tar;
+// #[cfg(feature = "prefix")]
+// extern crate xz2;
 
-#[cfg(windows)]
-extern crate winreg;
+// #[cfg(all(windows, feature = "windows"))]
+// extern crate winreg;
 
-#[cfg(target_os = "macos")]
-extern crate maplit;
-#[cfg(target_os = "macos")]
-extern crate plist;
-
-#[cfg(windows)]
-extern crate winapi;
-
-extern crate crypto;
-extern crate sentry;
+// #[cfg(target_os = "macos")]
+// extern crate maplit;
+// #[cfg(target_os = "macos")]
+// extern crate plist;
 
 use hashbrown::HashMap;
 use std::fmt;
@@ -38,9 +32,9 @@ use url::Url;
 
 #[cfg(all(target_os = "macos", feature = "macos"))]
 pub mod macos;
-// #[cfg(feature = "prefix")]
+#[cfg(feature = "prefix")]
 pub mod tarball;
-#[cfg(windows)]
+#[cfg(all(windows, feature = "windows"))]
 pub mod windows;
 
 mod cmp;
@@ -58,6 +52,7 @@ use directories::BaseDirs;
 
 use serde::de::{self, Deserialize, Deserializer, Visitor};
 use serde::ser::{Serialize, Serializer};
+use serde_derive::{Deserialize, Serialize};
 
 struct AbsolutePackageKeyVisitor;
 
@@ -76,69 +71,6 @@ impl<'de> Visitor<'de> for AbsolutePackageKeyVisitor {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum PackageStatus {
-    NotInstalled,
-    UpToDate,
-    RequiresUpdate,
-    Skipped,
-}
-
-// impl PackageStatus {
-//     fn to_u8(&self) -> u8 {
-//         match self {
-//             PackageStatus::NotInstalled => 0,
-//             PackageStatus::UpToDate => 1,
-//             PackageStatus::RequiresUpdate => 2,
-//             PackageStatus::Skipped => 3
-//         }
-//     }
-// }
-
-impl fmt::Display for PackageStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match *self {
-                // PackageStatus::NoPackage => "No package",
-                PackageStatus::NotInstalled => "Not installed",
-                PackageStatus::UpToDate => "Up to date",
-                PackageStatus::RequiresUpdate => "Requires update",
-                PackageStatus::Skipped => "Skipped",
-            }
-        )
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum PackageStatusError {
-    NoPackage,
-    NoInstaller,
-    WrongInstallerType,
-    ParsingVersion,
-    InvalidInstallPath,
-    InvalidMetadata,
-}
-
-impl fmt::Display for PackageStatusError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "Error: {}",
-            match *self {
-                PackageStatusError::NoPackage => "No package",
-                PackageStatusError::NoInstaller => "No installer",
-                PackageStatusError::WrongInstallerType => "Wrong installer type",
-                PackageStatusError::ParsingVersion => "Could not parse version",
-                PackageStatusError::InvalidInstallPath => "Invalid install path",
-                PackageStatusError::InvalidMetadata => "Invalid metadata",
-            }
-        )
-    }
-}
-
 pub fn default_config_path() -> PathBuf {
     BaseDirs::new()
         .expect("base directories must be known")
@@ -151,6 +83,10 @@ pub fn default_cache_path() -> PathBuf {
         .expect("base directories must be known")
         .cache_dir()
         .join("Pahkat")
+}
+
+pub fn default_tmp_path() -> PathBuf {
+    default_cache_path().join("tmp")
 }
 
 #[cfg(target_os = "macos")]
@@ -213,11 +149,11 @@ impl AbsolutePackageKey {
         format!("{}packages/{}#{}", self.url, self.id, self.channel)
     }
 
-    pub fn from_string(url: &str) -> Result<AbsolutePackageKey, ()> {
-        let url = Url::parse(url).unwrap();
+    pub fn from_string(url: &str) -> Result<AbsolutePackageKey, Box<dyn std::error::Error>> {
+        let url = Url::parse(url)?;
 
         let channel = url.fragment().unwrap().to_string();
-        let base = url.join("..").unwrap();
+        let base = url.join("..")?;
         let id = url.path_segments().unwrap().last().unwrap().to_string();
 
         Ok(AbsolutePackageKey {
@@ -265,6 +201,8 @@ struct RawStoreConfig {
     pub skipped_packages: HashMap<AbsolutePackageKey, String>,
     #[serde(default = "default_cache_path")]
     pub cache_path: PathBuf,
+    #[serde(default = "default_tmp_path")]
+    pub tmp_path: PathBuf,
     #[serde(default = "HashMap::new")]
     pub ui: HashMap<String, String>,
 }
@@ -275,6 +213,7 @@ impl std::default::Default for RawStoreConfig {
             repos: vec![],
             skipped_packages: HashMap::new(),
             cache_path: default_cache_path(),
+            tmp_path: default_tmp_path(),
             ui: HashMap::new(),
         }
     }
@@ -330,8 +269,12 @@ impl StoreConfig {
     }
 
     pub fn load(config_path: &Path, save_changes: bool) -> io::Result<StoreConfig> {
+        log::debug!("StoreConfig::load({:?}, {})", config_path, save_changes);
+
         let file = File::open(config_path)?;
         let data: RawStoreConfig = serde_json::from_reader(file)?;
+
+        log::debug!("Data: {:?}", data);
 
         Ok(StoreConfig {
             config_path: config_path.to_owned(),
@@ -343,7 +286,7 @@ impl StoreConfig {
     pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
         let cfg_str = serde_json::to_string_pretty(&*self.data.read().unwrap())?;
         {
-            println!("{:?}", self.config_path);
+            log::debug!("Saving: {:?}", self.config_path);
             create_dir_all(self.config_dir()).unwrap();
             let mut file = File::create(&self.config_path).unwrap();
             file.write_all(cfg_str.as_bytes())?;
@@ -354,6 +297,10 @@ impl StoreConfig {
 
     pub fn config_path(&self) -> &Path {
         &self.config_path
+    }
+
+    pub fn tmp_path(&self) -> PathBuf {
+        self.data.read().unwrap().tmp_path.to_path_buf()
     }
 
     pub fn config_dir(&self) -> &Path {
@@ -484,8 +431,8 @@ impl StoreConfig {
         }
     }
 
-    pub fn set_ui_setting(&self, key: &str, value: Option<String>) -> SaveResult {
-        println!("Set UI setting: {} -> {:?}", key, &value);
+    pub fn set_ui_value(&self, key: &str, value: Option<String>) -> SaveResult {
+        log::debug!("Set UI setting: {} -> {:?}", key, &value);
         {
             let mut lock = self.data.write().expect("write lock");
             match value {
@@ -500,15 +447,7 @@ impl StoreConfig {
         }
     }
 
-    pub fn ui_setting(&self, key: &str) -> Option<String> {
+    pub fn ui_value(&self, key: &str) -> Option<String> {
         self.data.read().unwrap().ui.get(key).map(|x| x.to_string())
     }
-}
-
-#[derive(Debug)]
-pub struct PackageDependency {
-    pub id: AbsolutePackageKey,
-    pub version: String,
-    pub level: u8,
-    pub status: PackageStatus,
 }

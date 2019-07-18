@@ -3,7 +3,8 @@ use crypto::sha2::Sha256;
 use pahkat_types::{
     Package, PackageMap, Packages, Repository as RepositoryMeta, VirtualMap, Virtuals,
 };
-use serde_derive::Serialize;
+use serde_derive::{Deserialize, Serialize};
+use std::fmt;
 use std::fs::{self, File};
 use std::path::Path;
 use std::time::SystemTime;
@@ -52,6 +53,8 @@ pub(crate) fn resolve_package(
     package_key: &AbsolutePackageKey,
     repos: &Arc<RwLock<HashMap<RepoRecord, Repository>>>,
 ) -> Option<Package> {
+    log::debug!("Resolving package...");
+    log::debug!("My pkg id: {}", &package_key.id);
     repos
         .read()
         .unwrap()
@@ -60,19 +63,34 @@ pub(crate) fn resolve_package(
             channel: package_key.channel.clone(),
         })
         .and_then(|r| {
-            println!("Got repo: {:?}", r);
-            for k in r.packages().keys() {
-                println!("Pkg id: {}, {}", &k, k == &package_key.id);
-            }
-
-            println!("My pkg id: {}", &package_key.id);
+            log::debug!("Got repo: {:?}", r);
             let pkg = match r.packages().get(&package_key.id) {
                 Some(x) => Some(x.to_owned()),
                 None => None,
             };
-            println!("Found pkg: {:?}", &pkg);
+            log::debug!("Found pkg: {:?}", &pkg);
             pkg
         })
+}
+
+pub(crate) fn find_package_by_id<P, T>(
+    store: &P,
+    package_id: &str,
+    repos: &Arc<RwLock<HashMap<RepoRecord, Repository>>>,
+) -> Option<(AbsolutePackageKey, Package)> where P: PackageStore<Target = T>, T: Send + Sync {
+    match AbsolutePackageKey::from_string(package_id) {
+        Ok(k) => return store.resolve_package(&k).map(|pkg| (k, pkg)),
+        Err(_) => {}
+    };
+
+    repos.read().unwrap().iter().find_map(|(key, repo)| {
+        repo.packages().get(package_id).map(|x| {
+            (
+                AbsolutePackageKey::new(repo.meta(), &key.channel, package_id),
+                x.to_owned(),
+            )
+        })
+    })
 }
 
 impl Repository {
@@ -87,17 +105,17 @@ impl Repository {
         channel: String,
         cache_path: &Path,
     ) -> Result<Repository, RepoDownloadError> {
-        println!("{}, {}, {:?}", url, &channel, cache_path);
+        log::debug!("{}, {}, {:?}", url, &channel, cache_path);
         let hash_id = Repository::path_hash(url, &channel);
 
         let repo_cache_path = cache_path.join(&hash_id);
 
         if !repo_cache_path.exists() {
-            println!("Cache does not exist, creating");
+            log::debug!("Cache does not exist, creating");
             let repo = Repository::from_url(url, channel)?;
             repo.save_to_cache(cache_path)
                 .map_err(|e| RepoDownloadError::IoError(e))?;
-            println!("Save repo");
+            log::debug!("Save repo");
             return Ok(repo);
         }
 
@@ -111,14 +129,14 @@ impl Repository {
         };
 
         if is_cache_valid {
-            println!("Loading from cache");
+            log::debug!("Loading from cache");
             match Repository::from_directory(cache_path, hash_id) {
                 Ok(v) => return Ok(v),
                 Err(_) => {} // fallthrough
             }
         }
 
-        println!("loading from web");
+        log::debug!("loading from web");
         let repo = Repository::from_url(url, channel)?;
         repo.save_to_cache(cache_path)
             .map_err(|e| RepoDownloadError::IoError(e))?;
@@ -244,11 +262,117 @@ use crate::StoreConfig;
 pub(crate) fn refresh_repos(config: &StoreConfig) -> HashMap<RepoRecord, Repository> {
     let mut repos = HashMap::new();
 
+    log::debug!("Refreshing repos...");
+
     for record in config.repos().iter() {
+        log::debug!("{:?}", &record);
         recurse_repo(record, &mut repos, &config.repo_cache_path());
     }
 
     repos
+}
+
+pub(crate) fn clear_cache(config: &StoreConfig) {
+    for record in config.repos().iter() {
+        match Repository::clear_cache(
+            &record.url,
+            record.channel.clone(),
+            &config.repo_cache_path(),
+        ) {
+            Err(e) => {
+                log::debug!("{:?}", e);
+            }
+            Ok(_) => {}
+        };
+    }
+}
+
+use crate::transaction::{PackageStore, PackageDependencyError};
+
+fn recurse_package_dependencies<T>(
+    store: &Arc<dyn PackageStore<Target = T>>,
+    package: &Package,
+    candidates: &mut HashMap<AbsolutePackageKey, Package>,
+) -> Result<(), PackageDependencyError> where T: Send + Sync {
+    for (package_key, version) in package.dependencies.iter() {
+        // Package key may be a short, relative package id, or a fully qualified
+        // URL to a package in a linked repo
+
+        let result = store.find_package_by_id(package_key);
+
+        match result {
+            Some((key, package)) => {
+                if candidates.contains_key(&key) {
+                    continue;
+                }
+                
+                recurse_package_dependencies(store, &package, candidates)?;
+                candidates.insert(key, package);
+            }
+            None => return Err(PackageDependencyError::PackageNotFound(package_key.to_string()))
+        };
+    }
+
+    Ok(())
+} 
+
+pub(crate) fn find_package_dependencies<T>(
+    store: &Arc<dyn PackageStore<Target = T>>,
+    key: &AbsolutePackageKey,
+    package: &Package,
+    target: &T,
+) -> Result<Vec<(AbsolutePackageKey, Package)>, PackageDependencyError> where T: Send + Sync {
+    let mut candidates = HashMap::new();
+    recurse_package_dependencies(store, &package, &mut candidates)?;
+    Ok(candidates.into_iter().map(|(k, v)| (k, v)).collect())
+    // for (package_id, version) in package.dependencies.iter() {
+    //     // avoid circular references by keeping
+    //     // track of package ids that have already been processed
+    //     if resolved.contains(package_id) {
+    //         continue;
+    //     }
+    //     resolved.push(package_id.clone());
+
+    //     match self.find_package_by_id(package_id.as_str()) {
+    //         Some((ref key, ref package)) => {
+    //             // add all the dependencies of the dependency
+    //             // to the list result first
+    //             for dependency in
+    //                 self.find_package_dependencies_impl(key, package, target, level + 1, resolved)?
+    //             {
+    //                 push_if_not_exists(dependency, &mut result);
+    //             }
+
+    //             // make sure the version requirement is correct
+    //             // TODO: equality isn't how version comparisons work.
+    //             // if package.version.as_str() != version {
+    //             //     return Err(PackageDependencyError::VersionNotFound);
+    //             // }
+
+    //             match self.status(key, &target) {
+    //                 Err(error) => return Err(PackageDependencyError::PackageStatusError(error)),
+    //                 Ok(status) => match status {
+    //                     PackageStatus::UpToDate => {}
+    //                     _ => {
+    //                         let dependency = PackageDependency {
+    //                             id: key.clone(),
+    //                             package: package.clone(),
+    //                             version: version.clone(),
+    //                             status,
+    //                         };
+    //                         push_if_not_exists(dependency, &mut result);
+    //                     }
+    //                 },
+    //             }
+    //         }
+    //         _ => {
+    //             // the given package id does not exist
+    //             return Err(PackageDependencyError::PackageNotFound);
+    //         }
+    //     }
+    // }
+
+    // return Ok(result);
 }
 
 fn recurse_linked_repos(
@@ -260,7 +384,7 @@ fn recurse_linked_repos(
     let url = match url::Url::parse(url) {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("{:?}", e);
+            log::error!("{:?}", e);
             return;
         }
     };
@@ -289,21 +413,7 @@ fn recurse_repo(
         }
         // TODO: actual error handling omg
         Err(e) => {
-            eprintln!("{:?}", e);
+            log::error!("{:?}", e);
         }
     };
-}
-
-pub(crate) fn find_package_by_id(
-    repos: &HashMap<RepoRecord, Repository>,
-    package_id: &str,
-) -> Option<(AbsolutePackageKey, Package)> {
-    repos.iter().find_map(|(key, repo)| {
-        repo.packages().get(package_id).map(|x| {
-            (
-                AbsolutePackageKey::new(repo.meta(), &key.channel, package_id),
-                x.to_owned(),
-            )
-        })
-    })
 }

@@ -1,6 +1,6 @@
 use chrono::prelude::*;
 
-use crate::{PackageStatus, PackageStatusError};
+use crate::transaction::{PackageStatus, PackageStatusError};
 
 pub(crate) fn semver_cmp(
     installed_version: &str,
