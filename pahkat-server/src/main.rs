@@ -3,15 +3,16 @@ use std::path::{Path, PathBuf};
 
 use actix_web::{middleware, web, App, HttpServer};
 use clap::{crate_version, App as CliApp, AppSettings, Arg, SubCommand};
+use form_data::{handle_multipart, Error, Field, Form};
 use log::{error, info, warn};
 
-use pahkat_common::{db_path, database::Database};
 use pahkat_common::ProgressOutput;
+use pahkat_common::{database::Database, db_path};
 use watcher::Watcher;
 
 use handlers::{
     download_package, package_stats, packages_index, packages_package_index, repo_index,
-    repo_stats, virtuals_index, virtuals_package_index,
+    repo_stats, upload_package, virtuals_index, virtuals_package_index,
 };
 
 mod handlers;
@@ -23,6 +24,7 @@ pub struct ServerState {
     bind: String,
     port: String,
     database: Database,
+    upload_form: Form,
 }
 
 fn run_server(path: &Path, bind: &str, port: &str) {
@@ -35,11 +37,16 @@ fn run_server(path: &Path, bind: &str, port: &str) {
         }
     };
 
+    let form = Form::new()
+        .field("params", Field::text())
+        .field("payload", Field::bytes());
+
     let state = ServerState {
         path: path.to_path_buf(),
         bind: bind.to_string(),
         port: port.to_string(),
         database,
+        upload_form: form,
     };
 
     HttpServer::new(move || {
@@ -53,6 +60,7 @@ fn run_server(path: &Path, bind: &str, port: &str) {
                 web::resource("/packages/{packageId}/index.json")
                     .route(web::get().to(packages_package_index)),
             )
+            .service(web::resource("/packages/{packageId}").route(web::patch().to(upload_package)))
             .service(
                 web::resource("/packages/{packageId}/download")
                     .route(web::get().to(download_package)),

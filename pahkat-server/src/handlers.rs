@@ -2,10 +2,13 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
 
-use actix_web::{web, HttpResponse, Responder};
+use actix_multipart::Multipart;
+use actix_web::{web, HttpResponse, Responder, HttpRequest};
 use chrono::offset::Utc;
 use chrono::Duration;
-use log::error;
+use form_data::{handle_multipart, Error, Field, Form};
+use futures::future::Future;
+use log::{error, info};
 use serde_json::json;
 
 use pahkat_common::database::models::NewDownload;
@@ -13,6 +16,7 @@ use pahkat_common::open_package;
 use pahkat_types::Downloadable;
 
 use crate::ServerState;
+use actix::fut::ok;
 
 fn read_file(path: &str) -> std::io::Result<String> {
     let file = File::open(path)?;
@@ -91,6 +95,48 @@ pub fn packages_package_index(
             HttpResponse::NotFound().finish()
         }
     }
+}
+
+pub fn upload_package(
+    request: HttpRequest,
+    state: web::Data<ServerState>,
+    multipart: Multipart,
+) -> Box<dyn Future<Item = HttpResponse, Error = Error>> {
+    let ref_state = state.get_ref().clone();
+    let form = ref_state.upload_form;
+
+    info!("HttpRequest: {:?}", request);
+
+    Box::new(handle_multipart(multipart, form).map(|uploaded_content| {
+        let mut map = uploaded_content.map().unwrap();
+        let text = map.remove("params").unwrap().text().unwrap();
+        let file = map.remove("payload").unwrap().bytes().unwrap();
+        info!("text: {:?}, file: {:?}", &text, &file);
+        HttpResponse::Created().finish()
+    }))
+
+    //info!("{:?}", blar);
+
+    /*
+        //endpoint  handle authorization
+
+        //extract bearer tokens
+        //
+    */
+
+    /*
+    Box::new(
+        handle_multipart(mp, state.get_ref().clone()).map(|uploaded_content| {
+            let mut map = uploaded_content.map().unwrap();
+            let text = map.remove("text").unwrap().text().unwrap();
+            let file = map.remove("file").unwrap().bytes().unwrap();
+            println!("text: {:?}, file: {:?}", &text, &file);
+            HttpResponse::Created().finish()
+        }),
+    )
+    */
+
+    //HttpResponse::InternalServerError().finish()
 }
 
 pub fn download_package(state: web::Data<ServerState>, path: web::Path<String>) -> impl Responder {
