@@ -4,6 +4,7 @@ use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool, PoolError};
 use diesel::sqlite::SqliteConnection;
 use failure::Error;
+use uuid::Uuid;
 
 use pahkat_types::Package;
 
@@ -11,7 +12,7 @@ pub mod models;
 pub mod schema;
 pub mod user;
 
-use self::models::{NewDownload, NewUser, PackageCount};
+use self::models::{NewDownload, NewUser, PackageCount, User};
 use self::schema::{downloads, users};
 use crate::DatabaseError;
 
@@ -140,6 +141,35 @@ LIMIT ?
         Ok(diesel::insert_into(downloads::table)
             .values(&download)
             .execute(&connection)?)
+    }
+
+    pub fn validate_token(&self, str_token: &str) -> std::result::Result<bool, DatabaseError> {
+        use self::schema::users::dsl::*;
+
+        let parsed_uuid = Uuid::parse_str(&mut str_token.clone());
+
+        match parsed_uuid {
+            Ok(uuid) => {
+                println!("parsed uuid: {:?}", parsed_uuid);
+
+                let connection = self.pool.get()?;
+
+                let vec_uuid = uuid.as_bytes().to_vec();
+
+                let vec_users = users.filter(token.eq(vec_uuid)).load::<User>(&connection)?;
+                let users_length = vec_users.len();
+
+                if users_length > 0 {
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+            Err(err) => Err(DatabaseError::InputError(
+                "The supplied UUID token is invalid: make sure it is in the v4 format".to_owned(),
+                err,
+            )),
+        }
     }
 
     pub fn create_user(&self, user: NewUser) -> std::result::Result<usize, DatabaseError> {

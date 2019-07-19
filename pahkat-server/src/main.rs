@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use actix_web::{middleware, web, App, HttpServer};
 use clap::{crate_version, App as CliApp, AppSettings, Arg, SubCommand};
-use form_data::{handle_multipart, Error, Field, Form};
+use form_data::{Field, Form};
 use log::{error, info, warn};
 
 use pahkat_common::ProgressOutput;

@@ -11,8 +11,8 @@ use termcolor::Color;
 
 use cli::progress;
 use commands::{
-    installer::{package_macos_installer, package_tarball_installer, package_windows_installer},
     db::create_user,
+    installer::{package_macos_installer, package_tarball_installer, package_windows_installer},
     package_init, repo_init, virtual_init,
 };
 
@@ -433,7 +433,7 @@ fn main() {
                 }
                 _ => {}
             }
-        },
+        }
         ("repo", Some(matches)) => {
             let current_dir = &env::current_dir().unwrap();
             let path: &Path = matches
@@ -445,18 +445,16 @@ fn main() {
                 ("index", _) => repo_index(&path, &output),
                 _ => {}
             }
-        },
+        }
         ("database", Some(matches)) => match matches.subcommand() {
             ("user", Some(matches)) => match matches.subcommand() {
                 ("create", Some(matches)) => {
-                    let username = matches
-                        .value_of("username").unwrap();
+                    let username = matches.value_of("username").unwrap();
 
-                    let token = matches
-                        .value_of("token").unwrap();
+                    let token = matches.value_of("token").unwrap();
 
                     create_user(username, token)
-                },
+                }
                 _ => {}
             },
             _ => {}

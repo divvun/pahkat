@@ -3,11 +3,11 @@ use std::io::prelude::*;
 use std::io::BufReader;
 
 use actix_multipart::Multipart;
-use actix_web::{web, HttpResponse, Responder, HttpRequest};
+use actix_web::{http::header::AUTHORIZATION, web, HttpRequest, HttpResponse, Responder};
 use chrono::offset::Utc;
 use chrono::Duration;
-use form_data::{handle_multipart, Error, Field, Form};
-use futures::future::Future;
+use form_data::{handle_multipart, Error};
+use futures::future::{ok, Future};
 use log::{error, info};
 use serde_json::json;
 
@@ -16,7 +16,6 @@ use pahkat_common::open_package;
 use pahkat_types::Downloadable;
 
 use crate::ServerState;
-use actix::fut::ok;
 
 fn read_file(path: &str) -> std::io::Result<String> {
     let file = File::open(path)?;
@@ -102,6 +101,32 @@ pub fn upload_package(
     state: web::Data<ServerState>,
     multipart: Multipart,
 ) -> Box<dyn Future<Item = HttpResponse, Error = Error>> {
+    let auth_header = request.headers().get(AUTHORIZATION);
+    if auth_header == None {
+        // TODO: Potentially use Forbidden, otherwise need to add auth header response
+        return Box::new(ok(HttpResponse::Unauthorized().finish()));
+    }
+
+    let auth_header = auth_header.unwrap();
+
+    let database = &state.database;
+
+    let str_header = auth_header.to_str().unwrap();
+
+    info!("Str header: {}", str_header);
+
+    let split_vec: Vec<_> = str_header.split(' ').collect();
+    if split_vec.len() != 2 || split_vec.get(0).unwrap() != &"Bearer" {
+        info!("split vec: {:?}", split_vec);
+        return Box::new(ok(HttpResponse::Unauthorized().finish()));
+    }
+
+    let result = database.validate_token(split_vec.get(1).unwrap());
+    info!("db result: {:?}", &result);
+    if !result.is_ok() && result.unwrap() == false {
+        return Box::new(ok(HttpResponse::Unauthorized().finish()));
+    }
+
     let ref_state = state.get_ref().clone();
     let form = ref_state.upload_form;
 
@@ -114,29 +139,6 @@ pub fn upload_package(
         info!("text: {:?}, file: {:?}", &text, &file);
         HttpResponse::Created().finish()
     }))
-
-    //info!("{:?}", blar);
-
-    /*
-        //endpoint  handle authorization
-
-        //extract bearer tokens
-        //
-    */
-
-    /*
-    Box::new(
-        handle_multipart(mp, state.get_ref().clone()).map(|uploaded_content| {
-            let mut map = uploaded_content.map().unwrap();
-            let text = map.remove("text").unwrap().text().unwrap();
-            let file = map.remove("file").unwrap().bytes().unwrap();
-            println!("text: {:?}, file: {:?}", &text, &file);
-            HttpResponse::Created().finish()
-        }),
-    )
-    */
-
-    //HttpResponse::InternalServerError().finish()
 }
 
 pub fn download_package(state: web::Data<ServerState>, path: web::Path<String>) -> impl Responder {

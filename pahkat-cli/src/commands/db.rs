@@ -1,4 +1,7 @@
-use pahkat_common::{db_path, database::{Database, user::create_user as db_create_user}};
+use pahkat_common::{
+    database::{user::create_user as db_create_user, Database},
+    db_path,
+};
 
 pub fn create_user(username: &str, token: &str) {
     let database = match Database::new(db_path().as_path().to_str().unwrap()) {

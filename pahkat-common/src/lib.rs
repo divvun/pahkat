@@ -8,8 +8,8 @@ use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
 use directories::ProjectDirs;
+use serde::Serialize;
 
 use pahkat_types::{Package, Packages, Repository, RepositoryAgent, Virtual, Virtuals};
 
