@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use actix_web::{middleware, web, App, HttpServer};
 use clap::{crate_version, App as CliApp, AppSettings, Arg, SubCommand};
-use form_data::{Field, Form};
+use form_data::{Field, Form, FilenameGenerator};
 use log::{error, info, warn};
 
 use pahkat_common::ProgressOutput;
@@ -17,6 +17,17 @@ use handlers::{
 
 mod handlers;
 mod watcher;
+
+struct UploadFilenameGenerator {
+    prefix: PathBuf
+}
+
+impl FilenameGenerator for UploadFilenameGenerator {
+    fn next_filename(&self, _: &mime::Mime) -> Option<PathBuf> {
+        let random_fn = format!("{}.tmp", uuid::Uuid::new_v4().to_simple());
+        Some(self.prefix.join(random_fn))
+    }
+}
 
 #[derive(Clone)]
 pub struct ServerState {
@@ -37,9 +48,20 @@ fn run_server(path: &Path, bind: &str, port: &str) {
         }
     };
 
+    let upload_tmp_path = path.join("upload-tmp");
+
+    // Check that the directory exists
+    std::fs::create_dir_all(&upload_tmp_path)
+        .expect("could not create upload temp directory");
+    
+    // TODO(bbqsrc): Delete everything inside temp dir to ensure clean state
+    // TODO(bbqsrc): Check the user access for the temp dir for security
+
     let form = Form::new()
         .field("params", Field::text())
-        .field("payload", Field::bytes());
+        .field("payload", Field::file(UploadFilenameGenerator {
+            prefix: upload_tmp_path
+        }));
 
     let state = ServerState {
         path: path.to_path_buf(),
