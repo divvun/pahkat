@@ -133,10 +133,15 @@ pub fn upload_package(
     info!("HttpRequest: {:?}", request);
 
     Box::new(handle_multipart(multipart, form).map(|uploaded_content| {
+        println!("execute");
         let mut map = uploaded_content.map().unwrap();
         let text = map.remove("params").unwrap().text().unwrap();
-        let file = map.remove("payload").unwrap().bytes().unwrap();
-        info!("text: {:?}, file: {:?}", &text, &file);
+        let (filename, path) = map.remove("payload").unwrap().file().unwrap();
+
+        info!("text: {}", text);
+        info!("filename: {}, path: {:?}", filename, path);
+
+        //info!("text: {:?}, file: {:?}", &text, &file);
         HttpResponse::Created().finish()
     }))
 }
