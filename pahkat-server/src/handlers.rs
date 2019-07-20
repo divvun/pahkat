@@ -10,10 +10,12 @@ use form_data::{handle_multipart, Error};
 use futures::future::{ok, Future};
 use log::{error, info};
 use serde_json::json;
+use serde::Deserialize;
+
 
 use pahkat_common::database::models::NewDownload;
 use pahkat_common::open_package;
-use pahkat_types::Downloadable;
+use pahkat_types::{Downloadable, MacOSInstaller, Installer, TarballInstaller, WindowsInstaller};
 
 use crate::ServerState;
 
@@ -96,6 +98,13 @@ pub fn packages_package_index(
     }
 }
 
+#[derive(Deserialize)]
+struct UploadParams {
+    pub channel: String,
+    pub version: String,
+    pub installer: Installer,
+}
+
 pub fn upload_package(
     request: HttpRequest,
     state: web::Data<ServerState>,
@@ -135,14 +144,33 @@ pub fn upload_package(
     Box::new(handle_multipart(multipart, form).map(|uploaded_content| {
         println!("execute");
         let mut map = uploaded_content.map().unwrap();
-        let text = map.remove("params").unwrap().text().unwrap();
-        let (filename, path) = map.remove("payload").unwrap().file().unwrap();
+        let params = map.remove("params").unwrap().text().unwrap();
 
-        info!("text: {}", text);
-        info!("filename: {}, path: {:?}", filename, path);
+        let upload_params: Result<UploadParams, _> = serde_json::from_str(&params);
+        match upload_params {
+            Err(e) => {
+                return HttpResponse::BadRequest().body(format!("Error processing params: {}", e));
+            },
+            Ok(upload_params) => {
+                let (filename, path) = map.remove("payload").unwrap().file().unwrap();
 
-        //info!("text: {:?}, file: {:?}", &text, &file);
-        HttpResponse::Created().finish()
+                info!("text: {}", params);
+                info!("filename: {}, path: {:?}", filename, path);
+
+                // Tarball is not supported
+                match upload_params.installer {
+                    Installer::Tarball(_) => return HttpResponse::BadRequest().finish(),
+                    installer => {
+                        let url = installer.url();
+
+                        info!("installer url: {}", url);
+                    }
+                };
+
+                //info!("text: {:?}, file: {:?}", &text, &file);
+                HttpResponse::Created().finish()
+            }
+        }
     }))
 }
 
