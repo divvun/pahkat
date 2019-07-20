@@ -6,3 +6,4 @@ edition = "2018"
 
 [dependencies]
 serde = { version = "1.0.91", features = ["derive"] }
+derive_builder = "0.7.2"

@@ -1,8 +1,9 @@
 use std::collections::BTreeMap;
 
+use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Builder)]
 #[serde(rename_all = "camelCase")]
 pub struct Repository {
     #[serde(rename = "@context")]
@@ -23,7 +24,7 @@ pub struct Repository {
     pub linked_repositories: Vec<String>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Builder)]
 #[serde(rename_all = "camelCase")]
 pub struct RepositoryAgent {
     #[serde(rename = "@type")]

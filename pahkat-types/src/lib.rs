@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
+use derive_builder::Builder;
 
 pub use self::repo::{Repository, RepositoryAgent};
 
@@ -30,7 +31,7 @@ fn unknown_vec() -> Vec<String> {
     vec![unknown()]
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Builder)]
 #[serde(rename_all = "camelCase")]
 pub struct Package {
     #[serde(rename = "@context")]
@@ -69,7 +70,7 @@ pub trait Downloadable {
     fn url(&self) -> String;
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Builder)]
 #[serde(rename_all = "camelCase")]
 pub struct Packages {
     #[serde(rename = "@context")]
@@ -84,7 +85,7 @@ pub struct Packages {
     pub packages: PackageMap,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Builder)]
 #[serde(rename_all = "camelCase")]
 pub struct Virtual {
     #[serde(rename = "@context")]
@@ -101,7 +102,7 @@ pub struct Virtual {
     pub target: VirtualTarget,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Builder)]
 #[serde(rename_all = "camelCase")]
 pub struct Virtuals {
     #[serde(rename = "@context")]
@@ -124,7 +125,7 @@ pub enum VirtualTarget {
     MacOSPath(MacOSPathRef),
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Builder)]
 #[serde(rename_all = "camelCase")]
 pub struct MacOSPackageRef {
     #[serde(rename = "@type")]
@@ -137,7 +138,7 @@ pub struct MacOSPackageRef {
     pub max_build: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Builder)]
 #[serde(rename_all = "camelCase")]
 pub struct MacOSPathRef {
     #[serde(rename = "@type")]
@@ -150,7 +151,7 @@ pub struct MacOSPathRef {
     pub max_build: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Builder)]
 #[serde(rename_all = "camelCase")]
 pub struct RegistryKey {
     #[serde(rename = "@type")]
@@ -252,7 +253,7 @@ impl Ord for InstallTarget {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Builder)]
 #[serde(rename_all = "camelCase")]
 pub struct MacOSInstaller {
     #[serde(rename = "@type")]
@@ -270,7 +271,7 @@ pub struct MacOSInstaller {
     pub signature: Option<InstallerSignature>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Builder)]
 #[serde(rename_all = "camelCase")]
 pub struct WindowsInstaller {
     #[serde(rename = "@type")]
@@ -290,7 +291,7 @@ pub struct WindowsInstaller {
     pub signature: Option<InstallerSignature>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Builder)]
 #[serde(rename_all = "camelCase")]
 pub struct TarballInstaller {
     #[serde(rename = "@type")]
@@ -300,7 +301,7 @@ pub struct TarballInstaller {
     pub installed_size: usize,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Builder)]
 #[serde(rename_all = "camelCase")]
 pub struct InstallerSignature {
     pub public_key: String,
