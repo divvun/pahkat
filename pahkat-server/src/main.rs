@@ -1,11 +1,12 @@
-use std::env;
 use std::path::{Path, PathBuf};
+use std::{env, fs};
 
 use actix_web::{middleware, web, App, HttpServer};
-use clap::{crate_version, App as CliApp, AppSettings, Arg, SubCommand};
-use form_data::{Field, Form, FilenameGenerator};
+use clap::{crate_version, App as CliApp, AppSettings, Arg, ArgMatches, SubCommand};
+use form_data::{Field, FilenameGenerator, Form};
 use log::{error, info, warn};
 
+use config::TomlConfig;
 use pahkat_common::ProgressOutput;
 use pahkat_common::{database::Database, db_path};
 use watcher::Watcher;
@@ -15,11 +16,12 @@ use handlers::{
     repo_stats, upload_package, virtuals_index, virtuals_package_index,
 };
 
+mod config;
 mod handlers;
 mod watcher;
 
 struct UploadFilenameGenerator {
-    directory: PathBuf
+    directory: PathBuf,
 }
 
 impl FilenameGenerator for UploadFilenameGenerator {
@@ -34,11 +36,12 @@ pub struct ServerState {
     path: PathBuf,
     bind: String,
     port: String,
+    config: TomlConfig,
     database: Database,
     upload_form: Form,
 }
 
-fn run_server(path: &Path, bind: &str, port: &str) {
+fn run_server(config: TomlConfig, path: &Path, bind: &str, port: &str) {
     let system = actix::System::new("páhkat-server");
 
     let database = match Database::new(db_path().as_path().to_str().unwrap()) {
@@ -50,23 +53,31 @@ fn run_server(path: &Path, bind: &str, port: &str) {
 
     let upload_tmp_path = path.join("upload-tmp");
 
-    // Check that the directory exists
-    std::fs::create_dir_all(&upload_tmp_path)
-        .expect("could not create upload temp directory");
+    std::fs::create_dir_all(&upload_tmp_path).expect(&format!(
+        "could not create upload temp directory {}",
+        upload_tmp_path.as_path().display()
+    ));
+
+    std::fs::create_dir_all(&config.artifacts_dir).expect(&format!(
+        "could not create artifacts directory {}",
+        &config.artifacts_dir.as_path().display()
+    ));
 
     // TODO(bbqsrc): Delete everything inside temp dir to ensure clean state
     // TODO(bbqsrc): Check the user access for the temp dir for security
 
-    let form = Form::new()
-        .field("params", Field::text())
-        .field("payload", Field::file(UploadFilenameGenerator {
-            directory: upload_tmp_path
-        }));
+    let form = Form::new().field("params", Field::text()).field(
+        "payload",
+        Field::file(UploadFilenameGenerator {
+            directory: upload_tmp_path,
+        }),
+    );
 
     let state = ServerState {
         path: path.to_path_buf(),
         bind: bind.to_string(),
         port: port.to_string(),
+        config,
         database,
         upload_form: form,
     };
@@ -136,6 +147,15 @@ fn main() {
                         .help("The port which the server to listen to (default: 8000)")
                         .long("port")
                         .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("config")
+                        .short("c")
+                        .long("config")
+                        .value_name("FILE")
+                        .help("Set a custom TOML config file")
+                        .required(true)
+                        .takes_value(true),
                 ),
         )
         .get_matches();
@@ -176,10 +196,21 @@ fn main() {
                 }
             });
 
-            run_server(path, bind, port);
+            run_server(get_config(matches), path, bind, port);
         }
         _ => {}
     }
+}
+
+fn get_config(matches: &ArgMatches<'_>) -> TomlConfig {
+    let config_file = matches.value_of("config").unwrap();
+
+    let config =
+        fs::read_to_string(&config_file).expect(&format!("Failed to open {}", config_file));
+    let config: TomlConfig =
+        toml::from_str(&config).expect(&format!("Failed to convert {} to TOML", config_file));
+
+    config
 }
 
 struct ConsoleOutput;

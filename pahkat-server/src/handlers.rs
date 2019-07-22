@@ -1,4 +1,4 @@
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::prelude::*;
 use std::io::BufReader;
 
@@ -9,13 +9,12 @@ use chrono::Duration;
 use form_data::{handle_multipart, Error};
 use futures::future::{ok, Future};
 use log::{error, info};
-use serde_json::json;
 use serde::Deserialize;
-
+use serde_json::json;
 
 use pahkat_common::database::models::NewDownload;
 use pahkat_common::open_package;
-use pahkat_types::{Downloadable, MacOSInstaller, Installer, TarballInstaller, WindowsInstaller};
+use pahkat_types::{Downloadable, Installer};
 
 use crate::ServerState;
 
@@ -137,6 +136,7 @@ pub fn upload_package(
     }
 
     let ref_state = state.get_ref().clone();
+    let mut destination_dir = ref_state.config.artifacts_dir.clone();
     let form = ref_state.upload_form;
 
     info!("HttpRequest: {:?}", request);
@@ -150,12 +150,24 @@ pub fn upload_package(
         match upload_params {
             Err(e) => {
                 return HttpResponse::BadRequest().body(format!("Error processing params: {}", e));
-            },
+            }
             Ok(upload_params) => {
                 let (filename, path) = map.remove("payload").unwrap().file().unwrap();
 
                 info!("text: {}", params);
-                info!("filename: {}, path: {:?}", filename, path);
+                info!(
+                    "filename: {}, path: {:?}",
+                    filename,
+                    path.as_path().display()
+                );
+
+                let copy_error = format!(
+                    "failed to copy temp file {:?} to artifacts dir {:?}",
+                    &path, &destination_dir
+                );
+
+                destination_dir.push(filename);
+                fs::copy(&path, destination_dir).expect(&copy_error);
 
                 // Tarball is not supported
                 match upload_params.installer {
