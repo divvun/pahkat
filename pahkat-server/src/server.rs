@@ -98,9 +98,9 @@ pub fn run_server(config: TomlConfig, path: &Path, bind: &str, port: &str) {
                     .route(web::get().to(virtuals_package_index)),
             )
     })
-        .bind(&format!("{}:{}", bind, port))
-        .expect(&format!("Can not bind to {}:{}", bind, port))
-        .start();
+    .bind(&format!("{}:{}", bind, port))
+    .expect(&format!("Can not bind to {}:{}", bind, port))
+    .start();
 
     let _ = system.run();
 }

@@ -7,13 +7,13 @@ use log::{error, info, warn};
 use pahkat_common::ProgressOutput;
 
 use config::TomlConfig;
-use watcher::Watcher;
 use server::run_server;
+use watcher::Watcher;
 
 mod config;
 mod handlers;
-mod watcher;
 mod server;
+mod watcher;
 
 fn main() {
     env::set_var("RUST_LOG", "info");

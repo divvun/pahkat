@@ -15,6 +15,7 @@ use pahkat_types::{Package, Packages, Repository, RepositoryAgent, Virtual, Virt
 
 pub mod database;
 pub mod models;
+pub mod version;
 
 #[macro_export]
 macro_rules! ld_type {
@@ -89,6 +90,8 @@ pub fn open_package(path: &Path, channel: Option<&str>) -> Result<Package, OpenI
     let index = serde_json::from_reader(file).map_err(OpenIndexError::JsonError)?;
     Ok(index)
 }
+
+pub fn update_package(path: &Path, package: &Package) {}
 
 pub fn repo_index<T: ProgressOutput>(cur_dir: &Path, output: &T) {
     if let Err(err) = open_repo(&cur_dir) {

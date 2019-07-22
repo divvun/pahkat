@@ -1,6 +1,7 @@
 use std::fs::{self, File};
 use std::io::prelude::*;
 use std::io::BufReader;
+use std::path::Path;
 
 use actix_multipart::Multipart;
 use actix_web::{http::header::AUTHORIZATION, web, HttpRequest, HttpResponse, Responder};
@@ -14,6 +15,7 @@ use serde_json::json;
 
 use pahkat_common::database::models::NewDownload;
 use pahkat_common::open_package;
+use pahkat_common::version::Version;
 use pahkat_types::{Downloadable, Installer};
 
 use crate::server::ServerState;
@@ -107,6 +109,7 @@ struct UploadParams {
 pub fn upload_package(
     request: HttpRequest,
     state: web::Data<ServerState>,
+    path: web::Path<String>,
     multipart: Multipart,
 ) -> Box<dyn Future<Item = HttpResponse, Error = Error>> {
     let auth_header = request.headers().get(AUTHORIZATION);
@@ -136,54 +139,86 @@ pub fn upload_package(
     }
 
     let ref_state = state.get_ref().clone();
+    let mut repo_path = ref_state.path.clone();
     let mut destination_dir = ref_state.config.artifacts_dir.clone();
     let form = ref_state.upload_form;
 
     info!("HttpRequest: {:?}", request);
 
-    Box::new(handle_multipart(multipart, form).map(|uploaded_content| {
-        println!("execute");
-        let mut map = uploaded_content.map().unwrap();
-        let params = map.remove("params").unwrap().text().unwrap();
+    Box::new(
+        handle_multipart(multipart, form).map(move |uploaded_content| {
+            println!("execute");
+            let mut map = uploaded_content.map().unwrap();
+            let params = map.remove("params").unwrap().text().unwrap();
 
-        let upload_params: Result<UploadParams, _> = serde_json::from_str(&params);
-        match upload_params {
-            Err(e) => {
-                return HttpResponse::BadRequest().body(format!("Error processing params: {}", e));
-            }
-            Ok(upload_params) => {
-                let (filename, path) = map.remove("payload").unwrap().file().unwrap();
+            let upload_params: Result<UploadParams, _> = serde_json::from_str(&params);
+            match upload_params {
+                Err(e) => {
+                    return HttpResponse::BadRequest()
+                        .body(format!("Error processing params: {}", e));
+                }
+                Ok(upload_params) => {
+                    repo_path.push("packages");
+                    repo_path.push(Path::new(&path.clone()));
 
-                info!("text: {}", params);
-                info!(
-                    "filename: {}, path: {:?}",
-                    filename,
-                    path.as_path().display()
-                );
-
-                let copy_error = format!(
-                    "failed to copy temp file {:?} to artifacts dir {:?}",
-                    &path, &destination_dir
-                );
-
-                destination_dir.push(filename);
-                fs::copy(&path, destination_dir).expect(&copy_error);
-
-                // Tarball is not supported
-                match upload_params.installer {
-                    Installer::Tarball(_) => return HttpResponse::BadRequest().finish(),
-                    installer => {
-                        let url = installer.url();
-
-                        info!("installer url: {}", url);
+                    info!(
+                        "Repo path: {:?}, channel: {}",
+                        &repo_path, &upload_params.channel
+                    );
+                    let mut channel: Option<&str> = None;
+                    if upload_params.channel != "stable" {
+                        channel = Some(&upload_params.channel);
                     }
-                };
 
-                //info!("text: {:?}, file: {:?}", &text, &file);
-                HttpResponse::Created().finish()
+                    let package_option = open_package(&repo_path, channel);
+                    if let Err(err) = package_option {
+                        error!("Error when opening {:?}: {:?}", &repo_path, err);
+                        return HttpResponse::NotFound().finish();
+                    }
+                    let package = package_option.unwrap();
+
+                    let current_version = Version::new(&package.version);
+                    let incoming_version = Version::new(&upload_params.version);
+                    info!("curr_ver: {:?}, incoming_ver: {:?}", current_version, incoming_version);
+
+                    if incoming_version.is_err() {
+                        return HttpResponse::BadRequest().body(format!("Invalid version: {:?}", incoming_version));
+                    }
+
+                    // TODO: Should only be done if payload needed
+                    let (filename, filepath) = map.remove("payload").unwrap().file().unwrap();
+
+                    info!("text: {}", params);
+                    info!(
+                        "filename: {}, path: {:?}",
+                        filename,
+                        filepath.as_path().display()
+                    );
+
+                    let copy_error = format!(
+                        "failed to copy temp file {:?} to artifacts dir {:?}",
+                        &filepath, &destination_dir
+                    );
+
+                    destination_dir.push(filename);
+                    fs::copy(&filepath, destination_dir).expect(&copy_error);
+
+                    // Tarball is not supported
+                    match upload_params.installer {
+                        Installer::Tarball(_) => return HttpResponse::BadRequest().finish(),
+                        installer => {
+                            let url = installer.url();
+
+                            info!("installer url: {}", url);
+                        }
+                    };
+
+                    //info!("text: {:?}, file: {:?}", &text, &file);
+                    HttpResponse::Created().finish()
+                }
             }
-        }
-    }))
+        }),
+    )
 }
 
 pub fn download_package(state: web::Data<ServerState>, path: web::Path<String>) -> impl Responder {
