@@ -179,37 +179,75 @@ pub fn upload_package(
 
                     let current_version = Version::new(&package.version);
                     let incoming_version = Version::new(&upload_params.version);
-                    info!("curr_ver: {:?}, incoming_ver: {:?}", current_version, incoming_version);
-
-                    if incoming_version.is_err() {
-                        return HttpResponse::BadRequest().body(format!("Invalid version: {:?}", incoming_version));
-                    }
-
-                    // TODO: Should only be done if payload needed
-                    let (filename, filepath) = map.remove("payload").unwrap().file().unwrap();
-
-                    info!("text: {}", params);
                     info!(
-                        "filename: {}, path: {:?}",
-                        filename,
-                        filepath.as_path().display()
+                        "curr_ver: {:?}, incoming_ver: {:?}",
+                        &current_version, &incoming_version
                     );
 
-                    let copy_error = format!(
-                        "failed to copy temp file {:?} to artifacts dir {:?}",
-                        &filepath, &destination_dir
-                    );
+                    match (&current_version, &incoming_version) {
+                        (Ok(_), Err(e)) => {
+                            return HttpResponse::BadRequest()
+                                .body(format!("Invalid version: {:?}: {:?}", &upload_params.version, e));
+                        },
+                        (Ok(current_version), Ok(incoming_version)) => {
+                            if current_version > incoming_version {
+                                return HttpResponse::Conflict().body(format!(
+                                    "Incoming version less than current version: {:?} < {:?}",
+                                    &incoming_version,
+                                    &current_version
+                                ));
+                            } else {
+                                match incoming_version {
+                                    Version::UtcDate(incoming_date) => {
+                                        let now = chrono::offset::Utc::now();
+                                        let now = now.checked_add_signed(Duration::minutes(2)).unwrap();
 
-                    destination_dir.push(filename);
-                    fs::copy(&filepath, destination_dir).expect(&copy_error);
+                                        if incoming_date > &now {
+                                            return HttpResponse::Conflict().body(format!(
+                                                "Incoming date version is too far into the future: {:?}",
+                                                &incoming_version
+                                            ));
+                                        }
+                                    },
+                                    _ => {}
+                                }
+                            }
+                        },
+                        _ => {},
+                    };
+
+                    let incoming_version = incoming_version.unwrap();
 
                     // Tarball is not supported
                     match upload_params.installer {
-                        Installer::Tarball(_) => return HttpResponse::BadRequest().finish(),
+                        Installer::Tarball(_) => return HttpResponse::BadRequest().body("Tarball installers not supported"),
                         installer => {
                             let url = installer.url();
 
                             info!("installer url: {}", url);
+
+                            if url.contains("pahkat:payload") {
+                                if !map.contains_key("payload") {
+                                    return HttpResponse::BadRequest().body("payload required if `pahkat:payload` in uri")
+                                }
+
+                                let (filename, filepath) = map.remove("payload").unwrap().file().unwrap();
+
+                                info!("text: {}", params);
+                                info!(
+                                    "filename: {}, path: {:?}",
+                                    filename,
+                                    filepath.as_path().display()
+                                );
+
+                                let copy_error = format!(
+                                    "failed to copy temp file {:?} to artifacts dir {:?}",
+                                    &filepath, &destination_dir
+                                );
+
+                                destination_dir.push(filename);
+                                fs::copy(&filepath, destination_dir).expect(&copy_error);
+                            }
                         }
                     };
 

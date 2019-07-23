@@ -45,12 +45,8 @@ impl PartialEq for Version {
 impl Ord for Version {
     fn cmp(&self, other: &Self) -> Ordering {
         match (self, other) {
-            (Version::SemVer(my), Version::SemVer(other)) => {
-                my.cmp(other)
-            },
-            (Version::UtcDate(my), Version::UtcDate(other)) => {
-                my.cmp(other)
-            },
+            (Version::SemVer(my), Version::SemVer(other)) => my.cmp(other),
+            (Version::UtcDate(my), Version::UtcDate(other)) => my.cmp(other),
             (Version::UtcDate(my), Version::SemVer(other)) => Ordering::Greater,
             (Version::SemVer(my), Version::UtcDate(other)) => Ordering::Less,
         }
