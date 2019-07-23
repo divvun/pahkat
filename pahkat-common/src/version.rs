@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::fmt::{self, Display, Formatter};
 
 use chrono::prelude::*;
 use semver::{SemVerError, Version as SemVer};
@@ -6,8 +7,7 @@ use semver::{SemVerError, Version as SemVer};
 #[derive(Debug)]
 pub enum VersionValidationError {
     NotUTCDateError,
-    InvalidDateError(chrono::ParseError),
-    InvalidInput(SemVerError),
+    InvalidInput(SemVerError, chrono::ParseError),
 }
 
 #[derive(Debug)]
@@ -26,11 +26,22 @@ impl Version {
                     Err(VersionValidationError::NotUTCDateError)
                 }
             }
-            Err(e) => match SemVer::parse(version) {
+            Err(date_e) => match SemVer::parse(version) {
                 Ok(semver) => Ok(Version::SemVer(semver)),
-                Err(e) => Err(VersionValidationError::InvalidInput(e)),
+                Err(semver_e) => Err(VersionValidationError::InvalidInput(semver_e, date_e)),
             },
         }
+    }
+}
+
+impl Display for Version {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let str = match self {
+            Version::SemVer(semver) => semver.to_string(),
+            Version::UtcDate(date) => date.to_string(),
+        };
+
+        write!(f, "{}", str)
     }
 }
 
@@ -47,8 +58,8 @@ impl Ord for Version {
         match (self, other) {
             (Version::SemVer(my), Version::SemVer(other)) => my.cmp(other),
             (Version::UtcDate(my), Version::UtcDate(other)) => my.cmp(other),
-            (Version::UtcDate(my), Version::SemVer(other)) => Ordering::Greater,
-            (Version::SemVer(my), Version::UtcDate(other)) => Ordering::Less,
+            (Version::UtcDate(_), Version::SemVer(_)) => Ordering::Greater,
+            (Version::SemVer(_), Version::UtcDate(_)) => Ordering::Less,
         }
     }
 }

@@ -14,7 +14,7 @@ use serde::Deserialize;
 use serde_json::json;
 
 use pahkat_common::database::models::NewDownload;
-use pahkat_common::open_package;
+use pahkat_common::{open_package, index_fn};
 use pahkat_common::version::Version;
 use pahkat_types::{Downloadable, Installer};
 
@@ -141,6 +141,7 @@ pub fn upload_package(
     let ref_state = state.get_ref().clone();
     let mut repo_path = ref_state.path.clone();
     let mut destination_dir = ref_state.config.artifacts_dir.clone();
+    let url_prefix = ref_state.config.url_prefix.clone();
     let form = ref_state.upload_form;
 
     info!("HttpRequest: {:?}", request);
@@ -175,7 +176,7 @@ pub fn upload_package(
                         error!("Error when opening {:?}: {:?}", &repo_path, err);
                         return HttpResponse::NotFound().finish();
                     }
-                    let package = package_option.unwrap();
+                    let mut package = package_option.unwrap();
 
                     let current_version = Version::new(&package.version);
                     let incoming_version = Version::new(&upload_params.version);
@@ -218,15 +219,14 @@ pub fn upload_package(
 
                     let incoming_version = incoming_version.unwrap();
 
-                    // Tarball is not supported
-                    match upload_params.installer {
+                    match &upload_params.installer {
                         Installer::Tarball(_) => return HttpResponse::BadRequest().body("Tarball installers not supported"),
                         installer => {
-                            let url = installer.url();
+                            let mut url = installer.url();
 
                             info!("installer url: {}", url);
 
-                            if url.contains("pahkat:payload") {
+                            if url == "pahkat:payload" {
                                 if !map.contains_key("payload") {
                                     return HttpResponse::BadRequest().body("payload required if `pahkat:payload` in uri")
                                 }
@@ -245,13 +245,61 @@ pub fn upload_package(
                                     &filepath, &destination_dir
                                 );
 
-                                destination_dir.push(filename);
+                                let final_filename;
+
+                                match installer {
+                                    Installer::Windows(installer) => {
+                                        let mut ext = "exe";
+                                        if let Some(installer_type) = &installer.installer_type {
+                                            if installer_type == "msi" {
+                                                ext = &installer_type;
+                                            }
+                                        }
+
+                                        final_filename = format!("{}-{}.{}", package.id, incoming_version.to_string(), ext);
+                                    },
+                                    Installer::MacOS(_) => {
+                                        final_filename = format!("{}-{}.pkg", package.id, incoming_version.to_string());
+                                    },
+                                    Installer::Tarball(_) => {
+                                        return HttpResponse::Conflict().body("Previous package had Tarball installer")
+                                    },
+                                }
+
+                                destination_dir.push(&final_filename);
+                                url = format!("{}/{}", &url_prefix, final_filename);
                                 fs::copy(&filepath, destination_dir).expect(&copy_error);
                             }
+
+                            // Update the final package info
+                            package.version = incoming_version.to_string();
+
+                            // Should we use params installer?
+                            let mut package_installer = package.installer.clone().unwrap();
+
+                            match &mut package_installer {
+                                Installer::Windows(installer) => {
+                                    installer.url = url;
+                                },
+                                Installer::MacOS(installer) => {
+                                    installer.url = url;
+                                },
+                                Installer::Tarball(_) => {
+                                    return HttpResponse::Conflict().body("Previous package had Tarball installer")
+                                },
+                            }
+
+                            package.installer = Some(package_installer);
+
+                            let mut package_path = repo_path.clone();
+                            package_path.push(index_fn(channel));
+
+                            let json_package = serde_json::to_string_pretty(&package).unwrap();
+                            let mut file = File::create(package_path).unwrap();
+                            file.write_all(json_package.as_bytes()).unwrap();
                         }
                     };
 
-                    //info!("text: {:?}, file: {:?}", &text, &file);
                     HttpResponse::Created().finish()
                 }
             }
