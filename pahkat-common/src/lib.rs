@@ -91,57 +91,6 @@ pub fn open_package(path: &Path, channel: Option<&str>) -> Result<Package, OpenI
     Ok(index)
 }
 
-// We require this function because `derive_builder` does not appear to provide a way
-// to create a Builder object from an existing Struct
-/*pub fn create_updated_package(package: Package, installer_url: &str, version: Version) -> Package {
-    // Can we assume there is an installer?
-    let mut updated_installer = package.installer.unwrap();
-    updated_installer.url = installer_url;
-
-    Package {
-        id: package.id,
-        name: package.name,
-        description: package.description,
-        authors: package.authors,
-        license: package.license,
-        version: version.to_string(),
-        category: package.category,
-        languages: package.languages,
-        platform: package.platform,
-        dependencies: package.dependencies,
-        virtual_dependencies: package.virtual_dependencies,
-    }
-}*/
-
-/*
-#[derive(Debug, Serialize, Deserialize, Clone, Builder)]
-#[serde(rename_all = "camelCase")]
-pub struct Package {
-    #[serde(rename = "@context")]
-    pub _context: Option<String>,
-    #[serde(rename = "@type")]
-    pub _type: Option<String>,
-    pub id: String,
-    pub name: BTreeMap<String, String>,
-    pub description: BTreeMap<String, String>,
-    #[serde(default = "unknown_vec")]
-    pub authors: Vec<String>,
-    #[serde(default = "unknown")]
-    pub license: String,
-    pub version: String,
-
-    pub category: String,
-    pub languages: Vec<String>,
-    pub platform: BTreeMap<String, String>,
-    #[serde(default = "BTreeMap::new")]
-    pub dependencies: BTreeMap<String, String>,
-    #[serde(default = "BTreeMap::new")]
-    pub virtual_dependencies: BTreeMap<String, String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub installer: Option<Installer>,
-}
-*/
-
 pub fn repo_index<T: ProgressOutput>(cur_dir: &Path, output: &T) {
     if let Err(err) = open_repo(&cur_dir) {
         output.error(&format!("{}", err));
