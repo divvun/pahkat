@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
@@ -17,7 +18,6 @@ use pahkat_types::{Downloadable, Installer, Package};
 
 use crate::server::ServerState;
 use std::collections::hash_map::RandomState;
-use std::collections::HashMap;
 
 macro_rules! try_http_err {
     ($action:expr) => {{
@@ -55,14 +55,13 @@ pub fn upload_package(
     let mut destination_dir = state.config.artifacts_dir.clone();
 
     let final_result = handle_multipart(multipart, form).map(move |uploaded_content| {
-        let mut map = uploaded_content.map().unwrap();
-        let params = map.remove("params").unwrap().text().unwrap();
-
-        let upload_params: Result<UploadParams, _> = serde_json::from_str(&params);
-        if let Err(e) = upload_params {
-            return HttpResponse::BadRequest().body(format!("Error processing params: {}", e));
+        let map = uploaded_content.map();
+        if map.is_none() {
+            return HttpResponse::BadRequest().body("No form data provided");
         }
-        let upload_params = upload_params.unwrap();
+        let mut map = map.unwrap();
+
+        let upload_params = try_http_err!(get_upload_params(&mut map));
 
         repo_path.push("packages");
         repo_path.push(Path::new(&path.clone()));
@@ -74,7 +73,9 @@ pub fn upload_package(
 
         let package_option = open_package(&repo_path, channel);
         if let Err(err) = package_option {
-            error!("Error when opening {:?}: {:?}", &repo_path, err);
+            let mut error_path = repo_path.clone();
+            error_path.push(index_fn(channel));
+            error!("Error when opening {:?}: {:?}", &error_path, err);
             return HttpResponse::NotFound().finish();
         }
         let mut package = package_option.unwrap();
@@ -82,6 +83,7 @@ pub fn upload_package(
         let incoming_version =
             try_http_err!(validate_version(&package.version, &upload_params.version));
 
+        let json_package;
         let mut installer = upload_params.installer.clone();
         match &mut installer {
             Installer::Tarball(_) => {
@@ -121,13 +123,13 @@ pub fn upload_package(
                 let mut package_path = repo_path.clone();
                 package_path.push(index_fn(channel));
 
-                let json_package = serde_json::to_string_pretty(&package).unwrap();
+                json_package = serde_json::to_string_pretty(&package).unwrap();
                 let mut file = File::create(package_path).unwrap();
                 file.write_all(json_package.as_bytes()).unwrap();
             }
         };
 
-        HttpResponse::Created().finish()
+        HttpResponse::Created().body(json_package)
     });
 
     Box::new(final_result)
@@ -175,6 +177,30 @@ fn authorize(
             }
         }
     }
+}
+
+fn get_upload_params(
+    map: &mut HashMap<String, Value, RandomState>,
+) -> Result<UploadParams, HttpResponse> {
+    let params_key = "params";
+    if !map.contains_key(params_key) {
+        return Err(HttpResponse::BadRequest().body("No upload params provided"));
+    }
+
+    let params = map.remove("params").unwrap().text();
+    if params.is_none() {
+        return Err(HttpResponse::BadRequest().body("Upload params must be a valid string"));
+    }
+    let params = params.unwrap();
+
+    let upload_params: Result<UploadParams, _> = serde_json::from_str(&params);
+    if let Err(e) = upload_params {
+        return Err(
+            HttpResponse::BadRequest().body(format!("Error processing upload params: {}", e))
+        );
+    }
+
+    Ok(upload_params.unwrap())
 }
 
 fn validate_version(
