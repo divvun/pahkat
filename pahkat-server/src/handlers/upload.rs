@@ -187,7 +187,7 @@ fn get_upload_params(
         return Err(HttpResponse::BadRequest().body("No upload params provided"));
     }
 
-    let params = map.remove("params").unwrap().text();
+    let params = map.remove(params_key).unwrap().text();
     if params.is_none() {
         return Err(HttpResponse::BadRequest().body("Upload params must be a valid string"));
     }
