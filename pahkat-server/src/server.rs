@@ -8,7 +8,7 @@ use pahkat_common::{database::Database, db_path};
 use crate::config::TomlConfig;
 use crate::handlers::{
     download_package, package_stats, packages_index, packages_package_index, repo_index,
-    repo_stats, upload_package, virtuals_index, virtuals_package_index,
+    repo_stats, virtuals_index, virtuals_package_index, upload::upload_package
 };
 
 struct UploadFilenameGenerator {
