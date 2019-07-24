@@ -12,8 +12,8 @@ pub mod models;
 pub mod schema;
 pub mod user;
 
-use self::models::{NewDownload, NewUser, PackageCount, User};
-use self::schema::{downloads, users};
+use self::models::{NewDownload, NewUser, NewUserAccess, PackageCount, User};
+use self::schema::{downloads, user_access, users};
 use crate::DatabaseError;
 
 #[derive(Clone)]
@@ -74,7 +74,7 @@ impl Database {
             .first(&connection)?)
     }
 
-    pub fn query_top_downloads(&self, limit: u32) -> std::result::Result<Vec<PackageCount>, Error> {
+    pub fn query_top_downloads(&self, limit: u32) -> Result<Vec<PackageCount>, Error> {
         use diesel::sql_query;
         use diesel::sql_types::Integer;
 
@@ -98,7 +98,7 @@ LIMIT ?
         &self,
         limit: u32,
         duration: Duration,
-    ) -> std::result::Result<Vec<PackageCount>, Error> {
+    ) -> Result<Vec<PackageCount>, Error> {
         use diesel::sql_query;
         use diesel::sql_types::{Integer, Timestamp};
 
@@ -120,10 +120,7 @@ LIMIT ?
         .load(&connection)?)
     }
 
-    pub fn query_distinct_downloads_since(
-        &self,
-        duration: Duration,
-    ) -> std::result::Result<Vec<String>, Error> {
+    pub fn query_distinct_downloads_since(&self, duration: Duration) -> Result<Vec<String>, Error> {
         use self::schema::downloads::dsl::*;
 
         let connection = self.pool.get()?;
@@ -135,7 +132,7 @@ LIMIT ?
             .load(&connection)?)
     }
 
-    pub fn create_download(&self, download: NewDownload) -> std::result::Result<usize, Error> {
+    pub fn create_download(&self, download: NewDownload) -> Result<usize, Error> {
         let connection = self.pool.get()?;
 
         Ok(diesel::insert_into(downloads::table)
@@ -143,7 +140,7 @@ LIMIT ?
             .execute(&connection)?)
     }
 
-    pub fn validate_token(&self, str_token: &str) -> std::result::Result<bool, DatabaseError> {
+    pub fn validate_token(&self, str_token: &str) -> Result<bool, DatabaseError> {
         use self::schema::users::dsl::*;
 
         let parsed_uuid = Uuid::parse_str(&mut str_token.clone());
@@ -159,7 +156,20 @@ LIMIT ?
                 let vec_users = users.filter(token.eq(vec_uuid)).load::<User>(&connection)?;
                 let users_length = vec_users.len();
 
-                if users_length > 0 {
+                if users_length > 1 {
+                    panic!("More than one user found for the same token!");
+                }
+
+                if users_length == 1 {
+                    let user = &vec_users[0];
+
+                    let new_user_access = NewUserAccess {
+                        user_id: user.id.clone(),
+                        timestamp: Utc::now().naive_utc(),
+                    };
+
+                    self.create_user_access(new_user_access)?;
+
                     Ok(true)
                 } else {
                     Ok(false)
@@ -172,11 +182,19 @@ LIMIT ?
         }
     }
 
-    pub fn create_user(&self, user: NewUser) -> std::result::Result<usize, DatabaseError> {
+    pub fn create_user(&self, user: NewUser) -> Result<usize, DatabaseError> {
         let connection = self.pool.get()?;
 
         Ok(diesel::insert_into(users::table)
             .values(&user)
+            .execute(&connection)?)
+    }
+
+    pub fn create_user_access(&self, user_access: NewUserAccess) -> Result<usize, DatabaseError> {
+        let connection = self.pool.get()?;
+
+        Ok(diesel::insert_into(user_access::table)
+            .values(&user_access)
             .execute(&connection)?)
     }
 

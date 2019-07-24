@@ -11,10 +11,7 @@ use std::path::{Path, PathBuf};
 use directories::ProjectDirs;
 use serde::Serialize;
 
-use crate::version::Version;
-use pahkat_types::{
-    Downloadable, Package, Packages, Repository, RepositoryAgent, Virtual, Virtuals,
-};
+use pahkat_types::{Package, Packages, Repository, RepositoryAgent, Virtual, Virtuals};
 
 pub mod database;
 pub mod models;
