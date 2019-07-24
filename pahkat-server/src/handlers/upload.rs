@@ -19,6 +19,16 @@ use crate::server::ServerState;
 use std::collections::hash_map::RandomState;
 use std::collections::HashMap;
 
+macro_rules! try_http_err {
+    ($action:expr) => {{
+        let result = $action;
+        match result {
+            Ok(v) => v,
+            Err(e) => return e,
+        }
+    }};
+}
+
 #[derive(Deserialize)]
 struct UploadParams {
     pub channel: String,
@@ -34,16 +44,15 @@ pub fn upload_package(
 ) -> Box<dyn Future<Item = HttpResponse, Error = Error>> {
     debug!("HttpRequest: {:?}", request);
 
-    let authorization_result = authorize(&request, &state.database);
-    if authorization_result.is_err() {
-        return authorization_result.unwrap_err();
-    }
+    try_http_err!(authorize(&request, &state.database));
 
-    let ref_state = state.get_ref().clone();
-    let mut repo_path = ref_state.path.clone();
-    let mut destination_dir = ref_state.config.artifacts_dir.clone();
-    let url_prefix = ref_state.config.url_prefix.clone();
-    let form = ref_state.upload_form;
+    let state = state.get_ref().clone();
+    let form = state.upload_form;
+
+    let url_prefix = state.config.url_prefix.clone();
+
+    let mut repo_path = state.path.clone();
+    let mut destination_dir = state.config.artifacts_dir.clone();
 
     let final_result = handle_multipart(multipart, form).map(move |uploaded_content| {
         let mut map = uploaded_content.map().unwrap();
@@ -53,7 +62,6 @@ pub fn upload_package(
         if let Err(e) = upload_params {
             return HttpResponse::BadRequest().body(format!("Error processing params: {}", e));
         }
-
         let upload_params = upload_params.unwrap();
 
         repo_path.push("packages");
@@ -71,34 +79,23 @@ pub fn upload_package(
         }
         let mut package = package_option.unwrap();
 
-        let version_validation = validate_version(&package.version, &upload_params.version);
-        if version_validation.is_err() {
-            return version_validation.unwrap_err();
-        }
-        let incoming_version = version_validation.unwrap();
+        let incoming_version =
+            try_http_err!(validate_version(&package.version, &upload_params.version));
 
-        match &upload_params.installer {
+        let mut installer = upload_params.installer.clone();
+        match &mut installer {
             Installer::Tarball(_) => {
                 return HttpResponse::BadRequest().body("Tarball installers not supported")
             }
-            installer => {
+            _ => {
                 let mut url = installer.url();
 
                 info!("installer url: {}", url);
 
                 if url == "pahkat:payload" {
-                    let filename = get_filename(&package, &installer, &incoming_version);
-                    if filename.is_err() {
-                        return filename.unwrap_err();
-                    }
-                    let filename = filename.unwrap();
-
-                    let payload_result =
-                        copy_payload_and_get_url(&mut map, &mut destination_dir, &filename);
-
-                    if payload_result.is_err() {
-                        return payload_result.unwrap_err();
-                    }
+                    let filename =
+                        try_http_err!(get_filename(&package, &installer, &incoming_version));
+                    try_http_err!(copy_payload(&mut map, &mut destination_dir, &filename));
 
                     url = format!("{}/{}", &url_prefix, filename);
                 }
@@ -106,10 +103,7 @@ pub fn upload_package(
                 // Update the final package info
                 package.version = incoming_version.to_string();
 
-                // Should we use params installer?
-                let mut package_installer = package.installer.clone().unwrap();
-
-                match &mut package_installer {
+                match &mut installer {
                     Installer::Windows(installer) => {
                         installer.url = url;
                     }
@@ -122,7 +116,7 @@ pub fn upload_package(
                     }
                 }
 
-                package.installer = Some(package_installer);
+                package.installer = Some(installer);
 
                 let mut package_path = repo_path.clone();
                 package_path.push(index_fn(channel));
@@ -224,7 +218,7 @@ fn validate_version(
     Ok(incoming_version.unwrap())
 }
 
-fn copy_payload_and_get_url(
+fn copy_payload(
     map: &mut HashMap<String, Value, RandomState>,
     destination_dir: &mut PathBuf,
     filename: &str,
