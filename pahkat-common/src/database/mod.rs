@@ -147,8 +147,6 @@ LIMIT ?
 
         match parsed_uuid {
             Ok(uuid) => {
-                println!("parsed uuid: {:?}", parsed_uuid);
-
                 let connection = self.pool.get()?;
 
                 let vec_uuid = uuid.as_bytes().to_vec();

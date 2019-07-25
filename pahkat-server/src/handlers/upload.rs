@@ -9,10 +9,10 @@ use chrono::Duration;
 use form_data::{handle_multipart, Error, Value};
 use futures::future::{ok, Future};
 use log::{debug, error, info};
-use serde::Deserialize;
 
 use pahkat_common::database::Database;
 use pahkat_common::version::Version;
+use pahkat_common::UploadParams;
 use pahkat_common::{index_fn, open_package};
 use pahkat_types::{Downloadable, Installer, Package};
 
@@ -27,13 +27,6 @@ macro_rules! try_http_err {
             Err(e) => return e,
         }
     }};
-}
-
-#[derive(Deserialize)]
-struct UploadParams {
-    pub channel: String,
-    pub version: String,
-    pub installer: Installer,
 }
 
 pub fn upload_package(
@@ -207,18 +200,26 @@ fn validate_version(
     current_version: &str,
     incoming_version: &str,
 ) -> Result<Version, HttpResponse> {
+    debug!(
+        "current_version: {}, incoming_version: {}",
+        &current_version, &incoming_version
+    );
     let current_version = Version::new(&current_version);
     let incoming_version = Version::new(&incoming_version);
 
+    debug!(
+        "current_version: {:?}, incoming_version: {:?}",
+        &current_version, &incoming_version
+    );
     match (&current_version, &incoming_version) {
-        (Ok(_), Err(e)) => {
+        (_, Err(e)) => {
             return Err(HttpResponse::BadRequest()
-                .body(format!("Invalid version: {:?}: {:?}", &current_version, e)));
+                .body(format!("Invalid version: {:?}: {:?}", &incoming_version, e)));
         }
         (Ok(current_version), Ok(incoming_version)) => {
-            if current_version > incoming_version {
+            if current_version >= incoming_version {
                 return Err(HttpResponse::Conflict().body(format!(
-                    "Incoming version less than current version: {:?} < {:?}",
+                    "Incoming version less than or equal to current version: {:?} < {:?}",
                     &incoming_version, &current_version
                 )));
             } else {

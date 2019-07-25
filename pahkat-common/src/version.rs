@@ -38,7 +38,7 @@ impl Display for Version {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let str = match self {
             Version::SemVer(semver) => semver.to_string(),
-            Version::UtcDate(date) => date.to_string(),
+            Version::UtcDate(date) => date.to_rfc3339_opts(SecondsFormat::Millis, true),
         };
 
         write!(f, "{}", str)

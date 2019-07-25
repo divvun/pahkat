@@ -4,9 +4,11 @@ extern crate serde;
 extern crate serde_json;
 
 use std::env;
+use std::fs::File;
 use std::path::Path;
 
 use clap::{App, AppSettings, Arg, SubCommand};
+use reqwest::multipart;
 use termcolor::Color;
 
 use cli::progress;
@@ -16,7 +18,8 @@ use commands::{
     package_init, repo_init, virtual_init,
 };
 
-use pahkat_common::{repo_index, ProgressOutput};
+use pahkat_common::{repo_index, ProgressOutput, UploadParams};
+use pahkat_types::{Downloadable, Installer};
 
 mod cli;
 mod commands;
@@ -321,6 +324,61 @@ fn main() {
                 )
             )
         )
+        .subcommand(SubCommand::with_name("upload")
+            .about("Upload a package patch")
+            .arg(Arg::with_name("url")
+                 .help("repo url")
+                 .index(1)
+                 .required(true)
+            )
+            .arg(Arg::with_name("token")
+                .value_name("TOKEN")
+                .help("bearer token for an authorized user")
+                .short("t")
+                .long("token")
+                .takes_value(true)
+                .required(true)
+            )
+            .arg(Arg::with_name("package")
+                .value_name("PKG-ID")
+                .help("package id")
+                .short("p")
+                .long("package")
+                .takes_value(true)
+                .required(true)
+            )
+            .arg(Arg::with_name("channel")
+                .value_name("CHANNEL")
+                .help("package channel")
+                .short("c")
+                .long("channel")
+                .takes_value(true)
+                .required(true)
+            )
+            .arg(Arg::with_name("version")
+                .value_name("VERSION")
+                .help("new package installer version")
+                .short("v")
+                .long("version")
+                .takes_value(true)
+                .required(true)
+            )
+            .arg(Arg::with_name("installer")
+                .value_name("INSTALLER")
+                .help("json file for the package installer metadata")
+                .short("i")
+                .long("installer")
+                .takes_value(true)
+                .required(true)
+            )
+            .arg(Arg::with_name("file")
+                .value_name("FILE")
+                .help("installer file executable to update the package with")
+                .short("f")
+                .long("file")
+                .takes_value(true)
+            )
+        )
         .get_matches();
 
     let output = StderrOutput;
@@ -459,6 +517,66 @@ fn main() {
             },
             _ => {}
         },
+        ("upload", Some(matches)) => {
+            let repo_url = matches.value_of("url").unwrap();
+
+            let token = matches.value_of("token").unwrap();
+            let package_id = matches.value_of("package").unwrap();
+            let channel = matches.value_of("channel").unwrap();
+            let installer_file = matches.value_of("installer").unwrap();
+            let version = matches.value_of("version").unwrap();
+
+            // Only required if installer url is "pahkat:payload"
+            let payload_file = matches.value_of("file");
+
+            let patch_url = format!("{}/packages/{}", repo_url, package_id);
+
+            let file = File::open(installer_file).expect("the installer file to be valid");
+            let installer: Installer =
+                serde_json::from_reader(file).expect("the json in the installer file to be valid");
+
+            let upload_params = UploadParams {
+                channel: channel.to_owned(),
+                version: version.to_owned(),
+                installer: installer.clone(),
+            };
+
+            let client = reqwest::Client::new();
+
+            let installer_url = installer.url();
+
+            let form = multipart::Form::new()
+                .text("params", serde_json::to_string(&upload_params).unwrap());
+
+            let form = if installer_url == "pahkat:payload" {
+                match payload_file {
+                    Some(file) => {
+                        let form = multipart::Form::new()
+                            .text("params", serde_json::to_string(&upload_params).unwrap())
+                            .file("payload", file)
+                            .expect("payload file to be valid");
+
+                        form
+                    }
+                    None => {
+                        panic!("A file must be provided if installer url is pahkat:payload");
+                    }
+                }
+            } else {
+                form
+            };
+
+            let mut response = client
+                .patch(&patch_url)
+                .bearer_auth(token)
+                .multipart(form)
+                .send()
+                .unwrap();
+
+            let text = response.text().unwrap();
+
+            println!("Response: {:?}, body: {}", &response, &text);
+        }
         _ => {}
     }
 }

@@ -1,0 +1,7 @@
+{
+  "type": "msi",
+  "url": "pahkat:payload",
+  "productCode": "{some_code}_is1",
+  "size": 5880488,
+  "installedSize": 27500000
+}

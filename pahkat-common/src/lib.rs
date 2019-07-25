@@ -9,9 +9,9 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use directories::ProjectDirs;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-use pahkat_types::{Package, Packages, Repository, RepositoryAgent, Virtual, Virtuals};
+use pahkat_types::{Installer, Package, Packages, Repository, RepositoryAgent, Virtual, Virtuals};
 
 pub mod database;
 pub mod models;
@@ -46,6 +46,13 @@ pub enum DatabaseError {
     PoolError(r2d2::Error),
     OperationError(diesel::result::Error),
     InputError(String, uuid::parser::ParseError),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct UploadParams {
+    pub channel: String,
+    pub version: String,
+    pub installer: Installer,
 }
 
 impl From<diesel::result::Error> for DatabaseError {
