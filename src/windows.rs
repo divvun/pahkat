@@ -534,8 +534,7 @@ impl WindowsPackageStore {
         let skipped_package = config.skipped_package(id);
         let skipped_package = skipped_package.as_ref().map(String::as_ref);
 
-        let status = self::cmp::semver_cmp(&disp_version, &package.version, skipped_package)
-            .or_else(|_| self::cmp::iso8601_cmp(&disp_version, &package.version, skipped_package));
+        let status = self::cmp::cmp(&disp_version, &package.version, skipped_package);
 
         log::debug!("Status: {:?}", &status);
         status
