@@ -12,9 +12,9 @@ of the same name ("the Páhkat standard"), to solve the following problems:
 
 This is the reference implementation of the in-development standard. There are several clients in development:
 
-* https://github.com/divvun/pahkat-client-windows[Pákhat C#/WPF client] - Windows 8.1+
-* https://github.com/divvun/pahkat-client-macos[Pákhat Swift/Cocoa client] - macOS 10.10+
-* https://github.com/divvun/pahkat-client-core[Pákhat core library and command line client] - Windows 8.1+, Linux, macOS, etc
+* https://github.com/divvun/pahkat-client-windows[Páhkat C#/WPF client] - Windows 8.1+
+* https://github.com/divvun/pahkat-client-macos[Páhkat Swift/Cocoa client] - macOS 10.10+
+* https://github.com/divvun/pahkat-client-core[Páhkat core library and command line client] - Windows 8.1+, Linux, macOS, etc
 
 Páhkat is alpha software licensed under the Apache 2 license. This software should not be used in production.
 
@@ -27,6 +27,6 @@ The Páhkat repository itself is platform-agnostic. The platform field in a pack
 
 Páhkat clients are responsible for implementation of support for the relevant platform identifiers.
 
-Currently, the Pákhat C#/WPF supports Windows 8.1+ installers (both .msi and .exe), the macOS client supports .pkg files, 
+Currently, the Páhkat C#/WPF supports Windows 8.1+ installers (both .msi and .exe), the macOS client supports .pkg files, 
 while the command-line client supports a prefix on any platform where the client can be run for a 
 yet-to-be-documented XZ-compressed tarball format, as well as the platform-specific installers.
