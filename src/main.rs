@@ -629,7 +629,7 @@ fn main() {
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .version(crate_version!())
         .author("Brendan Molloy <brendan@bbqsrc.net>")
-        .about("The last package manager. \"Pákhat\" is the nominative plural form for \"packages\" in Northern Sámi.")
+        .about("The last package manager. \"Páhkat\" is the nominative plural form for \"packages\" in Northern Sámi.")
         .subcommand(
             SubCommand::with_name("repo")
             .about("Repository-related subcommands")
