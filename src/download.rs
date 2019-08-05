@@ -1,6 +1,6 @@
 use pahkat_types::{Downloadable, Package};
-use std::fs::File;
-use std::io::{self, copy, BufReader, BufWriter, Write};
+
+use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;

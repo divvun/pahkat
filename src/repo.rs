@@ -4,7 +4,7 @@ use pahkat_types::{
     Package, PackageMap, Packages, Repository as RepositoryMeta, VirtualMap, Virtuals,
 };
 use serde_derive::{Deserialize, Serialize};
-use std::fmt;
+
 use std::fs::{self, File};
 use std::path::Path;
 use std::time::SystemTime;
@@ -294,7 +294,7 @@ fn recurse_package_dependencies<T>(
     package: &Package,
     candidates: &mut HashMap<AbsolutePackageKey, Package>,
 ) -> Result<(), PackageDependencyError> where T: Send + Sync {
-    for (package_key, version) in package.dependencies.iter() {
+    for (package_key, _version) in package.dependencies.iter() {
         // Package key may be a short, relative package id, or a fully qualified
         // URL to a package in a linked repo
 
@@ -318,9 +318,9 @@ fn recurse_package_dependencies<T>(
 
 pub(crate) fn find_package_dependencies<T>(
     store: &Arc<dyn PackageStore<Target = T>>,
-    key: &AbsolutePackageKey,
+    _key: &AbsolutePackageKey,
     package: &Package,
-    target: &T,
+    _target: &T,
 ) -> Result<Vec<(AbsolutePackageKey, Package)>, PackageDependencyError> where T: Send + Sync {
     let mut candidates = HashMap::new();
     recurse_package_dependencies(store, &package, &mut candidates)?;

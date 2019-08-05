@@ -185,7 +185,7 @@ impl ConfigPath {
     fn try_as_path(&self) -> Option<PathBuf> {
         let url = match self {
             ConfigPath::File(ref v) => v.to_owned(),
-            ConfigPath::Container(v) => self.container_to_file()?,
+            ConfigPath::Container(_v) => self.container_to_file()?,
         };
 
         url.to_file_path().ok()

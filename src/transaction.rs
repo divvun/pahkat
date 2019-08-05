@@ -1,10 +1,10 @@
 use crate::AbsolutePackageKey;
-use pahkat_types::{InstallTarget, MacOSInstaller, Package};
+use pahkat_types::{Package};
 // use serde::de::{self, Deserialize, Deserializer};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::path::PathBuf;
-use std::process::{self, Command};
+
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
