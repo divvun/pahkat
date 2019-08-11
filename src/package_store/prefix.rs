@@ -26,11 +26,6 @@ use crate::transaction::{
     PackageDependencyError, PackageStore,
 };
 
-pub struct TarballPackageStore {
-    pool: r2d2::Pool<SqliteConnectionManager>,
-    prefix: PathBuf,
-}
-
 pub struct PrefixPackageStore {
     pool: r2d2::Pool<SqliteConnectionManager>,
     prefix: PathBuf,

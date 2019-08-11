@@ -2,7 +2,7 @@
 pub mod macos;
 
 #[cfg(feature = "prefix")]
-pub mod tarball;
+pub mod prefix;
 
 #[cfg(all(windows, feature = "windows"))]
 pub mod windows;

@@ -9,7 +9,7 @@ use pahkat_client::*;
 use pahkat_types::Package;
 use sentry::integrations::panic::register_panic_handler;
 
-use pahkat_client::tarball::PrefixPackageStore;
+use pahkat_client::prefix::PrefixPackageStore;
 use pahkat_client::{transaction::PackageTransaction, PackageAction};
 
 const DSN: &'static str =

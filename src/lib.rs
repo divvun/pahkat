@@ -20,7 +20,7 @@ pub use self::store_config::StoreConfig;
 pub use package_store::macos::MacOSPackageStore;
 
 #[cfg(feature = "prefix")]
-pub use package_store::tarball::PrefixPackageStore;
+pub use package_store::prefix::PrefixPackageStore;
 
 #[cfg(all(windows, feature = "windows"))]
 pub use package_store::windows::WindowsPackageStore;
