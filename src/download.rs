@@ -142,7 +142,7 @@ impl Download for Package {
             }
 
             let out_path = (&dir_path).join(&filename).to_path_buf();
-            file.persist(&out_path);
+            file.persist(&out_path).map_err(|e| DownloadError::PersistError(e))?;
 
             Ok(out_path)
         });
@@ -159,6 +159,7 @@ pub enum DownloadError {
     NoUrl,
     UserCancelled,
     ReqwestError(reqwest::Error),
+    PersistError(tempfile::PersistError),
     HttpStatusFailure(u16),
 }
 

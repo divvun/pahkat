@@ -19,10 +19,15 @@ use snafu::{OptionExt, ResultExt};
 use url::Url;
 
 use crate::{
-    cmp, default_uninstall_path, download::Download, global_uninstall_path, repo::Repository,
+    cmp, default_uninstall_path, download::Download, repo::Repository,
     AbsolutePackageKey, PackageDependency, PackageStatus, PackageStatusError, RepoRecord,
     StoreConfig,
 };
+
+#[cfg(target_os = "macos")]
+pub fn global_uninstall_path() -> PathBuf {
+    PathBuf::from("/Library/Application Support/Pahkat/uninstall")
+}
 
 use crate::transaction::PackageTransaction;
 

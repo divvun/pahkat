@@ -1,3 +1,5 @@
+#![cfg(feature = "ffi")]
+
 use std::convert::TryFrom;
 use std::ffi::{CStr, OsStr};
 #[cfg(unix)]

@@ -18,7 +18,7 @@ use xz2::read::XzDecoder;
 use crate::transaction::PackageTransaction;
 use crate::{
     cmp, download::Download, repo::Repository, AbsolutePackageKey,
-    PackageStatus, PackageStatusError, RepoRecord, StoreConfig,
+    transaction::PackageStatus, transaction::PackageStatusError, RepoRecord, StoreConfig,
 };
 
 use crate::transaction::{
@@ -106,7 +106,7 @@ impl PrefixPackageStore {
     }
 
     pub fn find_package_by_id(&self, package_id: &str) -> Option<(AbsolutePackageKey, Package)> {
-        crate::repo::find_package_by_id(&*self.repos.read().unwrap(), package_id)
+        crate::repo::find_package_by_id(self, package_id, &self.repos)
     }
 
     fn package_path(&self, package: &Package) -> PathBuf {
@@ -125,6 +125,10 @@ impl PackageStore for PrefixPackageStore {
         crate::repo::resolve_package(key, &self.repos)
     }
 
+    fn repos(&self) -> Arc<RwLock<HashMap<RepoRecord, Repository>>> {
+        Arc::clone(&self.repos)
+    }
+
     fn download(
         &self,
         key: &AbsolutePackageKey,
@@ -141,12 +145,20 @@ impl PackageStore for PrefixPackageStore {
             None => return Err(crate::download::DownloadError::NoUrl),
             Some(v) => v,
         };
+        
+        let config = &self.config.read().unwrap();
 
-        let disposable = package.download(
-            &crate::repo::download_path(&*self.config.read().unwrap(), &installer.url()),
-            Some(progress),
-        )?;
+        let download_path =
+            crate::repo::download_path(config, &installer.url());
+        let tmp_path = config.tmp_path().to_path_buf();
+        let disposable = package.download(tmp_path, &download_path, Some(progress))?;
         disposable.wait()
+
+        // let disposable = package.download(
+        //     &crate::repo::download_path(&*self.config.read().unwrap(), &installer.url()),
+        //     Some(progress),
+        // )?;
+        // disposable.wait()
     }
 
     fn install(
@@ -277,20 +289,10 @@ impl PackageStore for PrefixPackageStore {
         Ok(PackageStatus::NotInstalled)
     }
 
-    fn find_package_dependencies(
-        &self,
-        key: &AbsolutePackageKey,
-        package: &Package,
-        target: &Self::Target,
-    ) -> Result<Vec<crate::PackageDependency>, PackageDependencyError> {
-        // TODO!
-        Ok(vec![])
-    }
-
     fn status(
         &self,
         key: &AbsolutePackageKey,
-        target: &InstallTarget,
+        target: &(),
     ) -> Result<PackageStatus, PackageStatusError> {
         unimplemented!()
     }
@@ -352,7 +354,7 @@ pub enum Error {
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
-static PKG_STORE_INIT: &'static str = include_str!("./pkgstore_init.sql");
+static PKG_STORE_INIT: &'static str = include_str!("../pkgstore_init.sql");
 
 // impl TarballPackageStore {
 
@@ -496,6 +498,21 @@ struct PackageRecord {
 
 struct PackageDbConnection<'a>(&'a mut rusqlite::Connection);
 
+
+
+#[cfg(not(windows))]
+#[inline(always)]
+fn path_as_bytes<'p>(path: &'p Path) -> &'p [u8] {
+    &path.as_os_str().as_bytes()
+}
+
+#[cfg(windows)]
+#[inline(always)]
+fn path_as_bytes<'p>(path: &'p Path) -> &'p [u8] {
+    path.as_os_str().encode_wide().flat_map(u16::to_le_bytes).collect()
+}
+
+
 impl<'a> PackageDbConnection<'a> {
     fn dependencies(&self, id: &str) -> Vec<String> {
         let mut stmt = self
@@ -574,13 +591,7 @@ impl<'a> PackageDbConnection<'a> {
                 file_stmt
                     .execute_named(&[
                         (":id", &pkg.id),
-                        if cfg!(unix) {
-                            (":path", &file_path.as_os_str().as_bytes())
-                        } else if cfg!(windows) {
-                            (":path", &file_path.as_os_str().encode_wide().flat_map(u16::to_le_bytes).collect())
-                        } else {
-                            unreachable!()
-                        }
+                        (":path", &path_as_bytes(&file_path))
                     ])
                     .unwrap();
             }
