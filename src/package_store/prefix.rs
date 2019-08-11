@@ -17,7 +17,7 @@ use xz2::read::XzDecoder;
 
 use crate::transaction::PackageTransaction;
 use crate::{
-    cmp, download::Download, repo::Repository, AbsolutePackageKey,
+    cmp, download::Download, repo::Repository, PackageKey,
     transaction::PackageStatus, transaction::PackageStatusError, RepoRecord, StoreConfig,
 };
 
@@ -100,7 +100,7 @@ impl PrefixPackageStore {
         Arc::new(self)
     }
 
-    pub fn find_package_by_id(&self, package_id: &str) -> Option<(AbsolutePackageKey, Package)> {
+    pub fn find_package_by_id(&self, package_id: &str) -> Option<(PackageKey, Package)> {
         crate::repo::find_package_by_id(self, package_id, &self.repos)
     }
 
@@ -116,7 +116,7 @@ impl PrefixPackageStore {
 impl PackageStore for PrefixPackageStore {
     type Target = ();
 
-    fn resolve_package(&self, key: &AbsolutePackageKey) -> Option<Package> {
+    fn resolve_package(&self, key: &PackageKey) -> Option<Package> {
         crate::repo::resolve_package(key, &self.repos)
     }
 
@@ -126,7 +126,7 @@ impl PackageStore for PrefixPackageStore {
 
     fn download(
         &self,
-        key: &AbsolutePackageKey,
+        key: &PackageKey,
         progress: Box<dyn Fn(u64, u64) -> () + Send + 'static>,
     ) -> Result<PathBuf, crate::download::DownloadError> {
         let package = match self.resolve_package(key) {
@@ -158,7 +158,7 @@ impl PackageStore for PrefixPackageStore {
 
     fn install(
         &self,
-        key: &AbsolutePackageKey,
+        key: &PackageKey,
         target: &Self::Target,
     ) -> Result<PackageStatus, InstallError> {
         let package = self
@@ -236,7 +236,7 @@ impl PackageStore for PrefixPackageStore {
 
     fn uninstall(
         &self,
-        key: &AbsolutePackageKey,
+        key: &PackageKey,
         target: &Self::Target,
     ) -> Result<PackageStatus, UninstallError> {
         let package = self.resolve_package(key).ok_or(UninstallError::NoPackage)?;
@@ -286,13 +286,13 @@ impl PackageStore for PrefixPackageStore {
 
     fn status(
         &self,
-        key: &AbsolutePackageKey,
+        key: &PackageKey,
         target: &(),
     ) -> Result<PackageStatus, PackageStatusError> {
         unimplemented!()
     }
 
-    fn find_package_by_id(&self, package_id: &str) -> Option<(AbsolutePackageKey, Package)> {
+    fn find_package_by_id(&self, package_id: &str) -> Option<(PackageKey, Package)> {
         unimplemented!()
     }
 

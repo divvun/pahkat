@@ -9,7 +9,7 @@ use pahkat_types::Package;
 use std::sync::RwLock;
 use std::os::windows::ffi::OsStrExt;
 
-use crate::AbsolutePackageKey;
+use crate::PackageKey;
 use crate::windows::WindowsPackageStore;
 use std::os::windows::ffi::OsStringExt;
 use std::sync::Arc;
@@ -151,20 +151,20 @@ struct PackageKeyMarshaler;
 
 impl FromForeign for PackageKeyMarshaler {
     type In = *const c_char;
-    type Out = AbsolutePackageKey;
+    type Out = PackageKey;
     type Error = Box<dyn Error>;
     
-    fn from_foreign(key: *const c_char) -> Result<AbsolutePackageKey, Self::Error> {
+    fn from_foreign(key: *const c_char) -> Result<PackageKey, Self::Error> {
         let key = unsafe { CStr::from_ptr(key) }.to_string_lossy();
-        AbsolutePackageKey::from_string(&*key)
+        PackageKey::from_string(&*key)
     }
 }
 
-impl ToForeign<AbsolutePackageKey> for PackageKeyMarshaler {
+impl ToForeign<PackageKey> for PackageKeyMarshaler {
     type Out = *const c_char;
     type Error = Box<dyn Error>;
 
-    fn to_foreign(input: AbsolutePackageKey) -> Result<*const c_char, Self::Error> {
+    fn to_foreign(input: PackageKey) -> Result<*const c_char, Self::Error> {
         let key = input.to_string();
         log::debug!("PKG KEY: {}", &key);
         let c_str = CString::new(key)?;
@@ -232,7 +232,7 @@ extern "C" fn pahkat_windows_package_store_status(
 
     fn package_store_status(
         store: &WindowsPackageStore,
-        package_key: &AbsolutePackageKey,
+        package_key: &PackageKey,
         is_system: &mut bool
     ) -> Result<Result<PackageStatus, PackageStatusError>, Box<dyn Error>> {
         let status = store.status(package_key, &WindowsTarget::User);
@@ -275,7 +275,7 @@ extern "C" fn pahkat_windows_package_store_status(
 extern "C" fn pahkat_windows_package_store_download(
     handle: *mut WindowsPackageStore,
     package_key: *const c_char,
-    progress: extern "C" fn(*const AbsolutePackageKey, u64, u64),
+    progress: extern "C" fn(*const PackageKey, u64, u64),
     exception: *mut *mut Exception,
 ) -> *const wchar_t {
     let store = unsafe { &mut *handle };
@@ -283,8 +283,8 @@ extern "C" fn pahkat_windows_package_store_download(
 
     fn package_store_download(
         store: &WindowsPackageStore,
-        package_key: &AbsolutePackageKey,
-        progress: extern "C" fn(*const AbsolutePackageKey, u64, u64),
+        package_key: &PackageKey,
+        progress: extern "C" fn(*const PackageKey, u64, u64),
     ) -> Result<PathBuf, Box<dyn Error>> {
         let package_key1 = package_key.to_owned();
         store.download(&package_key, Box::new(move |cur, max| {
@@ -758,7 +758,7 @@ extern "C" fn pahkat_windows_transaction_process(
 // use crate::windows::PackageAction;
 // use crate::windows::PackageTransaction;
 // use crate::windows::WindowsPackageStore;
-// use crate::AbsolutePackageKey;
+// use crate::PackageKey;
 // use crate::PackageActionType;
 // use crate::PackageStatus;
 // use crate::PackageTransactionError;
@@ -854,7 +854,7 @@ extern "C" fn pahkat_windows_transaction_process(
 //     }
 
 //     let package_key = unsafe { CStr::from_ptr(raw_package_key) }.to_string_lossy();
-//     let package_key = AbsolutePackageKey::from_string(&package_key).unwrap();
+//     let package_key = PackageKey::from_string(&package_key).unwrap();
 //     let package = match store.resolve_package(&package_key) {
 //         Some(v) => v,
 //         None => {
@@ -922,7 +922,7 @@ extern "C" fn pahkat_windows_transaction_process(
 //     }
 
 //     let package_key = unsafe { CStr::from_ptr(package_key) }.to_string_lossy();
-//     let package_key = AbsolutePackageKey::from_string(&package_key).unwrap();
+//     let package_key = PackageKey::from_string(&package_key).unwrap();
 
 //     // TODO use package key
 //     // let package = match store.resolve_package(&package_key) {
@@ -970,7 +970,7 @@ extern "C" fn pahkat_windows_transaction_process(
 //     package_key: *const c_char,
 // ) -> *mut PackageAction {
 //     Box::into_raw(Box::new(PackageAction {
-//         id: AbsolutePackageKey::from_string(
+//         id: PackageKey::from_string(
 //             &*unsafe { CStr::from_ptr(package_key) }.to_string_lossy(),
 //         )
 //         .unwrap(),
@@ -1101,7 +1101,7 @@ extern "C" fn pahkat_windows_transaction_process(
 // ) {
 //     let store = safe_handle!(handle);
 //     let package_key = unsafe { CStr::from_ptr(raw_package_key) }.to_string_lossy();
-//     let package_key = AbsolutePackageKey::from_string(&package_key).unwrap();
+//     let package_key = PackageKey::from_string(&package_key).unwrap();
 //     store.install(&package_key, InstallTarget::System);
 // }
 
@@ -1112,7 +1112,7 @@ extern "C" fn pahkat_windows_transaction_process(
 // ) -> *const c_char {
 //     let store = safe_handle!(handle);
 //     let package_key = unsafe { CStr::from_ptr(raw_package_key) }.to_string_lossy();
-//     let package_key = AbsolutePackageKey::from_string(&package_key).unwrap();
+//     let package_key = PackageKey::from_string(&package_key).unwrap();
 //     match store.package_path(&package_key) {
 //         Some(v) => {
 //             let p = v.to_string_lossy();

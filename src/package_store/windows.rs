@@ -144,7 +144,7 @@ impl PackageStore for WindowsPackageStore {
 
     fn download(
         &self,
-        key: &AbsolutePackageKey,
+        key: &PackageKey,
         progress: Box<dyn Fn(u64, u64) -> () + Send + 'static>,
     ) -> Result<PathBuf, crate::download::DownloadError> {
         let package = match self.resolve_package(key) {
@@ -170,7 +170,7 @@ impl PackageStore for WindowsPackageStore {
 
     fn install(
         &self,
-        key: &AbsolutePackageKey,
+        key: &PackageKey,
         target: &Self::Target,
     ) -> Result<PackageStatus, InstallError> {
         let package = match self.resolve_package(key) {
@@ -265,7 +265,7 @@ impl PackageStore for WindowsPackageStore {
 
     fn uninstall(
         &self,
-        key: &AbsolutePackageKey,
+        key: &PackageKey,
         target: &Self::Target,
     ) -> Result<PackageStatus, UninstallError> {
         let package = match self.resolve_package(key) {
@@ -352,7 +352,7 @@ impl PackageStore for WindowsPackageStore {
 
     fn status(
         &self,
-        key: &AbsolutePackageKey,
+        key: &PackageKey,
         target: &InstallTarget,
     ) -> Result<PackageStatus, PackageStatusError> {
         log::debug!("status: {}, target: {:?}", &key.to_string(), target);
@@ -377,17 +377,17 @@ impl PackageStore for WindowsPackageStore {
         self.status_impl(installer, key, &package, target.clone())
     }
 
-    fn resolve_package(&self, key: &AbsolutePackageKey) -> Option<Package> {
+    fn resolve_package(&self, key: &PackageKey) -> Option<Package> {
         crate::repo::resolve_package(key, &self.repos)
     }
 
-    fn find_package_by_id(&self, package_id: &str) -> Option<(AbsolutePackageKey, Package)> {
+    fn find_package_by_id(&self, package_id: &str) -> Option<(PackageKey, Package)> {
         crate::repo::find_package_by_id(self, package_id, &self.repos)
     }
 
     // fn find_package_dependencies(
     //     &self,
-    //     key: &AbsolutePackageKey,
+    //     key: &PackageKey,
     //     // package: &Package,
     //     target: &Self::Target,
     // ) -> Result<Vec<???>, PackageDependencyError> {
@@ -470,7 +470,7 @@ impl WindowsPackageStore {
 
     // fn find_package_dependencies_impl(
     //     &self,
-    //     key: &AbsolutePackageKey,
+    //     key: &PackageKey,
     //     package: &Package,
     //     target: InstallTarget,
     //     level: u8,
@@ -480,7 +480,7 @@ impl WindowsPackageStore {
     // }
 
     // TODO: this is a sneaky FFI hack, booooo
-    // pub fn package_path(&self, key: &AbsolutePackageKey) -> Option<PathBuf> {
+    // pub fn package_path(&self, key: &PackageKey) -> Option<PathBuf> {
     //     let package = match self.resolve_package(key) {
     //         Some(v) => v,
     //         None => {
@@ -515,7 +515,7 @@ impl WindowsPackageStore {
     fn status_impl(
         &self,
         installer: &WindowsInstaller,
-        id: &AbsolutePackageKey,
+        id: &PackageKey,
         package: &Package,
         target: InstallTarget,
     ) -> Result<PackageStatus, PackageStatusError> {

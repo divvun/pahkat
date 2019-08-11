@@ -20,7 +20,7 @@ use url::Url;
 
 use crate::{
     cmp, default_uninstall_path, download::Download, repo::Repository,
-    AbsolutePackageKey, PackageDependency, PackageStatus, PackageStatusError, RepoRecord,
+    PackageKey, PackageDependency, PackageStatus, PackageStatusError, RepoRecord,
     StoreConfig,
 };
 
@@ -78,7 +78,7 @@ struct BundlePlistInfo {
 
 // #[derive(Debug, Clone, Serialize)]
 // pub struct PackageAction {
-//     pub id: AbsolutePackageKey,
+//     pub id: PackageKey,
 //     pub action: PackageActionType,
 //     pub target: InstallTarget,
 // }
@@ -97,7 +97,7 @@ pub struct MacOSPackageStore {
 impl PackageStore for MacOSPackageStore {
     type Target = InstallTarget;
 
-    fn resolve_package(&self, package_key: &AbsolutePackageKey) -> Option<Package> {
+    fn resolve_package(&self, package_key: &PackageKey) -> Option<Package> {
         log::debug!(
             "Resolving package: url: {}, channel: {}",
             &package_key.url, &package_key.channel
@@ -112,7 +112,7 @@ impl PackageStore for MacOSPackageStore {
 
     fn install(
         &self,
-        key: &AbsolutePackageKey,
+        key: &PackageKey,
         target: &InstallTarget,
     ) -> Result<PackageStatus, InstallError> {
         let package = match self.resolve_package(key) {
@@ -154,7 +154,7 @@ impl PackageStore for MacOSPackageStore {
 
     fn uninstall(
         &self,
-        key: &AbsolutePackageKey,
+        key: &PackageKey,
         target: &InstallTarget,
     ) -> Result<PackageStatus, UninstallError> {
         let package = match self.resolve_package(key) {
@@ -185,7 +185,7 @@ impl PackageStore for MacOSPackageStore {
     /// Get the dependencies for a given package
     fn find_package_dependencies(
         &self,
-        key: &AbsolutePackageKey,
+        key: &PackageKey,
         package: &Package,
         target: &InstallTarget,
     ) -> Result<Vec<PackageDependency>, PackageDependencyError> {
@@ -194,7 +194,7 @@ impl PackageStore for MacOSPackageStore {
     }
     fn download(
         &self,
-        key: &AbsolutePackageKey,
+        key: &PackageKey,
         progress: Box<dyn Fn(u64, u64) -> () + Send + 'static>,
     ) -> Result<PathBuf, crate::download::DownloadError> {
         unimplemented!()
@@ -281,11 +281,11 @@ impl MacOSPackageStore {
         Ok(())
     }
 
-    pub fn find_package(&self, package_id: &str) -> Option<(AbsolutePackageKey, Package)> {
+    pub fn find_package(&self, package_id: &str) -> Option<(PackageKey, Package)> {
         self.repos.read().unwrap().iter().find_map(|(key, repo)| {
             repo.packages().get(package_id).map(|x| {
                 (
-                    AbsolutePackageKey::new(repo.meta(), &key.channel, package_id),
+                    PackageKey::new(repo.meta(), &key.channel, package_id),
                     x.to_owned(),
                 )
             })
@@ -294,7 +294,7 @@ impl MacOSPackageStore {
 
     fn find_package_dependencies_impl(
         &self,
-        _key: &AbsolutePackageKey,
+        _key: &PackageKey,
         package: &Package,
         target: &InstallTarget,
         level: u8,
@@ -370,7 +370,7 @@ impl MacOSPackageStore {
 
     pub fn download<F>(
         &self,
-        key: &AbsolutePackageKey,
+        key: &PackageKey,
         progress: F,
     ) -> Result<PathBuf, crate::download::DownloadError>
     where
@@ -394,7 +394,7 @@ impl MacOSPackageStore {
 
     pub fn status(
         &self,
-        key: &AbsolutePackageKey,
+        key: &PackageKey,
         target: &InstallTarget,
     ) -> Result<PackageStatus, PackageStatusError> {
         let package = match self.resolve_package(key) {
@@ -424,7 +424,7 @@ impl MacOSPackageStore {
     fn status_impl(
         &self,
         installer: &MacOSInstaller,
-        id: &AbsolutePackageKey,
+        id: &PackageKey,
         package: &Package,
         target: &InstallTarget,
     ) -> Result<PackageStatus, PackageStatusError> {

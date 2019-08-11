@@ -1,4 +1,4 @@
-use crate::AbsolutePackageKey;
+use crate::PackageKey;
 use pahkat_types::{Package};
 // use serde::de::{self, Deserialize, Deserializer};
 use serde::{Deserialize, Serialize};
@@ -81,35 +81,35 @@ pub trait PackageStore: Send + Sync {
 
     fn download(
         &self,
-        key: &AbsolutePackageKey,
+        key: &PackageKey,
         progress: Box<dyn Fn(u64, u64) -> () + Send + 'static>,
     ) -> Result<PathBuf, crate::download::DownloadError>;
 
-    fn resolve_package(&self, key: &AbsolutePackageKey) -> Option<Package>;
+    fn resolve_package(&self, key: &PackageKey) -> Option<Package>;
 
     fn install(
         &self,
-        key: &AbsolutePackageKey,
+        key: &PackageKey,
         target: &Self::Target,
     ) -> Result<PackageStatus, InstallError>;
 
     fn uninstall(
         &self,
-        key: &AbsolutePackageKey,
+        key: &PackageKey,
         target: &Self::Target,
     ) -> Result<PackageStatus, UninstallError>;
 
     fn status(
         &self,
-        key: &AbsolutePackageKey,
+        key: &PackageKey,
         target: &Self::Target,
     ) -> Result<PackageStatus, PackageStatusError>;
 
-    fn find_package_by_id(&self, package_id: &str) -> Option<(AbsolutePackageKey, Package)>;
+    fn find_package_by_id(&self, package_id: &str) -> Option<(PackageKey, Package)>;
 
     // fn find_package_dependencies(
     //     &self,
-    //     key: &AbsolutePackageKey,
+    //     key: &PackageKey,
     //     target: &Self::Target,
     // ) -> Result<Vec<???>, PackageDependencyError> {
     //     let package = match self.resolve_package(key) {
@@ -150,13 +150,13 @@ impl PackageTarget for pahkat_types::InstallTarget {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PackageAction<T: PackageTarget> {
-    pub id: AbsolutePackageKey,
+    pub id: PackageKey,
     pub action: PackageActionType,
     pub target: T,
 }
 
 impl<T: PackageTarget> PackageAction<T> {
-    pub fn install(id: AbsolutePackageKey, target: T) -> PackageAction<T> {
+    pub fn install(id: PackageKey, target: T) -> PackageAction<T> {
         PackageAction {
             id,
             action: PackageActionType::Install,
@@ -164,7 +164,7 @@ impl<T: PackageTarget> PackageAction<T> {
         }
     }
 
-    pub fn uninstall(id: AbsolutePackageKey, target: T) -> PackageAction<T> {
+    pub fn uninstall(id: PackageKey, target: T) -> PackageAction<T> {
         PackageAction {
             id,
             action: PackageActionType::Uninstall,
@@ -395,14 +395,14 @@ impl<T: PackageTarget + 'static> PackageTransaction<T> {
 
     // pub fn download<F>(&self, progress: F)
     // where
-    //     F: Fn(AbsolutePackageKey, u64, u64) -> () + 'static + Send,
+    //     F: Fn(PackageKey, u64, u64) -> () + 'static + Send,
     // {
 
     // }
 
     pub fn process<F>(&self, progress: F)
     where
-        F: Fn(AbsolutePackageKey, TransactionEvent) -> () + 'static + Send,
+        F: Fn(PackageKey, TransactionEvent) -> () + 'static + Send,
     {
         if !self.validate() {
             // TODO: early return

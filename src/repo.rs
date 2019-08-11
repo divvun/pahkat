@@ -11,10 +11,10 @@ use serde::ser::{Serialize, Serializer};
 use serde_derive::{Deserialize, Serialize};
 
 mod repository;
-mod absolute_package_key;
+mod package_key;
 
 pub use repository::{Repository, RepoDownloadError};
-pub use absolute_package_key::AbsolutePackageKey;
+pub use package_key::PackageKey;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct RepoRecord {
@@ -39,7 +39,7 @@ pub(crate) fn download_path(config: &StoreConfig, url: &str) -> std::path::PathB
 }
 
 pub(crate) fn resolve_package(
-    package_key: &AbsolutePackageKey,
+    package_key: &PackageKey,
     repos: &Arc<RwLock<HashMap<RepoRecord, Repository>>>,
 ) -> Option<Package> {
     log::debug!("Resolving package...");
@@ -66,8 +66,8 @@ pub(crate) fn find_package_by_id<P, T>(
     store: &P,
     package_id: &str,
     repos: &Arc<RwLock<HashMap<RepoRecord, Repository>>>,
-) -> Option<(AbsolutePackageKey, Package)> where P: PackageStore<Target = T>, T: Send + Sync {
-    match AbsolutePackageKey::from_string(package_id) {
+) -> Option<(PackageKey, Package)> where P: PackageStore<Target = T>, T: Send + Sync {
+    match PackageKey::from_string(package_id) {
         Ok(k) => return store.resolve_package(&k).map(|pkg| (k, pkg)),
         Err(_) => {}
     };
@@ -75,7 +75,7 @@ pub(crate) fn find_package_by_id<P, T>(
     repos.read().unwrap().iter().find_map(|(key, repo)| {
         repo.packages().get(package_id).map(|x| {
             (
-                AbsolutePackageKey::new(repo.meta(), &key.channel, package_id),
+                PackageKey::new(repo.meta(), &key.channel, package_id),
                 x.to_owned(),
             )
         })
@@ -117,7 +117,7 @@ use crate::transaction::{PackageStore, PackageDependencyError};
 fn recurse_package_dependencies<T>(
     store: &Arc<dyn PackageStore<Target = T>>,
     package: &Package,
-    candidates: &mut HashMap<AbsolutePackageKey, Package>,
+    candidates: &mut HashMap<PackageKey, Package>,
 ) -> Result<(), PackageDependencyError> where T: Send + Sync {
     for (package_key, _version) in package.dependencies.iter() {
         // Package key may be a short, relative package id, or a fully qualified
@@ -143,10 +143,10 @@ fn recurse_package_dependencies<T>(
 
 pub(crate) fn find_package_dependencies<T>(
     store: &Arc<dyn PackageStore<Target = T>>,
-    _key: &AbsolutePackageKey,
+    _key: &PackageKey,
     package: &Package,
     _target: &T,
-) -> Result<Vec<(AbsolutePackageKey, Package)>, PackageDependencyError> where T: Send + Sync {
+) -> Result<Vec<(PackageKey, Package)>, PackageDependencyError> where T: Send + Sync {
     let mut candidates = HashMap::new();
     recurse_package_dependencies(store, &package, &mut candidates)?;
     Ok(candidates.into_iter().map(|(k, v)| (k, v)).collect())

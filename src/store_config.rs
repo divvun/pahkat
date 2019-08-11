@@ -11,7 +11,7 @@ use serde::ser::{Serialize, Serializer};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::defaults;
-use crate::{repo::RepoRecord, AbsolutePackageKey, Repository};
+use crate::{repo::RepoRecord, PackageKey, Repository};
 
 #[derive(Debug, Clone)]
 pub struct StoreConfig {
@@ -101,7 +101,7 @@ impl StoreConfig {
         &self.config_path.parent().expect("parent dir must exist")
     }
 
-    pub fn skipped_package(&self, key: &AbsolutePackageKey) -> Option<String> {
+    pub fn skipped_package(&self, key: &PackageKey) -> Option<String> {
         self.data
             .read()
             .unwrap()
@@ -110,7 +110,7 @@ impl StoreConfig {
             .map(|x| x.to_string())
     }
 
-    pub fn remove_skipped_package(&self, key: &AbsolutePackageKey) -> SaveResult {
+    pub fn remove_skipped_package(&self, key: &PackageKey) -> SaveResult {
         {
             self.data.write().unwrap().skipped_packages.remove(key);
         }
@@ -122,7 +122,7 @@ impl StoreConfig {
         }
     }
 
-    pub fn add_skipped_package(&self, key: AbsolutePackageKey, version: String) -> SaveResult {
+    pub fn add_skipped_package(&self, key: PackageKey, version: String) -> SaveResult {
         {
             self.data
                 .write()
@@ -365,7 +365,7 @@ struct RawStoreConfig {
     #[serde(default = "Vec::new")]
     pub repos: Vec<RepoRecord>,
     #[serde(default = "HashMap::new")]
-    pub skipped_packages: HashMap<AbsolutePackageKey, String>,
+    pub skipped_packages: HashMap<PackageKey, String>,
     #[serde(default = "defaults::cache_path")]
     pub cache_path: ConfigPath,
     #[serde(default = "defaults::tmp_path")]

@@ -12,7 +12,7 @@ mod download;
 mod store_config;
 
 pub use self::download::Download;
-pub use self::repo::{RepoRecord, Repository, AbsolutePackageKey};
+pub use self::repo::{RepoRecord, Repository, PackageKey};
 pub use self::transaction::PackageAction;
 pub use self::store_config::StoreConfig;
 

@@ -12,7 +12,7 @@ use std::ptr::null;
 
 use crate::macos::{MacOSPackageStore, PackageAction, PackageTransaction};
 use crate::{
-    AbsolutePackageKey, PackageActionType, PackageStatus, PackageTransactionError, RepoRecord,
+    PackageKey, PackageActionType, PackageStatus, PackageTransactionError, RepoRecord,
     StoreConfig,
 };
 use pahkat_types::*;
@@ -223,7 +223,7 @@ extern "C" fn pahkat_download_package(
     }
 
     let package_key = unsafe { CStr::from_ptr(raw_package_key) }.to_string_lossy();
-    let package_key = AbsolutePackageKey::from_string(&package_key).unwrap();
+    let package_key = PackageKey::from_string(&package_key).unwrap();
     let _package = match store.resolve_package(&package_key) {
         Some(v) => v,
         None => {
@@ -291,7 +291,7 @@ extern "C" fn pahkat_status(
     }
 
     let package_key = unsafe { CStr::from_ptr(package_key) }.to_string_lossy();
-    let package_key = AbsolutePackageKey::from_string(&package_key).unwrap();
+    let package_key = PackageKey::from_string(&package_key).unwrap();
 
     // TODO use package key
     // let package = match store.resolve_package(&package_key) {
@@ -339,7 +339,7 @@ extern "C" fn pahkat_create_action(
     package_key: *const c_char,
 ) -> *mut PackageAction {
     Box::into_raw(Box::new(PackageAction {
-        id: AbsolutePackageKey::from_string(
+        id: PackageKey::from_string(
             &*unsafe { CStr::from_ptr(package_key) }.to_string_lossy(),
         )
         .unwrap(),

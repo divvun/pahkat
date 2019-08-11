@@ -80,14 +80,14 @@ pub extern "C" fn pahkat_prefix_package_store_open(
 
 // }
 
-use crate::AbsolutePackageKey;
+use crate::PackageKey;
 
 #[no_mangle]
 pub extern "C" fn pahkat_prefix_package_store_find_package_by_id(
     handle: *mut ArcPtr<PrefixPackageStore>>,
     package_id: *mut c_char,
     exception: *mut Exception,
-) -> Nullable<(AbsolutePackageKey, Package)> {
+) -> Nullable<(PackageKey, Package)> {
     let handle = unsafe { try_as_ref!(handle, &exception) };
     let package_id = try_as_str!(package_id, &exception);
     handle.find_package_by_id(package_id).into()
@@ -157,7 +157,7 @@ pub type PrefixPackageTransaction = crate::transaction::PackageTransaction<Prefi
 
 #[no_mangle]
 pub extern "C" fn pahkat_prefix_action_new_install(
-    key: In<ArcPtr<AbsolutePackageKey>>,
+    key: In<ArcPtr<PackageKey>>,
     exception: OutPtr<Exception>,
 ) -> Nullable<ArcPtr<PrefixPackageAction>> {
     let key = try_as_arc!(key, &exception);
@@ -167,7 +167,7 @@ pub extern "C" fn pahkat_prefix_action_new_install(
 
 #[no_mangle]
 pub extern "C" fn pahkat_prefix_action_new_uninstall(
-    key: In<ArcPtr<AbsolutePackageKey>>,
+    key: In<ArcPtr<PackageKey>>,
     exception: OutPtr<Exception>,
 ) -> Nullable<ArcPtr<PrefixPackageAction>> {
     let key = try_as_arc!(key, &exception);
