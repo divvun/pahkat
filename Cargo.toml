@@ -30,7 +30,6 @@ serde_json = "1.0.41"
 semver = "0.9.0"
 url = { version = "2.1.0", features = ["serde"] }
 libc = "0.2.65"
-rust-crypto = "0.2.36"
 lazy_static = "1.4.0"
 sentry = "0.17.0"
 maplit = "1.0"
@@ -43,6 +42,7 @@ snafu = "0.5.0"
 tempfile = "3.1.0"
 itertools = "0.8.0"
 log = "0.4.8"
+sha2 = "0.8"
 
 # Prefix feature
 xz2 = { version = "0.1.6", optional = true }
@@ -60,8 +60,8 @@ better-panic = { git = "https://github.com/mitsuhiko/better-panic", optional = t
 # FFI specific
 # cursed = { path = "../cursed", optional = true }
 env_logger = { version = "0.7.1", optional = true }
-cthulhu = { path = "../cthulhu/cthulhu" }
-cursed = { path = "../cthulhu/cursed" }
+cthulhu = { path = "../cthulhu/cthulhu", optional = true }
+cursed = { path = "../cthulhu/cursed", optional = true }
 
 # MacOS-specific
 [target.'cfg(target_os="macos")'.dependencies]
@@ -73,7 +73,7 @@ winapi = { version = "0.3", features = ["shellapi"] }
 winreg = { git = "https://github.com/bbqsrc/winreg-rs", branch = "master" }
 
 [features]
-ffi = ["env_logger"]
+ffi = ["env_logger", "cthulhu", "cursed"]
 prefix = ["tar", "xz2", "rusqlite", "r2d2_sqlite", "r2d2"]
 binaries = ["clap", "termcolor", "indicatif", "better-panic"]
 windows = []

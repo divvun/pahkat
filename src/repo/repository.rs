@@ -1,5 +1,5 @@
-use crypto::digest::Digest;
-use crypto::sha2::Sha256;
+use sha2::digest::Digest;
+use sha2::Sha256;
 use pahkat_types::{
     Package, PackageMap, Packages, Repository as RepositoryMeta, VirtualMap, Virtuals,
 };
@@ -49,8 +49,8 @@ pub struct Repository {
 impl Repository {
     pub fn path_hash(url: &Url, channel: &str) -> String {
         let mut sha = Sha256::new();
-        sha.input_str(&format!("{}#{}", &url, &channel));
-        sha.result_str()
+        sha.input(&format!("{}#{}", &url, &channel));
+        format!("{:x}", sha.result())
     }
 
     pub fn from_cache_or_url(

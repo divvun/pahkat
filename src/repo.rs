@@ -1,5 +1,5 @@
-use crypto::digest::Digest;
-use crypto::sha2::Sha256;
+use sha2::digest::Digest;
+use sha2::Sha256;
 use hashbrown::HashMap;
 use pahkat_types::Package;
 use serde::de::{self, Deserializer, Visitor};
@@ -23,8 +23,8 @@ pub struct RepoRecord {
 
 pub(crate) fn download_path(config: &StoreConfig, url: &str) -> std::path::PathBuf {
     let mut sha = Sha256::new();
-    sha.input_str(url);
-    let hash_id = sha.result_str();
+    sha.input(url.as_bytes());
+    let hash_id = format!("{:x}", sha.result());
     let part1 = &hash_id[0..2];
     let part2 = &hash_id[2..4];
     let part3 = &hash_id[4..];
