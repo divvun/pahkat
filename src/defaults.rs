@@ -1,6 +1,6 @@
-use std::path::PathBuf;
-use directories::BaseDirs;
 use crate::store_config::ConfigPath;
+use directories::BaseDirs;
+use std::path::PathBuf;
 use url::Url;
 
 pub fn config_path() -> PathBuf {

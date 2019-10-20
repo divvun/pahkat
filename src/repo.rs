@@ -1,24 +1,22 @@
-
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
-use pahkat_types::Package;
-use std::path::Path;
 use hashbrown::HashMap;
+use pahkat_types::Package;
+use serde::de::{self, Deserializer, Visitor};
+use serde::ser::Serializer;
+use serde::{Deserialize, Serialize};
+use std::path::Path;
 use std::sync::{Arc, RwLock};
 use url::Url;
-use serde::de::{self, Deserialize, Deserializer, Visitor};
-use serde::ser::{Serialize, Serializer};
-use serde_derive::{Deserialize, Serialize};
 
-mod repository;
 mod package_key;
+mod repository;
 
-pub use repository::{Repository, RepoDownloadError};
 pub use package_key::PackageKey;
+pub use repository::{RepoDownloadError, Repository};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct RepoRecord {
-    #[serde(with = "url_serde")]
     pub url: Url,
     pub channel: String,
 }
@@ -66,7 +64,11 @@ pub(crate) fn find_package_by_id<P, T>(
     store: &P,
     package_id: &str,
     repos: &Arc<RwLock<HashMap<RepoRecord, Repository>>>,
-) -> Option<(PackageKey, Package)> where P: PackageStore<Target = T>, T: Send + Sync {
+) -> Option<(PackageKey, Package)>
+where
+    P: PackageStore<Target = T>,
+    T: Send + Sync,
+{
     match PackageKey::from_string(package_id) {
         Ok(k) => return store.resolve_package(&k).map(|pkg| (k, pkg)),
         Err(_) => {}
@@ -112,13 +114,17 @@ pub(crate) fn clear_cache(config: &StoreConfig) {
     }
 }
 
-use crate::transaction::{PackageStore, PackageDependencyError};
+use crate::package_store::PackageStore;
+use crate::transaction::PackageDependencyError;
 
 fn recurse_package_dependencies<T>(
     store: &Arc<dyn PackageStore<Target = T>>,
     package: &Package,
     candidates: &mut HashMap<PackageKey, Package>,
-) -> Result<(), PackageDependencyError> where T: Send + Sync {
+) -> Result<(), PackageDependencyError>
+where
+    T: Send + Sync,
+{
     for (package_key, _version) in package.dependencies.iter() {
         // Package key may be a short, relative package id, or a fully qualified
         // URL to a package in a linked repo
@@ -130,23 +136,30 @@ fn recurse_package_dependencies<T>(
                 if candidates.contains_key(&key) {
                     continue;
                 }
-                
+
                 recurse_package_dependencies(store, &package, candidates)?;
                 candidates.insert(key, package);
             }
-            None => return Err(PackageDependencyError::PackageNotFound(package_key.to_string()))
+            None => {
+                return Err(PackageDependencyError::PackageNotFound(
+                    package_key.to_string(),
+                ))
+            }
         };
     }
 
     Ok(())
-} 
+}
 
 pub(crate) fn find_package_dependencies<T>(
     store: &Arc<dyn PackageStore<Target = T>>,
     _key: &PackageKey,
     package: &Package,
     _target: &T,
-) -> Result<Vec<(PackageKey, Package)>, PackageDependencyError> where T: Send + Sync {
+) -> Result<Vec<(PackageKey, Package)>, PackageDependencyError>
+where
+    T: Send + Sync,
+{
     let mut candidates = HashMap::new();
     recurse_package_dependencies(store, &package, &mut candidates)?;
     Ok(candidates.into_iter().map(|(k, v)| (k, v)).collect())

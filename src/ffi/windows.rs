@@ -6,11 +6,11 @@ use std::ptr::NonNull;
 use crate::StoreConfig;
 use libc::{c_char, c_void, wchar_t};
 use pahkat_types::Package;
-use std::sync::RwLock;
 use std::os::windows::ffi::OsStrExt;
+use std::sync::RwLock;
 
-use crate::PackageKey;
 use crate::windows::WindowsPackageStore;
+use crate::PackageKey;
 use std::os::windows::ffi::OsStringExt;
 use std::sync::Arc;
 
@@ -39,7 +39,11 @@ impl ToForeign<PathBuf> for WindowsPathMarshaler<'_> {
     type Error = Box<dyn Error>;
 
     fn to_foreign(input: PathBuf) -> Result<*const wchar_t, Self::Error> {
-        let mut vec: Vec<wchar_t> = input.into_os_string().encode_wide().chain(Some(0).into_iter()).collect();
+        let mut vec: Vec<wchar_t> = input
+            .into_os_string()
+            .encode_wide()
+            .chain(Some(0).into_iter())
+            .collect();
         vec.shrink_to_fit();
         let ptr = vec.as_ptr();
         std::mem::forget(vec);
@@ -52,15 +56,25 @@ impl ToForeign<PathBuf> for WindowsPathMarshaler<'_> {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn pahkat_windows_enable_logging() {
-    use std::io::Write;
+// #[no_mangle]
+// pub extern "C" fn pahkat_windows_enable_logging() {
+//     use std::io::Write;
 
-    std::env::set_var("RUST_LOG", "pahkat_client=debug");
-    env_logger::builder()
-        .format(|buf, record| writeln!(buf, "{} {} {}:{} > {}", record.level(), record.target(), record.file().unwrap_or("<unknown>"), record.line().unwrap_or(0), record.args()))
-        .init();
-}
+//     std::env::set_var("RUST_LOG", "pahkat_client=debug");
+//     env_logger::builder()
+//         .format(|buf, record| {
+//             writeln!(
+//                 buf,
+//                 "{} {} {}:{} > {}",
+//                 record.level(),
+//                 record.target(),
+//                 record.file().unwrap_or("<unknown>"),
+//                 record.line().unwrap_or(0),
+//                 record.args()
+//             )
+//         })
+//         .init();
+// }
 
 #[no_mangle]
 pub extern "C" fn pahkat_windows_package_store_default() -> *const WindowsPackageStore {
@@ -71,7 +85,8 @@ pub extern "C" fn pahkat_windows_package_store_default() -> *const WindowsPackag
 pub extern "C" fn pahkat_windows_package_store_new(
     path: *mut wchar_t,
     exception: *mut *mut Exception,
-) -> *mut WindowsPackageStore {  //*mut WindowsPackageStore {
+) -> *mut WindowsPackageStore {
+    //*mut WindowsPackageStore {
     log::debug!("pahkat_windows_package_store_new");
     let path = WindowsPathMarshaler::from_foreign(path).unwrap();
     log::debug!("P: {:?}", &path);
@@ -85,7 +100,8 @@ pub extern "C" fn pahkat_windows_package_store_new(
 pub extern "C" fn pahkat_windows_package_store_load(
     path: *mut wchar_t,
     exception: *mut *mut Exception,
-) -> *const WindowsPackageStore {  //*mut WindowsPackageStore {
+) -> *const WindowsPackageStore {
+    //*mut WindowsPackageStore {
     log::debug!("pahkat_windows_package_store_load");
     let path = WindowsPathMarshaler::from_foreign(path).unwrap();
     log::debug!("P: {:?}", &path);
@@ -99,7 +115,6 @@ pub extern "C" fn pahkat_windows_package_store_load(
     let store = WindowsPackageStore::new(config);
     Arc::into_raw(Arc::new(store)) as *mut _
 }
-
 
 trait ToForeign<In>: Sized {
     // type In;
@@ -117,9 +132,9 @@ trait FromForeign: Sized {
     fn drop_local(_: Self::Out) {}
 }
 
-use std::error::Error;
 use crate::transaction::{PackageStatus, PackageStatusError};
 use std::borrow::Cow;
+use std::error::Error;
 
 struct StrMarshaler<'a>(&'a PhantomData<u8>);
 
@@ -153,7 +168,7 @@ impl FromForeign for PackageKeyMarshaler {
     type In = *const c_char;
     type Out = PackageKey;
     type Error = Box<dyn Error>;
-    
+
     fn from_foreign(key: *const c_char) -> Result<PackageKey, Self::Error> {
         let key = unsafe { CStr::from_ptr(key) }.to_string_lossy();
         PackageKey::from_string(&*key)
@@ -197,7 +212,7 @@ impl PackageStatusMarshaler {
             WrongInstallerType => -3,
             ParsingVersion => -4,
             InvalidInstallPath => -5,
-            InvalidMetadata => -6
+            InvalidMetadata => -6,
         }
     }
 }
@@ -206,11 +221,11 @@ impl ToForeign<Result<PackageStatus, PackageStatusError>> for PackageStatusMarsh
     // type In = ;
     type Out = i8;
     type Error = Box<dyn Error>;
-    
+
     fn to_foreign(status: Result<PackageStatus, PackageStatusError>) -> Result<i8, Self::Error> {
         let result = match status {
             Ok(status) => PackageStatusMarshaler::status_to_int(status),
-            Err(error) => PackageStatusMarshaler::error_to_int(error)
+            Err(error) => PackageStatusMarshaler::error_to_int(error),
         };
 
         Ok(result)
@@ -220,7 +235,7 @@ impl ToForeign<Result<PackageStatus, PackageStatusError>> for PackageStatusMarsh
 use crate::transaction::PackageStore;
 
 #[no_mangle]
-extern "C" fn pahkat_windows_package_store_status(
+pub extern "C" fn pahkat_windows_package_store_status(
     handle: *mut WindowsPackageStore,
     package_key: *const c_char,
     mut is_system: *mut bool,
@@ -233,19 +248,17 @@ extern "C" fn pahkat_windows_package_store_status(
     fn package_store_status(
         store: &WindowsPackageStore,
         package_key: &PackageKey,
-        is_system: &mut bool
+        is_system: &mut bool,
     ) -> Result<Result<PackageStatus, PackageStatusError>, Box<dyn Error>> {
         let status = store.status(package_key, &WindowsTarget::User);
         match status {
-            Ok(result) => {
-                match result {
-                    PackageStatus::NotInstalled => {},
-                    _ => {
-                        *is_system = false;
-                        return Ok(status)
-                    }
+            Ok(result) => match result {
+                PackageStatus::NotInstalled => {}
+                _ => {
+                    *is_system = false;
+                    return Ok(status);
                 }
-            }
+            },
             Err(_) => {}
         }
 
@@ -254,13 +267,11 @@ extern "C" fn pahkat_windows_package_store_status(
     }
 
     match package_store_status(&store, &package_key, is_system) {
-        Ok(result) => {
-            match PackageStatusMarshaler::to_foreign(result) {
-                Ok(foreign) => foreign,
-                Err(err) => {
-                    throw(err, exception);
-                    i8::default()
-                }
+        Ok(result) => match PackageStatusMarshaler::to_foreign(result) {
+            Ok(foreign) => foreign,
+            Err(err) => {
+                throw(err, exception);
+                i8::default()
             }
         },
         Err(err) => {
@@ -270,9 +281,8 @@ extern "C" fn pahkat_windows_package_store_status(
     }
 }
 
-
 #[no_mangle]
-extern "C" fn pahkat_windows_package_store_download(
+pub extern "C" fn pahkat_windows_package_store_download(
     handle: *mut WindowsPackageStore,
     package_key: *const c_char,
     progress: extern "C" fn(*const PackageKey, u64, u64),
@@ -287,19 +297,22 @@ extern "C" fn pahkat_windows_package_store_download(
         progress: extern "C" fn(*const PackageKey, u64, u64),
     ) -> Result<PathBuf, Box<dyn Error>> {
         let package_key1 = package_key.to_owned();
-        store.download(&package_key, Box::new(move |cur, max| {
-            progress(&package_key1 as *const _, cur, max);
-        })).map_err(|e| Box::new(e) as Box<dyn Error>)
+        store
+            .download(
+                &package_key,
+                Box::new(move |cur, max| {
+                    progress(&package_key1 as *const _, cur, max);
+                }),
+            )
+            .map_err(|e| Box::new(e) as Box<dyn Error>)
     }
 
     match package_store_download(&store, &package_key, progress) {
-        Ok(result) => {
-            match WindowsPathMarshaler::to_foreign(result) {
-                Ok(v) => v,
-                Err(err) => {
-                    throw(err, exception);
-                    return std::ptr::null();
-                }
+        Ok(result) => match WindowsPathMarshaler::to_foreign(result) {
+            Ok(v) => v,
+            Err(err) => {
+                throw(err, exception);
+                return std::ptr::null();
             }
         },
         Err(err) => {
@@ -310,44 +323,47 @@ extern "C" fn pahkat_windows_package_store_download(
 }
 
 #[no_mangle]
-extern "C" fn pahkat_windows_package_store_clear_cache(
+pub extern "C" fn pahkat_windows_package_store_clear_cache(
     handle: *mut WindowsPackageStore,
-    exception: *mut *mut Exception,    
+    exception: *mut *mut Exception,
 ) {
     let store = unsafe { &mut *handle };
     store.clear_cache();
 }
 
 #[no_mangle]
-extern "C" fn pahkat_windows_package_store_refresh_repos(
+pub extern "C" fn pahkat_windows_package_store_refresh_repos(
     handle: *mut WindowsPackageStore,
-    exception: *mut *mut Exception,    
+    exception: *mut *mut Exception,
 ) {
     let store = unsafe { &mut *handle };
     store.refresh_repos();
 }
 
 #[no_mangle]
-extern "C" fn pahkat_windows_package_store_force_refresh_repos(
+pub extern "C" fn pahkat_windows_package_store_force_refresh_repos(
     handle: *mut WindowsPackageStore,
-    exception: *mut *mut Exception,    
+    exception: *mut *mut Exception,
 ) {
     let store = unsafe { &mut *handle };
     store.force_refresh_repos();
 }
 
-use std::marker::PhantomData;
-use std::ffi::CString;
-use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
+use std::ffi::CString;
+use std::marker::PhantomData;
 
 struct JsonMarshaler<'a, T>(&'a PhantomData<T>);
 
-impl<'a, T> ToForeign<&'a T> for JsonMarshaler<'a, T> where T: Serialize {
+impl<'a, T> ToForeign<&'a T> for JsonMarshaler<'a, T>
+where
+    T: Serialize,
+{
     // type In = &'a T;
     type Out = *const c_char;
     type Error = Box<dyn Error>;
-    
+
     fn to_foreign(input: &'a T) -> Result<*const c_char, Self::Error> {
         let vec = serde_json::to_vec(input)?;
         let c_str = CString::new(vec)?;
@@ -360,11 +376,14 @@ impl<'a, T> ToForeign<&'a T> for JsonMarshaler<'a, T> where T: Serialize {
     }
 }
 
-impl<'a, T> FromForeign for JsonMarshaler<'a, T> where T: DeserializeOwned {
+impl<'a, T> FromForeign for JsonMarshaler<'a, T>
+where
+    T: DeserializeOwned,
+{
     type In = *const c_char;
     type Out = T;
     type Error = Box<dyn Error>;
-    
+
     fn from_foreign(ptr: *const c_char) -> Result<T, Self::Error> {
         let s = unsafe { CStr::from_ptr(ptr) }.to_string_lossy();
         log::debug!("JSON: {}", s);
@@ -377,7 +396,7 @@ impl<'a, T> FromForeign for JsonMarshaler<'a, T> where T: DeserializeOwned {
 }
 
 #[no_mangle]
-extern "C" fn pahkat_windows_package_store_repo_indexes(
+pub extern "C" fn pahkat_windows_package_store_repo_indexes(
     handle: *mut WindowsPackageStore,
     exception: *mut *mut Exception,
 ) -> *const c_char {
@@ -404,9 +423,7 @@ extern "C" fn pahkat_windows_package_store_repo_indexes(
 
 // }
 
-
 // pub extern "C" fn pahkat_windows_package_store_read_only???
-
 
 struct ArcMarshaler<'a, T>(&'a PhantomData<T>);
 
@@ -414,7 +431,7 @@ struct ArcMarshaler<'a, T>(&'a PhantomData<T>);
 //     // type In = &'a Arc<T>;
 //     type Out = *const T;
 //     type Error = Box<dyn Error>;
-    
+
 //     fn to_foreign(input: &'a Arc<T>) -> Result<*const T, Self::Error> {
 //         let arc = Arc::clone(input);
 //         Ok(Arc::into_raw(arc))
@@ -428,7 +445,7 @@ struct ArcMarshaler<'a, T>(&'a PhantomData<T>);
 // impl<T> ToForeign<T> for ArcMarshaler<'_, T> {
 //     type Out = *const T;
 //     type Error = Box<dyn Error>;
-    
+
 //     fn to_foreign(input: T) -> Result<*const T, Self::Error> {
 //         let arc = Arc::new(input);
 //         Ok(Arc::into_raw(arc))
@@ -443,7 +460,7 @@ impl<T> ToForeign<Arc<T>> for ArcMarshaler<'_, T> {
     // type In = &'a Arc<T>;
     type Out = *const T;
     type Error = Box<dyn Error>;
-    
+
     fn to_foreign(input: Arc<T>) -> Result<*const T, Self::Error> {
         Ok(Arc::into_raw(input))
     }
@@ -457,7 +474,7 @@ impl<'a, T> FromForeign for ArcMarshaler<'a, T> {
     type In = *const T;
     type Out = Arc<T>;
     type Error = Box<dyn Error>;
-    
+
     fn from_foreign(input: *const T) -> Result<Arc<T>, Self::Error> {
         let arc = unsafe { Arc::from_raw(input) };
         let ret = Arc::clone(&arc);
@@ -467,18 +484,15 @@ impl<'a, T> FromForeign for ArcMarshaler<'a, T> {
 }
 
 #[no_mangle]
-pub extern "C" fn pahkat_exception_release(c_str: *mut c_char) {
-    unsafe { CString::from_raw(c_str) };
-}
-
-#[no_mangle]
 pub extern "C" fn pahkat_windows_package_store_config(
     handle: *mut WindowsPackageStore,
     exception: *mut *mut Exception,
 ) -> *const RwLock<StoreConfig> {
     let store = unsafe { &mut *handle };
-    
-    fn package_store_config(store: &WindowsPackageStore) -> Result<Arc<RwLock<StoreConfig>>, Box<dyn Error>> {
+
+    fn package_store_config(
+        store: &WindowsPackageStore,
+    ) -> Result<Arc<RwLock<StoreConfig>>, Box<dyn Error>> {
         Ok(store.config())
     }
 
@@ -511,9 +525,7 @@ pub extern "C" fn pahkat_store_config_set_ui_value(
     let key = StrMarshaler::from_foreign(key).unwrap();
     let value: Option<String> = match value.is_null() {
         true => None,
-        false => {
-            Some(StrMarshaler::from_foreign(value).unwrap().to_string())
-        }
+        false => Some(StrMarshaler::from_foreign(value).unwrap().to_string()),
     };
     // log::debug!("Key: {:?}, Value: {:?}", &key, &value);
     // log::debug!("Getting guard");
@@ -549,7 +561,7 @@ pub extern "C" fn pahkat_store_config_ui_value(
 //     handle: StoreConfigPtr,
 //     key: *const c_char,
 //     exception: *mut *mut Exception,
-// ) {    
+// ) {
 //     let handle: &mut RwLock<StoreConfig> = unsafe { &mut *handle };
 //     let guard = handle.write().unwrap();
 // }
@@ -579,7 +591,7 @@ pub extern "C" fn pahkat_store_config_skipped_package(
 
     match guard.skipped_package(&key) {
         Some(v) => StrMarshaler::to_foreign(&v).unwrap(),
-        None => std::ptr::null()
+        None => std::ptr::null(),
     }
 }
 
@@ -609,45 +621,45 @@ pub extern "C" fn pahkat_store_config_set_repos(
     guard.set_repos(repos);
 }
 
-#[no_mangle]
-pub extern "C" fn pahkat_windows_action_to_json(
-    action: *mut WindowsPackageAction,
-    exception: *mut *mut Exception,
-) -> *const c_char {
-    let action = unsafe { &mut *action };
-    match JsonMarshaler::to_foreign(action) {
-        Ok(v) => v,
-        Err(err) => {
-            throw(err, exception);
-            std::ptr::null()
-        }
-    }
-}
+// #[no_mangle]
+// pub extern "C" fn pahkat_windows_action_to_json(
+//     action: *mut WindowsPackageAction,
+//     exception: *mut *mut Exception,
+// ) -> *const c_char {
+//     let action = unsafe { &mut *action };
+//     match JsonMarshaler::to_foreign(action) {
+//         Ok(v) => v,
+//         Err(err) => {
+//             throw(err, exception);
+//             std::ptr::null()
+//         }
+//     }
+// }
+
+// #[no_mangle]
+// pub extern "C" fn pahkat_windows_action_from_json(
+//     action: *mut c_char,
+//     exception: *mut *mut Exception,
+// ) -> *const WindowsPackageAction {
+//     let result: WindowsPackageAction = match JsonMarshaler::from_foreign(action) {
+//         Ok(v) => v,
+//         Err(err) => {
+//             throw(err, exception);
+//             return std::ptr::null();
+//         }
+//     };
+
+//     match ArcMarshaler::to_foreign(Arc::new(result)) {
+//         Ok(v) => v,
+//         Err(err) => {
+//             throw(err, exception);
+//             std::ptr::null()
+//         }
+//     }
+// }
 
 #[no_mangle]
-pub extern "C" fn pahkat_windows_action_from_json(
-    action: *mut c_char,
-    exception: *mut *mut Exception,
-) -> *const WindowsPackageAction {
-    let result: WindowsPackageAction = match JsonMarshaler::from_foreign(action) {
-        Ok(v) => v,
-        Err(err) => {
-            throw(err, exception);
-            return std::ptr::null();
-        }
-    };
-
-    match ArcMarshaler::to_foreign(Arc::new(result)) {
-        Ok(v) => v,
-        Err(err) => {
-            throw(err, exception);
-            std::ptr::null()
-        }
-    }
-}
-
-#[no_mangle]
-extern "C" fn pahkat_windows_transaction_new(
+pub extern "C" fn pahkat_windows_transaction_new(
     handle: *mut WindowsPackageStore,
     actions: *const c_char,
     exception: *mut *mut Exception,
@@ -657,12 +669,11 @@ extern "C" fn pahkat_windows_transaction_new(
 
     fn transaction_new(
         store: Arc<WindowsPackageStore>,
-        actions: Vec<WindowsPackageAction>
+        actions: Vec<WindowsPackageAction>,
     ) -> Result<WindowsPackageTransaction, Box<dyn Error>> {
-        WindowsPackageTransaction::new(store as Arc<_>, actions)
-            .map_err(|e| Box::new(e) as _)
+        WindowsPackageTransaction::new(store as Arc<_>, actions).map_err(|e| Box::new(e) as _)
     }
-    
+
     let result = match transaction_new(store, actions) {
         Ok(v) => v,
         Err(err) => {
@@ -681,7 +692,7 @@ extern "C" fn pahkat_windows_transaction_new(
 }
 
 #[no_mangle]
-extern "C" fn pahkat_windows_transaction_actions(
+pub extern "C" fn pahkat_windows_transaction_actions(
     handle: *mut WindowsPackageTransaction,
     exception: *mut *mut Exception,
 ) -> *const c_char {
@@ -700,14 +711,14 @@ extern "C" fn pahkat_windows_transaction_actions(
 // }
 
 #[no_mangle]
-extern "C" fn pahkat_windows_transaction_process(
+pub extern "C" fn pahkat_windows_transaction_process(
     handle: *mut WindowsPackageTransaction,
-    progress_callback: extern "C" fn (u32, *const libc::c_char, u32),
+    progress_callback: extern "C" fn(u32, *const libc::c_char, u32),
     tag: u32,
     exception: *mut *mut Exception,
 ) {
     let tx = unsafe { &mut *handle };
-    
+
     tx.process(move |key, event| {
         let k = PackageKeyMarshaler::to_foreign(key).unwrap();
         progress_callback(tag, k, event.to_u32());
@@ -1256,10 +1267,7 @@ impl From<Exception> for CString {
 }
 
 #[inline]
-pub fn throw_message<S: AsRef<str>>(
-    msg: S,
-    exception: *mut *mut Exception,
-) {
+pub fn throw_message<S: AsRef<str>>(msg: S, exception: *mut *mut Exception) {
     if !exception.is_null() {
         let msg = Exception::try_from(msg.as_ref()).unwrap();
         unsafe { *exception = msg.into_raw() };

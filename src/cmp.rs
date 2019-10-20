@@ -1,4 +1,3 @@
-
 use crate::transaction::{PackageStatus, PackageStatusError};
 
 use std::cmp::Ordering;
@@ -181,4 +180,3 @@ mod tests {
         assert_ne!(my, other);
     }
 }
-

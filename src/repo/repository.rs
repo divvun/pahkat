@@ -1,13 +1,13 @@
+use crypto::digest::Digest;
+use crypto::sha2::Sha256;
 use pahkat_types::{
     Package, PackageMap, Packages, Repository as RepositoryMeta, VirtualMap, Virtuals,
 };
-use serde_derive::{Deserialize, Serialize};
-use std::time::SystemTime;
-use std::path::Path;
-use url::Url;
+use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
-use crypto::digest::Digest;
-use crypto::sha2::Sha256;
+use std::path::Path;
+use std::time::SystemTime;
+use url::Url;
 
 fn last_modified_cache(repo_cache_path: &Path) -> SystemTime {
     match std::fs::metadata(repo_cache_path.join("cache.json")) {

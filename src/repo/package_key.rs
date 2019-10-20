@@ -1,9 +1,17 @@
-use url::Url;
 use serde::de::{self, Deserialize, Deserializer, Visitor};
 use serde::ser::{Serialize, Serializer};
+use std::convert::TryFrom;
+use url::Url;
 
-use std::fmt;
 use pahkat_types::Repository as RepositoryMeta;
+use std::fmt;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PackageKey {
+    pub url: Url,
+    pub id: String,
+    pub channel: String,
+}
 
 impl PackageKey {
     pub fn new(repo: &RepositoryMeta, channel: &str, package_id: &str) -> PackageKey {
@@ -14,17 +22,53 @@ impl PackageKey {
         }
     }
 
-    // TODO impl From trait.
+    #[inline]
     pub fn to_string(&self) -> String {
-        format!("{}packages/{}#{}", self.url, self.id, self.channel)
+        String::from(self)
     }
 
-    pub fn from_string(url: &str) -> Result<PackageKey, Box<dyn std::error::Error>> {
-        let url = Url::parse(url)?;
+    #[inline]
+    pub fn from_string(url: &str) -> Result<PackageKey, TryFromStringError> {
+        PackageKey::try_from(url)
+    }
+}
 
-        let channel = url.fragment().unwrap().to_string();
-        let base = url.join("..")?;
-        let id = url.path_segments().unwrap().last().unwrap().to_string();
+impl<'a> From<&'a PackageKey> for String {
+    fn from(key: &'a PackageKey) -> String {
+        format!("{}packages/{}#{}", key.url, key.id, key.channel)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum TryFromStringError {
+    InvalidUrl,
+}
+
+impl std::error::Error for TryFromStringError {}
+
+impl std::fmt::Display for TryFromStringError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "invalid URL")
+    }
+}
+
+impl<'a> TryFrom<&'a str> for PackageKey {
+    type Error = TryFromStringError;
+
+    fn try_from(url: &'a str) -> Result<PackageKey, Self::Error> {
+        let url = Url::parse(url).map_err(|_| TryFromStringError::InvalidUrl)?;
+
+        let channel = url
+            .fragment()
+            .ok_or(TryFromStringError::InvalidUrl)?
+            .to_string();
+        let base = url.join("..").map_err(|_| TryFromStringError::InvalidUrl)?;
+        let id = url
+            .path_segments()
+            .ok_or(TryFromStringError::InvalidUrl)?
+            .last()
+            .ok_or(TryFromStringError::InvalidUrl)?
+            .to_string();
 
         Ok(PackageKey {
             url: base,
@@ -32,13 +76,6 @@ impl PackageKey {
             id,
         })
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct PackageKey {
-    pub url: Url,
-    pub id: String,
-    pub channel: String,
 }
 
 impl Serialize for PackageKey {

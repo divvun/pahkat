@@ -100,12 +100,6 @@ pub struct WindowsPackageStore {
     config: SharedStoreConfig,
 }
 
-impl WindowsPackageStore {
-    pub fn derp(&self) {
-        log::debug!("DERP: {:?}", self);
-    }
-}
-
 fn installer(package: &Package) -> Result<&WindowsInstaller, PackageStatusError> {
     match package.installer() {
         None => Err(PackageStatusError::NoInstaller),
@@ -161,8 +155,7 @@ impl PackageStore for WindowsPackageStore {
 
         let config = &self.config.read().unwrap();
 
-        let download_path =
-            crate::repo::download_path(config, &installer.url());
+        let download_path = crate::repo::download_path(config, &installer.url());
         let tmp_path = config.tmp_path().to_path_buf();
         let disposable = package.download(tmp_path, &download_path, Some(progress))?;
         disposable.wait()

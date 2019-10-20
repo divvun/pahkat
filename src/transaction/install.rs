@@ -10,7 +10,7 @@ pub enum InstallError {
     InvalidFileType,
     PackageNotInCache,
     InvalidUrl {
-        source: reqwest::UrlError,
+        source: url::ParseError,
         url: String,
     },
     InstallerFailure {

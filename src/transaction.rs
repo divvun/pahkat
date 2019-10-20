@@ -1,9 +1,9 @@
+use crate::package_store::PackageStore;
 use crate::PackageKey;
-use pahkat_types::{Package};
-// use serde::de::{self, Deserialize, Deserializer};
+
+use pahkat_types::Package;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use std::path::PathBuf;
 
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -12,9 +12,6 @@ use std::sync::{
 
 pub mod install;
 pub mod uninstall;
-
-use install::InstallError;
-use uninstall::UninstallError;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
@@ -69,78 +66,10 @@ impl fmt::Display for PackageStatusError {
     }
 }
 
-use std::sync::RwLock;
-use hashbrown::HashMap;
-use crate::RepoRecord;
 use crate::repo::Repository;
-
-pub trait PackageStore: Send + Sync {
-    type Target: Send + Sync;
-
-    fn repos(&self) -> Arc<RwLock<HashMap<RepoRecord, Repository>>>;
-
-    fn download(
-        &self,
-        key: &PackageKey,
-        progress: Box<dyn Fn(u64, u64) -> () + Send + 'static>,
-    ) -> Result<PathBuf, crate::download::DownloadError>;
-
-    fn resolve_package(&self, key: &PackageKey) -> Option<Package>;
-
-    fn install(
-        &self,
-        key: &PackageKey,
-        target: &Self::Target,
-    ) -> Result<PackageStatus, InstallError>;
-
-    fn uninstall(
-        &self,
-        key: &PackageKey,
-        target: &Self::Target,
-    ) -> Result<PackageStatus, UninstallError>;
-
-    fn status(
-        &self,
-        key: &PackageKey,
-        target: &Self::Target,
-    ) -> Result<PackageStatus, PackageStatusError>;
-
-    fn find_package_by_id(&self, package_id: &str) -> Option<(PackageKey, Package)>;
-
-    // fn find_package_dependencies(
-    //     &self,
-    //     key: &PackageKey,
-    //     target: &Self::Target,
-    // ) -> Result<Vec<???>, PackageDependencyError> {
-    //     let package = match self.resolve_package(key) {
-    //         Some(pkg) => pkg,
-    //         None => return Err(PackageDependencyError::PackageNotFound(key.to_string()))
-    //     };
-        
-    //     unimplemented!();
-    // }
-
-    fn refresh_repos(&self);
-
-    fn clear_cache(&self);
-
-    fn force_refresh_repos(&self) {
-        self.clear_cache();
-        self.refresh_repos();
-    }
-
-    fn add_repo(&self, url: String, channel: String) -> Result<bool, Box<dyn std::error::Error>>;
-
-    fn remove_repo(&self, url: String, channel: String)
-        -> Result<bool, Box<dyn std::error::Error>>;
-
-    fn update_repo(
-        &self,
-        index: usize,
-        url: String,
-        channel: String,
-    ) -> Result<bool, Box<dyn std::error::Error>>;
-}
+use crate::RepoRecord;
+use hashbrown::HashMap;
+use std::sync::RwLock;
 
 pub trait PackageTarget: Send + Sync + Clone {}
 
@@ -246,7 +175,7 @@ pub enum PackageTransactionError {
     NoPackage(String),
     Deps(PackageDependencyError),
     ActionContradiction(String),
-    InvalidStatus(crate::transaction::PackageStatusError)
+    InvalidStatus(crate::transaction::PackageStatusError),
 }
 
 impl std::error::Error for PackageTransactionError {}
@@ -293,7 +222,7 @@ fn process_install_action<T: PackageTarget + 'static>(
             Err(e) => return Err(PackageTransactionError::Deps(e)),
         };
 
-    for dependency in dependencies.into_iter() {        
+    for dependency in dependencies.into_iter() {
         if !new_actions.iter().any(|x| x.id == dependency.0) {
             // TODO: validate that it is allowed for user installations
             let new_action = PackageAction::install(dependency.0, action.target.clone());
@@ -317,15 +246,15 @@ impl<T: PackageTarget + 'static> PackageTransaction<T> {
         for action in actions.into_iter() {
             let package_key = &action.id;
 
-            let package = store.resolve_package(&package_key).ok_or_else(||
-                PackageTransactionError::NoPackage(package_key.to_string())
-            )?;
+            let package = store
+                .resolve_package(&package_key)
+                .ok_or_else(|| PackageTransactionError::NoPackage(package_key.to_string()))?;
 
             if action.is_install() {
                 // Add all sub-dependencies
                 process_install_action(&store, &package, &action, &mut new_actions)?;
             }
-            
+
             if let Some(found_action) = new_actions.iter().find(|x| x.id == action.id) {
                 if found_action.action != action.action {
                     return Err(PackageTransactionError::ActionContradiction(
@@ -352,31 +281,32 @@ impl<T: PackageTarget + 'static> PackageTransaction<T> {
         // An intersection with more than 0 items is a contradiction.
         let contradictions = installs.intersection(&uninstalls).collect::<HashSet<_>>();
         if contradictions.len() > 0 {
-            return Err(PackageTransactionError::ActionContradiction(
-                format!("{:?}", contradictions),
-            ));
+            return Err(PackageTransactionError::ActionContradiction(format!(
+                "{:?}",
+                contradictions
+            )));
         }
 
         // Check if packages need to even be installed or uninstalled
-        let new_actions = new_actions.into_iter().try_fold(vec![], |mut out, action| {
-            let status = store.status(&action.id, &action.target as _)
-                .map_err(|err| {
-                    PackageTransactionError::InvalidStatus(err)
-                })?;
-            
-            let is_valid = if action.is_install() {
-                status != PackageStatus::UpToDate
-            } else {
-                status == PackageStatus::UpToDate ||
-                    status == PackageStatus::RequiresUpdate
-            };
+        let new_actions = new_actions
+            .into_iter()
+            .try_fold(vec![], |mut out, action| {
+                let status = store
+                    .status(&action.id, &action.target as _)
+                    .map_err(|err| PackageTransactionError::InvalidStatus(err))?;
 
-            if is_valid {
-                out.push(action);
-            }
+                let is_valid = if action.is_install() {
+                    status != PackageStatus::UpToDate
+                } else {
+                    status == PackageStatus::UpToDate || status == PackageStatus::RequiresUpdate
+                };
 
-            Ok(out)
-        })?;
+                if is_valid {
+                    out.push(action);
+                }
+
+                Ok(out)
+            })?;
 
         Ok(PackageTransaction {
             store,

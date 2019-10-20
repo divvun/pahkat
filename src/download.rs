@@ -142,7 +142,8 @@ impl Download for Package {
             }
 
             let out_path = (&dir_path).join(&filename).to_path_buf();
-            file.persist(&out_path).map_err(|e| DownloadError::PersistError(e))?;
+            file.persist(&out_path)
+                .map_err(|e| DownloadError::PersistError(e))?;
 
             Ok(out_path)
         });
@@ -166,11 +167,7 @@ pub enum DownloadError {
 impl std::error::Error for DownloadError {}
 impl std::fmt::Display for DownloadError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{:?}",
-            self
-        )
+        write!(f, "{:?}", self)
     }
 }
 

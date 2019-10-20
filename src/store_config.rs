@@ -6,9 +6,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use url::Url;
 
-use serde::de::{self, Deserialize, Deserializer, Visitor};
-use serde::ser::{Serialize, Serializer};
-use serde_derive::{Deserialize, Serialize};
+use serde::de::{self, Deserializer, Visitor};
+use serde::ser::Serializer;
+use serde::{Deserialize, Serialize};
 
 use crate::defaults;
 use crate::{repo::RepoRecord, PackageKey, Repository};
@@ -255,7 +255,7 @@ pub enum ConfigPath {
 #[derive(Debug, Clone)]
 pub enum ConfigPathError {
     InvalidScheme(String),
-    InvalidUrl
+    InvalidUrl,
 }
 
 impl std::error::Error for ConfigPathError {}
@@ -314,7 +314,7 @@ impl ConfigPath {
     pub fn as_url(&self) -> &Url {
         match self {
             ConfigPath::File(url) => url,
-            ConfigPath::Container(url) => url
+            ConfigPath::Container(url) => url,
         }
     }
 }
@@ -394,7 +394,10 @@ mod tests {
     fn parse() {
         let container = ConfigPath::Container(url::Url::parse("container:test").unwrap());
         let fp = ConfigPath::File(url::Url::parse("file:///foo").unwrap());
-        assert_eq!(&std::env::home_dir().unwrap().join("test"), &*container.to_path_buf());
+        assert_eq!(
+            &std::env::home_dir().unwrap().join("test"),
+            &*container.to_path_buf()
+        );
         assert_eq!(std::path::Path::new("/foo"), &*fp.to_path_buf());
     }
 }

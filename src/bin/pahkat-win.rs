@@ -84,7 +84,7 @@ fn subcommand_download() -> App<'static, 'static> {
 }
 
 const AUTHOR: &str = "Brendan Molloy <brendan@bbqsrc.net>";
-const ABOUT: &str = "The last package manager. \"Pákhat\" is the nominative plural form for \"packages\" in Northern Sámi.";
+const ABOUT: &str = "The last package manager. \"Páhkat\" is the nominative plural form for \"packages\" in Northern Sámi.";
 
 fn init() {
     let store = WindowsPackageStore::default();
@@ -126,9 +126,12 @@ fn install(package_names: Vec<&str>, target: WindowsTarget) -> Result<(), CliErr
     let transaction = PackageTransaction::new(Arc::clone(&store) as _, package_actions).unwrap();
 
     for action in transaction.actions().iter() {
-        let pkg_path = store.download(&action.id, Box::new(|cur, max| {
-            log::debug!("{}/{} bytes", cur, max);
-        }));
+        let pkg_path = store.download(
+            &action.id,
+            Box::new(|cur, max| {
+                log::debug!("{}/{} bytes", cur, max);
+            }),
+        );
     }
 
     transaction.process(|key, event| {
@@ -168,25 +171,25 @@ fn search() {
     let repo_map = repos.read().unwrap();
 
     repo_map.iter().for_each(|(record, repo)| {
-        log::debug!("# {}\n---", repo.meta().name.get("en").as_str().unwrap_or_default());
+        log::debug!(
+            "# {}\n---",
+            repo.meta().name.get("en").as_str().unwrap_or_default()
+        );
 
-        repo.packages()
-            .values()
-            .for_each(|pkg| {
-                log::debug!("{} {}\n  {}",
-                    pkg.id,
-                    pkg.version,
-                    pkg.name.get("en").as_str().unwrap_or_default()
-                );
+        repo.packages().values().for_each(|pkg| {
+            log::debug!(
+                "{} {}\n  {}",
+                pkg.id,
+                pkg.version,
+                pkg.name.get("en").as_str().unwrap_or_default()
+            );
 
-                let description = pkg.description.get("en")
-                    .map(|x| x.as_str())
-                    .unwrap_or("");
-                if description != "" {
-                    log::debug!("  {}", description);
-                }
-                log::debug!();
-            });
+            let description = pkg.description.get("en").map(|x| x.as_str()).unwrap_or("");
+            if description != "" {
+                log::debug!("  {}", description);
+            }
+            log::debug!();
+        });
     });
 }
 
@@ -225,12 +228,20 @@ fn main() {
             init();
         }
         ("install", Some(matches)) => {
-            let target = if matches.is_present("user") { WindowsTarget::User } else { WindowsTarget::System };
+            let target = if matches.is_present("user") {
+                WindowsTarget::User
+            } else {
+                WindowsTarget::System
+            };
             let package_names = matches.values_of("package-id").unwrap();
             install(package_names.collect(), target);
         }
         ("uninstall", Some(matches)) => {
-            let target = if matches.is_present("user") { WindowsTarget::User } else { WindowsTarget::System };
+            let target = if matches.is_present("user") {
+                WindowsTarget::User
+            } else {
+                WindowsTarget::System
+            };
             let package_names = matches.values_of("package-id").unwrap();
             uninstall(package_names.collect(), target);
         }
