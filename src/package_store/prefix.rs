@@ -126,6 +126,30 @@ impl PackageStore for PrefixPackageStore {
     fn config(&self) -> super::SharedStoreConfig {
         Arc::clone(&self.config)
     }
+    
+    fn import(
+        &self,
+        key: &PackageKey,
+        installer_path: &Path,
+    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
+        let package = match self.resolve_package(key) {
+            Some(v) => v,
+            None => {
+                return Err(Box::new(crate::download::DownloadError::NoUrl) as _);
+            }
+        };
+
+        let installer = match package.installer() {
+            None => return Err(Box::new(crate::download::DownloadError::NoUrl) as _),
+            Some(v) => v,
+        };
+
+        let config = &self.config.read().unwrap();
+
+        let output_path = crate::repo::download_path(config, &installer.url());
+        std::fs::copy(installer_path, &output_path)?;
+        Ok(output_path)
+    }
 
     fn download(
         &self,
