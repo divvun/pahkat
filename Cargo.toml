@@ -58,10 +58,9 @@ indicatif = { version = "0.12.0", optional = true }
 better-panic = { git = "https://github.com/mitsuhiko/better-panic", optional = true }
 
 # FFI specific
-# cursed = { path = "../cursed", optional = true }
 env_logger = { version = "0.7.1", optional = true }
-cthulhu = { path = "../cthulhu/cthulhu", optional = true }
-cursed = { path = "../cthulhu/cursed", optional = true }
+cthulhu = { git = "https://github.com/cthulhu-rs/cthulhu", optional = true }
+cursed = { git = "https://github.com/cthulhu-rs/cthulhu", optional = true }
 
 # MacOS-specific
 [target.'cfg(target_os="macos")'.dependencies]
