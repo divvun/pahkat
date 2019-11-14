@@ -186,6 +186,12 @@ pub enum InstallTarget {
     User,
 }
 
+impl std::default::Default for InstallTarget {
+    fn default() -> Self {
+        InstallTarget::System
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct ParseInstallTargetError;
 
