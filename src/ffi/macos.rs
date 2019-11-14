@@ -165,8 +165,8 @@ pub extern "C" fn pahkat_macos_transaction_actions(
 #[cthulhu::invoke]
 pub extern "C" fn pahkat_macos_transaction_process(
     #[marshal(cursed::BoxRefMarshaler::<MacOSPackageTransaction>)] handle: &MacOSPackageTransaction,
-    progress_callback: extern "C" fn(u32, *const libc::c_char, u32),
     tag: u32,
+    progress_callback: extern "C" fn(u32, *const libc::c_char, u32),
 ) {
     handle.process(move |key, event| {
         let k = PackageKeyMarshaler::to_foreign(&key).unwrap();
