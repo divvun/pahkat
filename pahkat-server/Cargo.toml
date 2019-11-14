@@ -13,24 +13,24 @@ description = "Páhkat server implementation"
 [dependencies]
 pahkat-types = { path = "../pahkat-types" }
 pahkat-common = { path = "../pahkat-common" }
-clap = { version = "2.33.0" }
-serde = { version = "1.0.91", features = ["derive"] }
-serde_json = "1.0.39"
-serde_derive = "1.0.88"
-actix-web = "1.0.0-beta.5"
-actix = "0.8.2"
-actix-multipart = "=0.1.2"
-actix-form-data = "=0.4.0"
+clap = "2.33.0"
+serde = { version = "1.0.102", features = ["derive"] }
+serde_json = "1.0.41"
+serde_derive = "1.0.102"
+actix-web = "1.0.9"
+actix = "0.8.3"
+actix-multipart = "0.1.4"
+actix-form-data = "0.4.0"
 glob = "0.3.0"
-log = "0.4.6"
-env_logger = "0.6.1"
-chrono = "0.4.6"
-uuid = { version = "0.7.4", features = ["serde", "v4"] }
-failure = "0.1.5"
-futures = "0.1.28"
-mime = "=0.3.13"
-toml = "=0.5.0"
-directories = "=2.0.1"
+log = "0.4.8"
+env_logger = "0.7.1"
+chrono = "0.4.9"
+uuid = { version = "0.8.1", features = ["serde", "v4"] }
+failure = "0.1.6"
+futures = "^0.1"
+mime = "0.3.14"
+toml = "0.5.5"
+directories = "2.0.2"
 diesel_migrations = "1.4.0"
 diesel = "1.4.3"
 dotenv = "0.15.0"

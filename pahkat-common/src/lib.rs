@@ -45,7 +45,7 @@ pub enum OpenIndexError {
 pub enum DatabaseError {
     PoolError(r2d2::Error),
     OperationError(diesel::result::Error),
-    InputError(String, uuid::parser::ParseError),
+    InputError(String, uuid::Error),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
