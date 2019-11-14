@@ -20,18 +20,18 @@ pub type PrefixTarget = ();
 pub type PrefixPackageAction = crate::transaction::PackageAction<PrefixTarget>;
 pub type PrefixPackageTransaction = crate::transaction::PackageTransaction<PrefixTarget>;
 
-#[cthulhu::invoke(return_marshaler = "cursed::BoxMarshaler::<PrefixPackageStore>")]
+#[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<PrefixPackageStore>")]
 pub extern "C" fn pahkat_prefix_package_store_open(
     #[marshal(cursed::PathMarshaler)] prefix_path: &Path,
-) -> Result<Box<PrefixPackageStore>, Box<dyn Error>> {
-    PrefixPackageStore::open(prefix_path).map(|x| Box::new(x))
+) -> Result<Arc<PrefixPackageStore>, Box<dyn Error>> {
+    PrefixPackageStore::open(prefix_path).map(|x| Arc::new(x))
 }
 
-#[cthulhu::invoke(return_marshaler = "cursed::BoxMarshaler::<PrefixPackageStore>")]
+#[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<PrefixPackageStore>")]
 pub extern "C" fn pahkat_prefix_package_store_create(
     #[marshal(cursed::PathMarshaler)] prefix_path: &Path,
-) -> Result<Box<PrefixPackageStore>, Box<dyn Error>> {
-    PrefixPackageStore::create(prefix_path).map(|x| Box::new(x))
+) -> Result<Arc<PrefixPackageStore>, Box<dyn Error>> {
+    PrefixPackageStore::create(prefix_path).map(|x| Arc::new(x))
 }
 
 #[repr(C)]

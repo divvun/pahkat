@@ -99,16 +99,8 @@ impl PrefixPackageStore {
         Arc::new(self)
     }
 
-    pub fn find_package_by_id(&self, package_id: &str) -> Option<(PackageKey, Package)> {
-        crate::repo::find_package_by_id(self, package_id, &self.repos)
-    }
-
     fn package_path(&self, package: &Package) -> PathBuf {
         self.prefix.join("pkg").join(&package.id)
-    }
-
-    pub fn refresh_repos(&self) {
-        *self.repos.write().unwrap() = crate::repo::refresh_repos(&*self.config.read().unwrap());
     }
 }
 
@@ -348,7 +340,8 @@ impl PackageStore for PrefixPackageStore {
 
     fn refresh_repos(&self) {
         let config = self.config.read().unwrap();
-        *self.repos.write().unwrap() = crate::repo::refresh_repos(&self.config.read().unwrap());
+        let repos = crate::repo::refresh_repos(&config);
+        *self.repos.write().unwrap() = repos;
     }
 
     fn clear_cache(&self) {
