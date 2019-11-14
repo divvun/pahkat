@@ -79,7 +79,7 @@ impl CPackageStatus {
 
 #[cthulhu::invoke(return_marshaler = "cursed::CopyMarshaler::<CPackageStatus>")]
 pub extern "C" fn pahkat_macos_package_store_status(
-    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: &Arc<MacOSPackageStore>,
+    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
     #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
 ) -> CPackageStatus {
     handle
@@ -92,7 +92,7 @@ pub extern "C" fn pahkat_macos_package_store_status(
 
 #[cthulhu::invoke(return_marshaler = "cursed::PathMarshaler")]
 pub extern "C" fn pahkat_macos_package_store_download(
-    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: &Arc<MacOSPackageStore>,
+    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
     #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
     progress: extern "C" fn(*const PackageKey, u64, u64),
 ) -> Result<PathBuf, Box<dyn Error>> {
@@ -109,28 +109,28 @@ pub extern "C" fn pahkat_macos_package_store_download(
 
 #[cthulhu::invoke]
 pub extern "C" fn pahkat_macos_package_store_clear_cache(
-    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: &Arc<MacOSPackageStore>,
+    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
 ) {
     handle.clear_cache();
 }
 
 #[cthulhu::invoke]
 pub extern "C" fn pahkat_macos_package_store_refresh_repos(
-    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: &Arc<MacOSPackageStore>,
+    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
 ) {
     handle.refresh_repos();
 }
 
 #[cthulhu::invoke]
 pub extern "C" fn pahkat_macos_package_store_force_refresh_repos(
-    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: &Arc<MacOSPackageStore>,
+    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
 ) {
     handle.force_refresh_repos();
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::StringMarshaler")]
 pub extern "C" fn pahkat_macos_package_store_repo_indexes(
-    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: &Arc<MacOSPackageStore>,
+    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
 ) -> Result<String, Box<dyn Error>> {
     let rwlock = handle.repos();
     let guard = rwlock.read().unwrap();
@@ -140,31 +140,31 @@ pub extern "C" fn pahkat_macos_package_store_repo_indexes(
 
 #[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<RwLock<StoreConfig>>")]
 pub extern "C" fn pahkat_macos_package_store_config(
-    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: &Arc<MacOSPackageStore>,
+    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
 ) -> Arc<RwLock<StoreConfig>> {
     handle.config()
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::BoxMarshaler::<MacOSPackageTransaction>")]
 pub extern "C" fn pahkat_macos_transaction_new(
-    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: &Arc<MacOSPackageStore>,
+    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
     #[marshal(JsonMarshaler)] actions: Vec<MacOSPackageAction>,
 ) -> Result<Box<MacOSPackageTransaction>, Box<dyn Error>> {
-    MacOSPackageTransaction::new(Arc::clone(handle) as _, actions)
+    MacOSPackageTransaction::new(handle as _, actions)
         .map(|x| Box::new(x))
         .map_err(|e| Box::new(e) as _)
 }
 
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_macos_transaction_actions(
-    #[marshal(cursed::BoxRefMarshaler::<MacOSPackageTransaction>)] handle: &Box<MacOSPackageTransaction>,
+    #[marshal(cursed::BoxRefMarshaler::<MacOSPackageTransaction>)] handle: &MacOSPackageTransaction,
 ) -> Vec<MacOSPackageAction> {
     handle.actions().to_vec()
 }
 
 #[cthulhu::invoke]
 pub extern "C" fn pahkat_macos_transaction_process(
-    #[marshal(cursed::BoxRefMarshaler::<MacOSPackageTransaction>)] handle: &Box<MacOSPackageTransaction>,
+    #[marshal(cursed::BoxRefMarshaler::<MacOSPackageTransaction>)] handle: &MacOSPackageTransaction,
     progress_callback: extern "C" fn(u32, *const libc::c_char, u32),
     tag: u32,
 ) {

@@ -70,7 +70,7 @@ impl CPackageStatus {
 
 #[cthulhu::invoke(return_marshaler = "cursed::CopyMarshaler::<CPackageStatus>")]
 pub extern "C" fn pahkat_prefix_package_store_status(
-    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: &Arc<PrefixPackageStore>,
+    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
     #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
 ) -> CPackageStatus {
     CPackageStatus::new(handle.status(&package_key, &()), true)
@@ -78,7 +78,7 @@ pub extern "C" fn pahkat_prefix_package_store_status(
 
 #[cthulhu::invoke(return_marshaler = "cursed::PathMarshaler")]
 pub extern "C" fn pahkat_prefix_package_store_download(
-    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: &Arc<PrefixPackageStore>,
+    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
     #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
     progress: extern "C" fn(*const PackageKey, u64, u64),
 ) -> Result<PathBuf, Box<dyn Error>> {
@@ -93,30 +93,38 @@ pub extern "C" fn pahkat_prefix_package_store_download(
         .map_err(|e| Box::new(e) as _)
 }
 
+#[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
+pub extern "C" fn pahkat_prefix_package_store_resolve_package(
+    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
+    #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
+) -> Option<pahkat_types::Package> {
+    handle.resolve_package(&package_key)
+}
+
 #[cthulhu::invoke]
 pub extern "C" fn pahkat_prefix_package_store_clear_cache(
-    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: &Arc<PrefixPackageStore>,
+    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
 ) {
     handle.clear_cache();
 }
 
 #[cthulhu::invoke]
 pub extern "C" fn pahkat_prefix_package_store_refresh_repos(
-    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: &Arc<PrefixPackageStore>,
+    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
 ) {
     handle.refresh_repos();
 }
 
 #[cthulhu::invoke]
 pub extern "C" fn pahkat_prefix_package_store_force_refresh_repos(
-    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: &Arc<PrefixPackageStore>,
+    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
 ) {
     handle.force_refresh_repos();
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::StringMarshaler")]
 pub extern "C" fn pahkat_prefix_package_store_repo_indexes(
-    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: &Arc<PrefixPackageStore>,
+    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
 ) -> Result<String, Box<dyn Error>> {
     let rwlock = handle.repos();
     let guard = rwlock.read().unwrap();
@@ -126,32 +134,31 @@ pub extern "C" fn pahkat_prefix_package_store_repo_indexes(
 
 #[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<RwLock<StoreConfig>>")]
 pub extern "C" fn pahkat_prefix_package_store_config(
-    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: &Arc<PrefixPackageStore>,
+    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
 ) -> Arc<RwLock<StoreConfig>> {
     handle.config()
 }
 
-
 #[cthulhu::invoke(return_marshaler = "cursed::BoxMarshaler::<PrefixPackageTransaction>")]
 pub extern "C" fn pahkat_prefix_transaction_new(
-    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: &Arc<PrefixPackageStore>,
+    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
     #[marshal(JsonMarshaler)] actions: Vec<PrefixPackageAction>,
 ) -> Result<Box<PrefixPackageTransaction>, Box<dyn Error>> {
-    PrefixPackageTransaction::new(Arc::clone(handle) as _, actions)
+    PrefixPackageTransaction::new(handle as _, actions)
         .map(|x| Box::new(x))
         .map_err(|e| Box::new(e) as _)
 }
 
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_prefix_transaction_actions(
-    #[marshal(cursed::BoxRefMarshaler::<PrefixPackageTransaction>)] handle: &Box<PrefixPackageTransaction>,
+    #[marshal(cursed::BoxRefMarshaler::<PrefixPackageTransaction>)] handle: &PrefixPackageTransaction,
 ) -> Vec<PrefixPackageAction> {
     handle.actions().to_vec()
 }
 
 #[cthulhu::invoke]
 pub extern "C" fn pahkat_prefix_transaction_process(
-    #[marshal(cursed::BoxRefMarshaler::<PrefixPackageTransaction>)] handle: &Box<PrefixPackageTransaction>,
+    #[marshal(cursed::BoxRefMarshaler::<PrefixPackageTransaction>)] handle: &PrefixPackageTransaction,
     progress_callback: extern "C" fn(u32, *const libc::c_char, u32),
     tag: u32,
 ) {
