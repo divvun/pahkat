@@ -2,8 +2,10 @@
 name = "pahkat-server"
 version = "0.6.0"
 authors = [
+    "projektir <oprojektir@gmail.com>",
     "Brendan Molloy <brendan@bbqsrc.net>",
-    "Rostislav Raykov <rostislav@technocreatives.com>"
+    "Rostislav Raykov <rostislav@technocreatives.com>",
+    "Eike Siewertsen <eike@allv.is>",
 ]
 edition = "2018"
 description = "Páhkat server implementation"

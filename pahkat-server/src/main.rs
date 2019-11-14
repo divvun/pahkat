@@ -7,7 +7,6 @@ use std::{env, fs};
 
 use clap::{
     crate_authors, crate_description, crate_version, App as CliApp, AppSettings, Arg, ArgMatches,
-    SubCommand,
 };
 use log::{error, info, warn};
 use pahkat_common::ProgressOutput;
