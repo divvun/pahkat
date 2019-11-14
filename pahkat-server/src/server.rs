@@ -1,9 +1,8 @@
-use std::path::{Path, PathBuf};
-
 use actix_web::{middleware, web, App, HttpServer};
 use form_data::{Field, FilenameGenerator, Form};
-
+use log::info;
 use pahkat_common::{database::Database, db_path};
+use std::path::{Path, PathBuf};
 
 use crate::config::TomlConfig;
 use crate::handlers::{
@@ -32,15 +31,28 @@ pub struct ServerState {
     pub upload_form: Form,
 }
 
+fn config_db_path(config: &TomlConfig) -> String {
+    config
+        .db_path
+        .clone()
+        .unwrap_or(db_path().as_path().to_str().unwrap().to_string())
+}
+
+embed_migrations!("../pahkat-common/migrations");
+
 pub fn run_server(config: TomlConfig, path: &Path, bind: &str, port: &str) {
     let system = actix::System::new("páhkat-server");
 
-    let database = match Database::new(db_path().as_path().to_str().unwrap()) {
+    let database = match Database::new(&config_db_path(&config)) {
         Ok(database) => database,
         Err(e) => {
             panic!("Failed to create database: {}", e);
         }
     };
+
+    info!("Running migrations");
+    embedded_migrations::run(&database.get_connection().expect("connection to succeed"))
+        .expect("migrations to run");
 
     let upload_tmp_path = path.join("upload-tmp");
 

@@ -1,7 +1,7 @@
 use chrono::offset::Utc;
 use chrono::{Duration, NaiveDateTime};
 use diesel::prelude::*;
-use diesel::r2d2::{ConnectionManager, Pool, PoolError};
+use diesel::r2d2::{ConnectionManager, Pool, PoolError, PooledConnection};
 use diesel::sqlite::SqliteConnection;
 use failure::Error;
 use uuid::Uuid;
@@ -27,6 +27,10 @@ impl Database {
         let pool = Pool::builder().build(manager)?;
 
         Ok(Database { pool })
+    }
+
+    pub fn get_connection(&self) -> Result<PooledConnection<ConnectionManager<SqliteConnection>>, PoolError> {
+        self.pool.get()
     }
 
     pub fn query_package_download_count(&self, package: &Package) -> Result<i64, Error> {

@@ -6,4 +6,5 @@ use std::path::PathBuf;
 pub struct TomlConfig {
     pub artifacts_dir: PathBuf,
     pub url_prefix: String,
+    pub db_path: Option<String>,
 }
