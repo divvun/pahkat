@@ -1,8 +1,12 @@
 [package]
 name = "pahkat-server"
 version = "0.6.0"
-authors = ["Brendan Molloy <brendan@bbqsrc.net>"]
+authors = [
+    "Brendan Molloy <brendan@bbqsrc.net>",
+    "Rostislav Raykov <rostislav@technocreatives.com>"
+]
 edition = "2018"
+description = "Páhkat server implementation"
 
 [dependencies]
 pahkat-types = { path = "../pahkat-types" }
@@ -27,3 +31,5 @@ toml = "=0.5.0"
 directories = "=2.0.1"
 diesel_migrations = "1.4.0"
 diesel = "1.4.3"
+dotenv = "0.15.0"
+dotenv_codegen = "0.15.0"
