@@ -10,4 +10,4 @@ COPY --from=builder /build/target/release/pahkat-server .
 ENV ARTIFACTS_DIR artifacts
 ENV DATABASE_URL db/db.sqlite
 VOLUME artifacts db
-CMD ["./pahkat-server"]
+CMD ["./pahkat-server", "--bind", "0.0.0.0", "--port", "8080"]

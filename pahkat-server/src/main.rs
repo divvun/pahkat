@@ -66,7 +66,7 @@ fn main() -> Result<(), Error> {
         .value_of("path")
         .map_or(&current_dir, |v| Path::new(v));
     let bind: &str = matches.value_of("bind").map_or("127.0.0.1", |v| v);
-    let port: &str = matches.value_of("port").map_or("8000", |v| v);
+    let port: &str = matches.value_of("port").map_or("8080", |v| v);
 
     let mut watcher = Watcher::new(path).expect("Failed to start file watcher");
 
