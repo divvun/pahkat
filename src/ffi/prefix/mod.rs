@@ -77,6 +77,15 @@ pub extern "C" fn pahkat_prefix_package_store_status(
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::PathMarshaler")]
+pub extern "C" fn pahkat_prefix_package_store_import(
+    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
+    #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
+    #[marshal(cursed::PathMarshaler)] installer_path: &Path,
+) -> Result<PathBuf, Box<dyn Error>> {
+    handle.import(&package_key, installer_path)
+}
+
+#[cthulhu::invoke(return_marshaler = "cursed::PathMarshaler")]
 pub extern "C" fn pahkat_prefix_package_store_download(
     #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
     #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
