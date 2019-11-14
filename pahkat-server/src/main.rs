@@ -5,15 +5,13 @@ extern crate diesel_migrations;
 use std::path::Path;
 use std::{env, fs};
 
-use clap::{
-    crate_authors, crate_description, crate_version, App as CliApp, AppSettings, Arg, ArgMatches,
-};
+use clap::{crate_authors, crate_description, crate_version, App as CliApp, Arg, ArgMatches};
+use config::TomlConfig;
+use failure::ResultExt;
 use log::{error, info, warn};
 use pahkat_common::ProgressOutput;
-use std::path::PathBuf;
-
-use config::TomlConfig;
 use server::run_server;
+use std::path::PathBuf;
 use watcher::Watcher;
 
 mod config;
@@ -31,7 +29,6 @@ fn main() -> Result<(), Error> {
         .version(crate_version!())
         .author(crate_authors!("\n"))
         .about(crate_description!())
-        .setting(AppSettings::SubcommandRequiredElseHelp)
         .arg(
             Arg::with_name("path")
                 .value_name("PATH")
@@ -113,8 +110,10 @@ fn get_config(matches: &ArgMatches<'_>) -> Result<TomlConfig, Error> {
         Ok(config)
     } else {
         Ok(TomlConfig {
-            artifacts_dir: PathBuf::from(env::var("ARTIFACTS_DIR")?),
-            url_prefix: env::var("URL_PREFIX")?,
+            artifacts_dir: PathBuf::from(
+                env::var("ARTIFACTS_DIR").with_context(|_| "ARTIFACTS_DIR not set")?,
+            ),
+            url_prefix: env::var("URL_PREFIX").with_context(|_| "URL_PREFIX not set")?,
             db_path: env::var("DATABASE_URL").ok(),
         })
     }
