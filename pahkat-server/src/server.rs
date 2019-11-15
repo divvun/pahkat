@@ -6,8 +6,9 @@ use std::path::{Path, PathBuf};
 
 use crate::config::TomlConfig;
 use crate::handlers::{
-    download_package, package_stats, packages_index, packages_package_index, repo_index,
-    repo_stats, upload::upload_package, virtuals_index, virtuals_package_index,
+    download_package, package_stats, packages_index, packages_index_stable, packages_package_index,
+    packages_package_index_stable, repo_index, repo_stats, upload::upload_package, virtuals_index,
+    virtuals_index_stable, virtuals_package_index, virtuals_package_index_stable,
 };
 
 struct UploadFilenameGenerator {
@@ -91,23 +92,46 @@ pub fn run_server(config: TomlConfig, path: &Path, bind: &str, port: &str) {
             .wrap(middleware::Logger::default())
             .service(web::resource("/index.json").route(web::get().to(repo_index)))
             .service(web::resource("/repo/stats").route(web::get().to(repo_stats)))
-            .service(web::resource("/packages/index.json").route(web::get().to(packages_index)))
             .service(
-                web::resource("/packages/{packageId}/index.json")
-                    .route(web::get().to(packages_package_index)),
+                web::scope("/packages")
+                    .service(
+                        web::resource("/index.json").route(web::get().to(packages_index_stable)),
+                    )
+                    .service(
+                        web::resource("/index.{channel}.json").route(web::get().to(packages_index)),
+                    )
+                    .service(
+                        web::resource("/{packageId}/index.json")
+                            .route(web::get().to(packages_package_index_stable)),
+                    )
+                    .service(
+                        web::resource("/{packageId}/index.{channel}.json")
+                            .route(web::get().to(packages_package_index)),
+                    )
+                    .service(web::resource("/{packageId}").route(web::patch().to(upload_package)))
+                    // TODO: add channel to download/stats endpoints
+                    .service(
+                        web::resource("/{packageId}/download")
+                            .route(web::get().to(download_package)),
+                    )
+                    .service(
+                        web::resource("/{packageId}/stats").route(web::get().to(package_stats)),
+                    ),
             )
-            .service(web::resource("/packages/{packageId}").route(web::patch().to(upload_package)))
             .service(
-                web::resource("/packages/{packageId}/download")
-                    .route(web::get().to(download_package)),
-            )
-            .service(
-                web::resource("/packages/{packageId}/stats").route(web::get().to(package_stats)),
-            )
-            .service(web::resource("/virtuals/index.json").route(web::get().to(virtuals_index)))
-            .service(
-                web::resource("/virtuals/{packageId}/index.json")
-                    .route(web::get().to(virtuals_package_index)),
+                web::scope("/virtuals")
+                    .service(
+                        web::resource("/index.json").route(web::get().to(virtuals_index_stable)),
+                    )
+                    .service(web::resource("/index.{channel}.json").route(web::get().to(virtuals_index)))
+                    .service(
+                        web::resource("/{packageId}/index.json")
+                            .route(web::get().to(virtuals_package_index_stable)),
+                    )
+                    .service(
+                        web::resource("/{packageId}/index.{channel}.json")
+                            .route(web::get().to(virtuals_package_index)),
+                    ),
             )
     })
     .bind(&format!("{}:{}", bind, port))

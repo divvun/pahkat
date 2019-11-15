@@ -25,6 +25,13 @@ fn read_file(path: &str) -> std::io::Result<String> {
     Ok(contents)
 }
 
+fn format_channel_index(channel: Option<String>) -> String {
+    match channel {
+        None => "index.json".to_string(),
+        Some(channel) => format!("index.{}.json", channel),
+    }
+}
+
 pub fn repo_index(state: web::Data<ServerState>) -> impl Responder {
     let mut repo_index_path = state.path.clone();
 
@@ -45,11 +52,19 @@ pub fn repo_index(state: web::Data<ServerState>) -> impl Responder {
     }
 }
 
-pub fn packages_index(state: web::Data<ServerState>) -> impl Responder {
+pub fn packages_index_stable(state: web::Data<ServerState>) -> impl Responder {
+    packages_index_impl(state, None)
+}
+
+pub fn packages_index(state: web::Data<ServerState>, path: web::Path<String>) -> impl Responder {
+    packages_index_impl(state, Some(path.clone()))
+}
+
+fn packages_index_impl(state: web::Data<ServerState>, channel: Option<String>) -> impl Responder {
     let mut packages_index_path = state.path.clone();
 
     packages_index_path.push("packages");
-    packages_index_path.push("index.json");
+    packages_index_path.push(format_channel_index(channel));
 
     match read_file(
         packages_index_path
@@ -66,17 +81,31 @@ pub fn packages_index(state: web::Data<ServerState>) -> impl Responder {
     }
 }
 
-pub fn packages_package_index(
+pub fn packages_package_index_stable(
     state: web::Data<ServerState>,
     path: web::Path<String>,
 ) -> impl Responder {
-    let package_id = path.clone();
+    packages_package_index_impl(state, path.clone(), None)
+}
 
+pub fn packages_package_index(
+    state: web::Data<ServerState>,
+    path: web::Path<(String, String)>,
+) -> impl Responder {
+    packages_package_index_impl(state, path.0.clone(), Some(path.1.clone()))
+}
+
+fn packages_package_index_impl(
+    state: web::Data<ServerState>,
+    package_id: String,
+    channel: Option<String>,
+) -> impl Responder {
     let mut packages_package_index_path = state.path.clone();
 
     packages_package_index_path.push("packages");
     packages_package_index_path.push(package_id);
-    packages_package_index_path.push("index.json");
+    packages_package_index_path.push(format_channel_index(channel));
+
     let index_path_str = packages_package_index_path
         .to_str()
         .expect("Cannot convert path to string");
@@ -187,11 +216,19 @@ pub fn repo_stats(state: web::Data<ServerState>) -> Result<HttpResponse, actix_w
         })))
 }
 
-pub fn virtuals_index(state: web::Data<ServerState>) -> impl Responder {
+pub fn virtuals_index_stable(state: web::Data<ServerState>) -> impl Responder {
+    virtuals_index_impl(state, None)
+}
+
+pub fn virtuals_index(state: web::Data<ServerState>, path: web::Path<String>) -> impl Responder {
+    virtuals_index_impl(state, Some(path.clone()))
+}
+
+fn virtuals_index_impl(state: web::Data<ServerState>, channel: Option<String>) -> impl Responder {
     let mut virtuals_index_path = state.path.clone();
 
     virtuals_index_path.push("virtuals");
-    virtuals_index_path.push("index.json");
+    virtuals_index_path.push(format_channel_index(channel));
 
     match read_file(
         virtuals_index_path
@@ -208,17 +245,30 @@ pub fn virtuals_index(state: web::Data<ServerState>) -> impl Responder {
     }
 }
 
-pub fn virtuals_package_index(
+pub fn virtuals_package_index_stable(
     state: web::Data<ServerState>,
     path: web::Path<String>,
 ) -> impl Responder {
-    let package_id = path.clone();
+    virtuals_package_index_impl(state, path.clone(), None)
+}
 
+pub fn virtuals_package_index(
+    state: web::Data<ServerState>,
+    path: web::Path<(String, String)>,
+) -> impl Responder {
+    virtuals_package_index_impl(state, path.0.clone(), Some(path.1.clone()))
+}
+
+fn virtuals_package_index_impl(
+    state: web::Data<ServerState>,
+    package_id: String,
+    channel: Option<String>,
+) -> impl Responder {
     let mut virtuals_package_index_path = state.path.clone();
 
     virtuals_package_index_path.push("virtuals");
     virtuals_package_index_path.push(package_id);
-    virtuals_package_index_path.push("index.json");
+    virtuals_package_index_path.push(format_channel_index(channel));
     let index_path_str = virtuals_package_index_path
         .to_str()
         .expect("Cannot convert path to string");
