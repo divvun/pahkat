@@ -31,13 +31,13 @@ pub fn tmp_path() -> ConfigPath {
 #[cfg(target_os = "ios")]
 pub fn cache_path() -> ConfigPath {
     let url = Url::parse("container:Caches/Pahkat").unwrap();
-    ConfigPath::Container(url);
+    ConfigPath::Container(url)
 }
 
 #[cfg(target_os = "ios")]
 pub fn tmp_path() -> ConfigPath {
     let url = Url::parse("container:Caches/Pahkat/tmp").unwrap();
-    ConfigPath::Container(url);
+    ConfigPath::Container(url)
 }
 
 #[cfg(target_os = "macos")]
