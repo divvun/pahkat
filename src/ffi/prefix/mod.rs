@@ -151,11 +151,13 @@ pub extern "C" fn pahkat_prefix_package_store_config(
 #[cthulhu::invoke(return_marshaler = "cursed::BoxMarshaler::<PrefixPackageTransaction>")]
 pub extern "C" fn pahkat_prefix_transaction_new(
     #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
-    #[marshal(JsonMarshaler)] actions: Vec<PrefixPackageAction>,
+    #[marshal(cursed::StrMarshaler)] actions: &str
 ) -> Result<Box<PrefixPackageTransaction>, Box<dyn Error>> {
-    PrefixPackageTransaction::new(handle as _, actions)
+    eprintln!("{:?}", &actions);
+    let actions: Vec<PrefixPackageAction> = serde_json::from_str(actions)?;
+    PrefixPackageTransaction::new(handle as _, actions.clone())
         .map(|x| Box::new(x))
-        .map_err(|e| Box::new(e) as _)
+        .map_err(|e| e.into())
 }
 
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]

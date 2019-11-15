@@ -137,10 +137,21 @@ impl PackageStore for PrefixPackageStore {
         };
 
         let config = &self.config.read().unwrap();
+        let installer_url = installer.url();
+        let output_path = crate::repo::download_path(config, &installer_url);
+        println!("{:?}", output_path);
 
-        let output_path = crate::repo::download_path(config, &installer.url());
-        std::fs::copy(installer_path, &output_path)?;
-        Ok(output_path)
+        std::fs::create_dir_all(&output_path).unwrap();
+        let url = url::Url::parse(&installer_url).with_context(|| {
+            crate::transaction::install::InvalidUrl {
+                url: installer_url.to_owned(),
+            }
+        })?;
+        let filename = url.path_segments().unwrap().last().unwrap();
+        let output_file = output_path.join(filename);
+
+        std::fs::copy(installer_path, &output_file)?;
+        Ok(output_file)
     }
 
     fn download(
