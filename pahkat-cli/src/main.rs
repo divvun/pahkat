@@ -321,6 +321,13 @@ fn main() {
                         .takes_value(true)
                         .required(true)
                     )
+                    .arg(Arg::with_name("db_path")
+                    .value_name("DB_PATH")
+                    .help("The path to the database")
+                    .short("d")
+                    .long("db")
+                    .takes_value(true)
+                )
                 )
             )
         )
@@ -508,10 +515,10 @@ fn main() {
             ("user", Some(matches)) => match matches.subcommand() {
                 ("create", Some(matches)) => {
                     let username = matches.value_of("username").unwrap();
-
                     let token = matches.value_of("token").unwrap();
+                    let db_path = matches.value_of("db_path");
 
-                    create_user(username, token)
+                    create_user(username, token, db_path.map(|s| s.to_string()))
                 }
                 _ => {}
             },
@@ -532,8 +539,43 @@ fn main() {
             let patch_url = format!("{}/packages/{}", repo_url, package_id);
 
             let file = File::open(installer_file).expect("the installer file to be valid");
-            let installer: Installer =
+            let mut installer: Installer =
                 serde_json::from_reader(file).expect("the json in the installer file to be valid");
+
+            let client = reqwest::Client::new();
+
+            let installer_url = installer.url();
+
+            let mut form = multipart::Form::new();
+
+            if installer_url == "pahkat:payload" || payload_file.is_some() {
+                match payload_file {
+                    Some(file) => {
+                        let installer_file =
+                            File::open(file).expect("Installer could not be opened.");
+                        let meta = installer_file.metadata().unwrap();
+                        let installer_size = meta.len() as usize;
+                        match installer {
+                            Installer::Windows(ref mut installer) => {
+                                installer.url = "pahkat:payload".to_string();
+                                installer.size = installer_size;
+                            }
+                            Installer::MacOS(ref mut installer) => {
+                                installer.url = "pahkat:payload".to_string();
+                                installer.size = installer_size;
+                            }
+                            _ => panic!("Installer type not supported"),
+                        };
+
+                        form = form
+                            .file("payload", file)
+                            .expect("payload file to be valid");
+                    }
+                    None => {
+                        panic!("A file must be provided if installer url is pahkat:payload");
+                    }
+                }
+            }
 
             let upload_params = UploadParams {
                 channel: channel.to_owned(),
@@ -541,30 +583,7 @@ fn main() {
                 installer: installer.clone(),
             };
 
-            let client = reqwest::Client::new();
-
-            let installer_url = installer.url();
-
-            let form = multipart::Form::new()
-                .text("params", serde_json::to_string(&upload_params).unwrap());
-
-            let form = if installer_url == "pahkat:payload" {
-                match payload_file {
-                    Some(file) => {
-                        let form = multipart::Form::new()
-                            .text("params", serde_json::to_string(&upload_params).unwrap())
-                            .file("payload", file)
-                            .expect("payload file to be valid");
-
-                        form
-                    }
-                    None => {
-                        panic!("A file must be provided if installer url is pahkat:payload");
-                    }
-                }
-            } else {
-                form
-            };
+            form = form.text("params", serde_json::to_string(&upload_params).unwrap());
 
             let mut response = client
                 .patch(&patch_url)

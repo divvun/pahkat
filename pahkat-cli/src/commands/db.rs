@@ -1,10 +1,13 @@
-use pahkat_common::{
-    database::{user::create_user as db_create_user, Database},
-    db_path,
-};
+use pahkat_common::database::{user::create_user as db_create_user, Database};
 
-pub fn create_user(username: &str, token: &str) {
-    let database = match Database::new(db_path().as_path().to_str().unwrap()) {
+pub fn create_user(username: &str, token: &str, db_path: Option<String>) {
+    let database = match Database::new(&db_path.unwrap_or_else(|| {
+        pahkat_common::db_path()
+            .as_path()
+            .to_str()
+            .unwrap()
+            .to_owned()
+    })) {
         Ok(database) => database,
         Err(e) => {
             panic!("Failed to create database: {}", e);
