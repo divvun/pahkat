@@ -4,6 +4,7 @@ use std::ffi::{CStr, CString};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
+use std::collections::BTreeMap;
 
 use cursed::{FromForeign, InputType, ReturnType, ToForeign};
 use serde::de::DeserializeOwned;
@@ -74,6 +75,15 @@ pub extern "C" fn pahkat_prefix_package_store_status(
     #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
 ) -> CPackageStatus {
     CPackageStatus::new(handle.status(&package_key, &()), true)
+}
+
+#[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
+pub extern "C" fn pahkat_prefix_package_store_all_statuses(
+    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
+    #[marshal(JsonMarshaler)] repo_record: RepoRecord,
+) -> BTreeMap<String, i8> {
+    let statuses = handle.all_statuses(&repo_record);
+    statuses.into_iter().map(|(id, result)| (id, CPackageStatus::new(result, false).status)).collect()
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::PathMarshaler")]

@@ -194,6 +194,10 @@ impl PackageStore for MacOSPackageStore {
         unimplemented!()
     }
 
+    fn all_statuses(&self, repo_record: &RepoRecord) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>> {
+        unimplemented!()
+    }
+
     fn resolve_package(&self, key: &PackageKey) -> Option<Package> {
         crate::repo::resolve_package(key, &self.repos)
     }

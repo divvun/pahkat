@@ -1,6 +1,7 @@
 #![cfg(feature = "prefix")]
 
-use hashbrown::HashMap;
+use hashbrown::{HashMap};
+use std::collections::BTreeMap;
 use pahkat_types::*;
 use r2d2_sqlite::SqliteConnectionManager;
 use snafu::{ensure, Backtrace, ErrorCompat, OptionExt, ResultExt, Snafu};
@@ -352,6 +353,20 @@ impl PackageStore for PrefixPackageStore {
 
         log::debug!("Status: {:?}", &status);
         status
+    }
+    
+    fn all_statuses(&self, repo_record: &RepoRecord) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>> {
+        let mut map = BTreeMap::new();
+        
+        let repos = self.repos.read().unwrap();
+        if let Some(repo) = repos.get(repo_record) {
+            for (id, package) in repo.packages() {
+                let key = PackageKey::new(repo.meta(), repo.channel(), id);
+                map.insert(id.clone(), self.status(&key, &()));
+            }
+        }
+
+        map
     }
 
     fn find_package_by_id(&self, package_id: &str) -> Option<(PackageKey, Package)> {

@@ -179,6 +179,10 @@ impl Repository {
         &self.meta
     }
 
+    pub fn channel(&self) -> &str {
+        &self.channel
+    }
+
     pub fn package(&self, key: &str) -> Option<&Package> {
         let map = &self.packages.packages;
         map.get(key)

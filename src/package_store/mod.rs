@@ -10,6 +10,7 @@ pub mod windows;
 use crate::transaction::{PackageStatus, PackageStatusError};
 use crate::{PackageKey, RepoRecord, Repository};
 use hashbrown::HashMap;
+use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
 
 use crate::transaction::{install::InstallError, uninstall::UninstallError};
@@ -79,4 +80,6 @@ pub trait PackageStore: Send + Sync {
         url: String,
         channel: String,
     ) -> Result<bool, Box<dyn std::error::Error>>;
+
+    fn all_statuses(&self, repo_record: &RepoRecord) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>>;
 }
