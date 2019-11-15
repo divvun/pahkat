@@ -47,7 +47,7 @@ impl PrefixPackageStore {
 
         let db_file_path = PrefixPackageStore::package_db_path(&config);
         let manager = SqliteConnectionManager::file(&db_file_path);
-        let pool = r2d2::Pool::new(manager)?;
+        let pool = Self::make_pool(manager)?;
         let conn = pool.get()?;
         conn.execute_batch(PKG_STORE_INIT)?;
 
@@ -73,7 +73,7 @@ impl PrefixPackageStore {
         let db_file_path = PrefixPackageStore::package_db_path(&config);
         log::debug!("{:?}", &db_file_path);
         let manager = SqliteConnectionManager::file(&db_file_path);
-        let pool = r2d2::Pool::new(manager)?;
+        let pool = Self::make_pool(manager)?;
 
         let store = PrefixPackageStore {
             pool,
@@ -85,6 +85,15 @@ impl PrefixPackageStore {
         store.refresh_repos();
 
         Ok(store)
+    }
+
+    #[inline(always)]
+    fn make_pool(manager: SqliteConnectionManager) -> Result<r2d2::Pool<SqliteConnectionManager>, r2d2::Error> {
+        r2d2::Pool::builder()
+            .max_size(4)
+            .min_idle(Some(0))
+            .idle_timeout(Some(std::time::Duration::new(10, 0)))
+            .build(manager)
     }
 
     pub fn config(&self) -> Arc<RwLock<StoreConfig>> {
