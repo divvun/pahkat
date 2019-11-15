@@ -449,15 +449,18 @@ impl<'a> PackageDbConnection<'a> {
     }
 
     fn files(&self, url: &str) -> Vec<PathBuf> {
+        use std::os::unix::ffi::OsStringExt;
+        use std::ffi::OsString;
+
         let mut stmt = self
             .0
             .prepare("SELECT file_path FROM packages_files WHERE package_id = (SELECT id FROM packages WHERE url = ?)")
-            .unwrap();
+            .expect("prepared statement");
 
         let res = stmt
             .query_map(&[&url], |row| row.get(0))
-            .unwrap()
-            .map(|x: Result<String, _>| Path::new(&x.unwrap()).to_path_buf())
+            .expect("query_map succeeds")
+            .map(|x: Result<Vec<u8>, _>| PathBuf::from(OsString::from_vec(x.unwrap())))
             .collect();
 
         res
