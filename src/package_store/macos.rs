@@ -28,6 +28,7 @@ use crate::transaction::{PackageStatus, PackageStatusError};
 use crate::transaction::{
     install::InstallError, install::ProcessError, uninstall::UninstallError,
 };
+
 fn from_str<'de, T, D>(deserializer: D) -> Result<T, D::Error>
 where
     T: FromStr,

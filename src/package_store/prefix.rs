@@ -449,12 +449,22 @@ fn path_as_bytes<'p>(path: &'p Path) -> &'p [u8] {
 
 #[cfg(windows)]
 #[inline(always)]
-fn path_as_bytes<'p>(path: &'p Path) -> &'p [u8] {
-    path.as_os_str()
-        .encode_wide()
-        .flat_map(u16::to_le_bytes)
+fn path_as_bytes(path: &Path) -> Vec<u8> {
+    let wide = path.as_os_str().encode_wide();
+    wide.map(|x| u16::to_le_bytes(x).into_iter().map(|x| *x))
+        .flatten()
         .collect()
 }
+
+#[cfg(windows)]
+#[inline(always)]
+fn path_from_bytes<'p>(path: &[u8]) -> Vec<u8> {
+    let wide = path.as_os_str().encode_wide();
+    wide.map(|x| u16::to_le_bytes(x).into_iter().map(|x| *x))
+        .flatten()
+        .collect()
+}
+
 
 impl<'a> PackageDbConnection<'a> {
     fn dependencies(&self, url: &str) -> Vec<String> {
@@ -471,11 +481,8 @@ impl<'a> PackageDbConnection<'a> {
 
         res
     }
-
+    
     fn files(&self, url: &str) -> Vec<PathBuf> {
-        use std::os::unix::ffi::OsStringExt;
-        use std::ffi::OsString;
-
         let mut stmt = self
             .0
             .prepare("SELECT file_path FROM packages_files WHERE package_id = (SELECT id FROM packages WHERE url = ?)")
@@ -484,7 +491,7 @@ impl<'a> PackageDbConnection<'a> {
         let res = stmt
             .query_map(&[&url], |row| row.get(0))
             .expect("query_map succeeds")
-            .map(|x: Result<Vec<u8>, _>| PathBuf::from(OsString::from_vec(x.unwrap())))
+            .map(|x: Result<Vec<u8>, _>| path_as_bytes(&x.unwrap()))
             .collect();
 
         res

@@ -66,11 +66,6 @@ impl fmt::Display for PackageStatusError {
     }
 }
 
-use crate::repo::Repository;
-use crate::RepoRecord;
-use hashbrown::HashMap;
-use std::sync::RwLock;
-
 pub trait PackageTarget: Send + Sync + Clone {}
 
 /// This is so good.

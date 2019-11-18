@@ -1,21 +1,24 @@
 #![cfg(windows)]
-use super::{Repository, StoreConfig};
-use crate::transaction::PackageTransaction;
-use crate::transaction::{PackageStatus, PackageStatusError};
-use crate::*;
-use crypto::digest::Digest;
-use crypto::sha2::Sha256;
-use pahkat_types::{Downloadable, InstallTarget, Installer, Package, WindowsInstaller};
-use semver;
+
 use std::ffi::OsString;
-use std::io;
 use std::path::{Path, PathBuf};
-use std::process::{self, Command};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::process::Command;
 use std::sync::{Arc, RwLock};
-use url;
+use std::collections::BTreeMap;
+
+use hashbrown::HashMap;
+use url::Url;
 use winreg::enums::*;
 use winreg::RegKey;
+use pahkat_types::{Downloadable, InstallTarget, Installer, Package, WindowsInstaller};
+
+use crate::{Repository, PackageStore, PackageKey};
+use crate::repo::RepoRecord;
+use crate::store_config::StoreConfig;
+use crate::transaction::{
+    PackageStatus, PackageStatusError,
+    install::InstallError, install::ProcessError, uninstall::UninstallError,
+};
 
 mod sys {
     use std::ffi::{OsStr, OsString};
@@ -83,12 +86,12 @@ mod sys {
     }
 }
 
-mod Keys {
-    pub const UninstallPath: &'static str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall";
-    pub const DisplayVersion: &'static str = "DisplayVersion";
-    pub const SkipVersion: &'static str = "SkipVersion";
-    pub const QuietUninstallString: &'static str = "QuietUninstallString";
-    pub const UninstallString: &'static str = "UninstallString";
+mod keys {
+    pub const UNINSTALL_PATH: &'static str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall";
+    pub const DISPLAY_VERSION: &'static str = "DisplayVersion";
+    // pub const SKIP_VERSION: &'static str = "SkipVersion";
+    pub const QUIET_UNINSTALL_STRING: &'static str = "QuietUninstallString";
+    // pub const UNINSTALL_STRING: &'static str = "UninstallString";
 }
 
 type SharedStoreConfig = Arc<RwLock<StoreConfig>>;
@@ -100,34 +103,17 @@ pub struct WindowsPackageStore {
     config: SharedStoreConfig,
 }
 
-fn installer(package: &Package) -> Result<&WindowsInstaller, PackageStatusError> {
-    match package.installer() {
-        None => Err(PackageStatusError::NoInstaller),
-        Some(v) => match v {
-            &Installer::Windows(ref v) => Ok(v),
-            _ => Err(PackageStatusError::WrongInstallerType),
-        },
-    }
-}
-
 fn uninstall_regkey(installer: &WindowsInstaller) -> Option<RegKey> {
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    let path = Path::new(Keys::UninstallPath).join(&installer.product_code);
+    let path = Path::new(keys::UNINSTALL_PATH).join(&installer.product_code);
     match hklm.open_subkey(&path) {
-        Err(e) => match hklm.open_subkey_with_flags(&path, KEY_READ | KEY_WOW64_64KEY) {
-            Err(e) => None,
+        Err(_e) => match hklm.open_subkey_with_flags(&path, KEY_READ | KEY_WOW64_64KEY) {
+            Err(_e) => None,
             Ok(v) => Some(v),
         },
         Ok(v) => Some(v),
     }
 }
-
-use crate::transaction::PackageStore;
-
-use crate::transaction::{
-    install::InstallError, install::InvalidUrl, install::ProcessError, uninstall::UninstallError,
-    PackageActionType, PackageDependencyError,
-};
 
 impl PackageStore for WindowsPackageStore {
     type Target = InstallTarget;
@@ -141,6 +127,8 @@ impl PackageStore for WindowsPackageStore {
         key: &PackageKey,
         progress: Box<dyn Fn(u64, u64) -> () + Send + 'static>,
     ) -> Result<PathBuf, crate::download::DownloadError> {
+        use crate::download::Download;
+        
         let package = match self.resolve_package(key) {
             Some(v) => v,
             None => {
@@ -284,8 +272,8 @@ impl PackageStore for WindowsPackageStore {
         };
 
         let uninst_string: String = match regkey
-            .get_value(Keys::QuietUninstallString)
-            .or_else(|_| regkey.get_value(Keys::QuietUninstallString))
+            .get_value(keys::QUIET_UNINSTALL_STRING)
+            .or_else(|_| regkey.get_value(keys::QUIET_UNINSTALL_STRING))
         {
             Ok(v) => v,
             Err(_) => {
@@ -436,6 +424,22 @@ impl PackageStore for WindowsPackageStore {
         self.refresh_repos();
         Ok(true)
     }
+    
+    fn config(&self) -> SharedStoreConfig {
+        Arc::clone(&self.config)
+    }
+
+    fn import(
+        &self,
+        key: &PackageKey,
+        installer_path: &Path,
+    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
+        unimplemented!()
+    }
+
+    fn all_statuses(&self, repo_record: &RepoRecord) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>> {
+        unimplemented!()
+    }
 }
 
 impl std::default::Default for WindowsPackageStore {
@@ -510,14 +514,14 @@ impl WindowsPackageStore {
         installer: &WindowsInstaller,
         id: &PackageKey,
         package: &Package,
-        target: InstallTarget,
+        _target: InstallTarget,
     ) -> Result<PackageStatus, PackageStatusError> {
         let inst_key = match uninstall_regkey(&installer) {
             Some(v) => v,
             None => return Ok(PackageStatus::NotInstalled),
         };
 
-        let disp_version: String = match inst_key.get_value(Keys::DisplayVersion) {
+        let disp_version: String = match inst_key.get_value(keys::DISPLAY_VERSION) {
             Err(_) => return Err(PackageStatusError::ParsingVersion),
             Ok(v) => v,
         };
@@ -527,7 +531,7 @@ impl WindowsPackageStore {
         let skipped_package = config.skipped_package(id);
         let skipped_package = skipped_package.as_ref().map(String::as_ref);
 
-        let status = self::cmp::cmp(&disp_version, &package.version, skipped_package);
+        let status = crate::cmp::cmp(&disp_version, &package.version, skipped_package);
 
         log::debug!("Status: {:?}", &status);
         status

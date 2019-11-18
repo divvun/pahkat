@@ -20,29 +20,29 @@ pub type MacOSTarget = pahkat_types::InstallTarget;
 pub type MacOSPackageAction = crate::transaction::PackageAction<MacOSTarget>;
 pub type MacOSPackageTransaction = crate::transaction::PackageTransaction<MacOSTarget>;
 
-#[cthulhu::invoke(return_marshaler = "cursed::BoxMarshaler::<MacOSPackageStore>")]
-pub extern "C" fn pahkat_macos_package_store_default() -> Box<MacOSPackageStore> {
-    Box::new(MacOSPackageStore::default())
+#[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<MacOSPackageStore>")]
+pub extern "C" fn pahkat_macos_package_store_default() -> Arc<MacOSPackageStore> {
+    Arc::new(MacOSPackageStore::default())
 }
 
-#[cthulhu::invoke(return_marshaler = "cursed::BoxMarshaler::<MacOSPackageStore>")]
+#[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<MacOSPackageStore>")]
 pub extern "C" fn pahkat_macos_package_store_new(
-    #[marshal(cursed::PathMarshaler)] path: &Path,
-) -> Result<Box<MacOSPackageStore>, Box<dyn Error>> {
+    #[marshal(cursed::PathMarshaler)] path: PathBuf,
+) -> Result<Arc<MacOSPackageStore>, Box<dyn Error>> {
     let config = StoreConfig::new(&path);
     config.save()?;
-    Ok(Box::new(MacOSPackageStore::new(config)))
+    Ok(Arc::new(MacOSPackageStore::new(config)))
 }
 
-#[cthulhu::invoke(return_marshaler = "cursed::BoxMarshaler::<MacOSPackageStore>")]
+#[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<MacOSPackageStore>")]
 pub extern "C" fn pahkat_macos_package_store_load(
-    #[marshal(cursed::PathMarshaler)] path: &Path,
-) -> Result<Box<MacOSPackageStore>, Box<dyn Error>> {
+    #[marshal(cursed::PathMarshaler)] path: PathBuf,
+) -> Result<Arc<MacOSPackageStore>, Box<dyn Error>> {
     let config = match StoreConfig::load(&path, true) {
         Ok(v) => v,
         Err(err) => return Err(Box::new(err) as _),
     };
-    Ok(Box::new(MacOSPackageStore::new(config)))
+    Ok(Arc::new(MacOSPackageStore::new(config)))
 }
 
 #[repr(C)]

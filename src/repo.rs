@@ -2,8 +2,6 @@ use sha2::digest::Digest;
 use sha2::Sha256;
 use hashbrown::HashMap;
 use pahkat_types::Package;
-use serde::de::{self, Deserializer, Visitor};
-use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::{Arc, RwLock};

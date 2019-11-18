@@ -27,27 +27,16 @@ pub extern "C" fn pahkat_enable_logging() {
         .init();
 }
 
-// #[no_mangle]
-// pub extern "C" fn pahkat_exception_release(c_str: *mut libc::c_char) {
-//     if !c_str.is_null() {
-//         unsafe { std::ffi::CString::from_raw(c_str) };
-//     }
-// }
-// 
 use std::convert::TryFrom;
 use std::error::Error;
 use std::ffi::{CStr, CString};
-use std::marker::PhantomData;
-use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use cursed::{FromForeign, InputType, ReturnType, ToForeign};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::package_store::PackageStore;
-use crate::transaction::{PackageAction, PackageStatus, PackageStatusError, PackageTransactionError};
-use crate::{PrefixPackageStore, PackageKey, StoreConfig};
+use crate::{PackageKey, StoreConfig};
 use crate::repo::RepoRecord;
 
 pub struct JsonMarshaler;
@@ -157,6 +146,17 @@ pub extern "C" fn pahkat_store_config_skipped_package(
     let config = handle.read().unwrap();
     config.skipped_package(&key)
 }
+
+#[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
+pub extern "C" fn pahkat_store_config_add_skipped_package(
+    #[marshal(cursed::ArcRefMarshaler::<RwLock<StoreConfig>>)] handle: Arc<RwLock<StoreConfig>>,
+    #[marshal(PackageKeyMarshaler)] key: PackageKey,
+    #[marshal(cursed::StrMarshaler)] version: &str,
+) -> Result<(), Box<dyn Error>> {
+    let config = handle.read().unwrap();
+    config.add_skipped_package(key, version.into())
+}
+
 
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_store_config_repos(

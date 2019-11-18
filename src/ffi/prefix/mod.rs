@@ -23,14 +23,14 @@ pub type PrefixPackageTransaction = crate::transaction::PackageTransaction<Prefi
 
 #[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<PrefixPackageStore>")]
 pub extern "C" fn pahkat_prefix_package_store_open(
-    #[marshal(cursed::PathMarshaler)] prefix_path: &Path,
+    #[marshal(cursed::PathMarshaler)] prefix_path: PathBuf,
 ) -> Result<Arc<PrefixPackageStore>, Box<dyn Error>> {
     PrefixPackageStore::open(prefix_path).map(|x| Arc::new(x))
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<PrefixPackageStore>")]
 pub extern "C" fn pahkat_prefix_package_store_create(
-    #[marshal(cursed::PathMarshaler)] prefix_path: &Path,
+    #[marshal(cursed::PathMarshaler)] prefix_path: PathBuf,
 ) -> Result<Arc<PrefixPackageStore>, Box<dyn Error>> {
     PrefixPackageStore::create(prefix_path).map(|x| Arc::new(x))
 }
@@ -90,9 +90,9 @@ pub extern "C" fn pahkat_prefix_package_store_all_statuses(
 pub extern "C" fn pahkat_prefix_package_store_import(
     #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
     #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
-    #[marshal(cursed::PathMarshaler)] installer_path: &Path,
+    #[marshal(cursed::PathMarshaler)] installer_path: PathBuf,
 ) -> Result<PathBuf, Box<dyn Error>> {
-    handle.import(&package_key, installer_path)
+    handle.import(&package_key, &installer_path)
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::PathMarshaler")]
