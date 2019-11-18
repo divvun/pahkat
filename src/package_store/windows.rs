@@ -1,24 +1,24 @@
 #![cfg(windows)]
 
+use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, RwLock};
-use std::collections::BTreeMap;
 
 use hashbrown::HashMap;
+use pahkat_types::{Downloadable, InstallTarget, Installer, Package, WindowsInstaller};
 use url::Url;
 use winreg::enums::*;
 use winreg::RegKey;
-use pahkat_types::{Downloadable, InstallTarget, Installer, Package, WindowsInstaller};
 
-use crate::{Repository, PackageStore, PackageKey};
 use crate::repo::RepoRecord;
 use crate::store_config::StoreConfig;
 use crate::transaction::{
-    PackageStatus, PackageStatusError,
-    install::InstallError, install::ProcessError, uninstall::UninstallError,
+    install::InstallError, install::ProcessError, uninstall::UninstallError, PackageStatus,
+    PackageStatusError,
 };
+use crate::{PackageKey, PackageStore, Repository};
 
 mod sys {
     use std::ffi::{OsStr, OsString};
@@ -128,7 +128,7 @@ impl PackageStore for WindowsPackageStore {
         progress: Box<dyn Fn(u64, u64) -> () + Send + 'static>,
     ) -> Result<PathBuf, crate::download::DownloadError> {
         use crate::download::Download;
-        
+
         let package = match self.resolve_package(key) {
             Some(v) => v,
             None => {
@@ -424,7 +424,7 @@ impl PackageStore for WindowsPackageStore {
         self.refresh_repos();
         Ok(true)
     }
-    
+
     fn config(&self) -> SharedStoreConfig {
         Arc::clone(&self.config)
     }
@@ -437,7 +437,10 @@ impl PackageStore for WindowsPackageStore {
         unimplemented!()
     }
 
-    fn all_statuses(&self, repo_record: &RepoRecord) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>> {
+    fn all_statuses(
+        &self,
+        repo_record: &RepoRecord,
+    ) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>> {
         unimplemented!()
     }
 }

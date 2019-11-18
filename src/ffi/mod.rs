@@ -36,8 +36,9 @@ use cursed::{FromForeign, InputType, ReturnType, ToForeign};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::{PackageKey, StoreConfig};
 use crate::repo::RepoRecord;
+use crate::transaction::{PackageStatus, PackageStatusError};
+use crate::{PackageKey, StoreConfig};
 
 pub struct JsonMarshaler;
 
@@ -157,7 +158,6 @@ pub extern "C" fn pahkat_store_config_add_skipped_package(
     config.add_skipped_package(key, version.into())
 }
 
-
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_store_config_repos(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<StoreConfig>>)] handle: Arc<RwLock<StoreConfig>>,
@@ -178,5 +178,27 @@ pub extern "C" fn pahkat_store_config_set_repos(
 pub extern "C" fn pahkat_str_free(ptr: *const libc::c_char) {
     if !ptr.is_null() {
         unsafe { CString::from_raw(ptr as *mut _) };
+    }
+}
+
+#[inline(always)]
+pub(crate) fn status_to_i8(result: Result<PackageStatus, PackageStatusError>) -> i8 {
+    use PackageStatusError::*;
+
+    match result {
+        Ok(status) => match status {
+            PackageStatus::NotInstalled => 0,
+            PackageStatus::UpToDate => 1,
+            PackageStatus::RequiresUpdate => 2,
+            PackageStatus::Skipped => 3,
+        },
+        Err(error) => match error {
+            NoPackage => -1,
+            NoInstaller => -2,
+            WrongInstallerType => -3,
+            ParsingVersion => -4,
+            InvalidInstallPath => -5,
+            InvalidMetadata => -6,
+        },
     }
 }

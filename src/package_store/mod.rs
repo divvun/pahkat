@@ -81,5 +81,9 @@ pub trait PackageStore: Send + Sync {
         channel: String,
     ) -> Result<bool, Box<dyn std::error::Error>>;
 
-    fn all_statuses(&self, repo_record: &RepoRecord) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>>;
+    fn all_statuses(
+        &self,
+        repo_record: &RepoRecord,
+        target: &Self::Target,
+    ) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>>;
 }

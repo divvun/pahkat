@@ -1,19 +1,21 @@
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::error::Error;
 use std::ffi::{CStr, CString};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
-use std::collections::BTreeMap;
 
 use cursed::{FromForeign, InputType, ReturnType, ToForeign};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use crate::package_store::PackageStore;
-use crate::transaction::{PackageAction, PackageStatus, PackageStatusError, PackageTransactionError};
-use crate::{PrefixPackageStore, PackageKey, StoreConfig};
 use crate::repo::RepoRecord;
+use crate::transaction::{
+    PackageAction, PackageStatus, PackageStatusError, PackageTransactionError,
+};
+use crate::{PackageKey, PrefixPackageStore, StoreConfig};
 
 use super::{JsonMarshaler, PackageKeyMarshaler};
 
@@ -35,46 +37,12 @@ pub extern "C" fn pahkat_prefix_package_store_create(
     PrefixPackageStore::create(prefix_path).map(|x| Arc::new(x))
 }
 
-#[repr(C)]
-#[derive(Debug, Default, Copy, Clone)]
-pub struct CPackageStatus {
-    is_system: u8,
-    status: i8,
-}
-
-impl CPackageStatus {
-    fn new(result: Result<PackageStatus, PackageStatusError>, is_system: bool) -> CPackageStatus {
-        use PackageStatusError::*;
-
-        let status = match result {
-            Ok(status) => match status {
-                PackageStatus::NotInstalled => 0,
-                PackageStatus::UpToDate => 1,
-                PackageStatus::RequiresUpdate => 2,
-                PackageStatus::Skipped => 3,
-            },
-            Err(error) => match error {
-                NoPackage => -1,
-                NoInstaller => -2,
-                WrongInstallerType => -3,
-                ParsingVersion => -4,
-                InvalidInstallPath => -5,
-                InvalidMetadata => -6,
-            },
-        };
-
-        let is_system = if is_system { 1 } else { 0 };
-
-        CPackageStatus { is_system, status }
-    }
-}
-
-#[cthulhu::invoke(return_marshaler = "cursed::CopyMarshaler::<CPackageStatus>")]
+#[cthulhu::invoke]
 pub extern "C" fn pahkat_prefix_package_store_status(
     #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
     #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
-) -> CPackageStatus {
-    CPackageStatus::new(handle.status(&package_key, &()), true)
+) -> i8 {
+    super::status_to_i8(handle.status(&package_key, &()))
 }
 
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
@@ -82,8 +50,11 @@ pub extern "C" fn pahkat_prefix_package_store_all_statuses(
     #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
     #[marshal(JsonMarshaler)] repo_record: RepoRecord,
 ) -> BTreeMap<String, i8> {
-    let statuses = handle.all_statuses(&repo_record);
-    statuses.into_iter().map(|(id, result)| (id, CPackageStatus::new(result, false).status)).collect()
+    let statuses = handle.all_statuses(&repo_record, &());
+    statuses
+        .into_iter()
+        .map(|(id, result)| (id, super::status_to_i8(result)))
+        .collect()
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::PathMarshaler")]
@@ -161,7 +132,7 @@ pub extern "C" fn pahkat_prefix_package_store_config(
 #[cthulhu::invoke(return_marshaler = "cursed::BoxMarshaler::<PrefixPackageTransaction>")]
 pub extern "C" fn pahkat_prefix_transaction_new(
     #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
-    #[marshal(cursed::StrMarshaler)] actions: &str
+    #[marshal(cursed::StrMarshaler)] actions: &str,
 ) -> Result<Box<PrefixPackageTransaction>, Box<dyn Error>> {
     eprintln!("{:?}", &actions);
     let actions: Vec<PrefixPackageAction> = serde_json::from_str(actions)?;

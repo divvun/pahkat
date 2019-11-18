@@ -1,8 +1,8 @@
-use sha2::digest::Digest;
-use sha2::Sha256;
 use hashbrown::HashMap;
 use pahkat_types::Package;
 use serde::{Deserialize, Serialize};
+use sha2::digest::Digest;
+use sha2::Sha256;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 use url::Url;
@@ -32,6 +32,32 @@ pub(crate) fn download_path(config: &StoreConfig, url: &str) -> std::path::PathB
         .join(part1)
         .join(part2)
         .join(part3)
+}
+
+use crate::transaction::{PackageStatus, PackageStatusError};
+use std::collections::BTreeMap;
+
+pub(crate) fn all_statuses<P, T>(
+    store: &P,
+    repo_record: &RepoRecord,
+    target: &T,
+) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>>
+where
+    P: PackageStore<Target = T>,
+    T: Send + Sync,
+{
+    let mut map = BTreeMap::new();
+
+    let repos = store.repos();
+    let repos = repos.read().unwrap();
+    if let Some(repo) = repos.get(repo_record) {
+        for id in repo.packages().keys() {
+            let key = PackageKey::new(repo.meta(), repo.channel(), id);
+            map.insert(id.clone(), store.status(&key, target));
+        }
+    }
+
+    map
 }
 
 pub(crate) fn resolve_package(

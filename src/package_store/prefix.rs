@@ -1,11 +1,11 @@
 #![cfg(feature = "prefix")]
 
-use hashbrown::{HashMap};
-use std::collections::BTreeMap;
+use hashbrown::HashMap;
 use pahkat_types::*;
 use r2d2_sqlite::SqliteConnectionManager;
 use snafu::{ensure, Backtrace, ErrorCompat, OptionExt, ResultExt, Snafu};
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::fs::{create_dir_all, read_dir, remove_dir, remove_file, File};
 #[cfg(unix)]
@@ -89,7 +89,9 @@ impl PrefixPackageStore {
     }
 
     #[inline(always)]
-    fn make_pool(manager: SqliteConnectionManager) -> Result<r2d2::Pool<SqliteConnectionManager>, r2d2::Error> {
+    fn make_pool(
+        manager: SqliteConnectionManager,
+    ) -> Result<r2d2::Pool<SqliteConnectionManager>, r2d2::Error> {
         r2d2::Pool::builder()
             .max_size(4)
             .min_idle(Some(0))
@@ -128,7 +130,7 @@ impl PackageStore for PrefixPackageStore {
     fn config(&self) -> super::SharedStoreConfig {
         Arc::clone(&self.config)
     }
-    
+
     fn import(
         &self,
         key: &PackageKey,
@@ -354,10 +356,14 @@ impl PackageStore for PrefixPackageStore {
         log::debug!("Status: {:?}", &status);
         status
     }
-    
-    fn all_statuses(&self, repo_record: &RepoRecord) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>> {
+
+    fn all_statuses(
+        &self,
+        repo_record: &RepoRecord,
+        _target: &(),
+    ) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>> {
         let mut map = BTreeMap::new();
-        
+
         let repos = self.repos.read().unwrap();
         if let Some(repo) = repos.get(repo_record) {
             for (id, package) in repo.packages() {
@@ -472,7 +478,6 @@ fn path_from_bytes<'p>(path: Vec<u8>) -> PathBuf {
     PathBuf::from(std::ffi::OsString::from_vec(path))
 }
 
-
 impl<'a> PackageDbConnection<'a> {
     fn dependencies(&self, url: &str) -> Vec<String> {
         let mut stmt = self
@@ -488,7 +493,7 @@ impl<'a> PackageDbConnection<'a> {
 
         res
     }
-    
+
     fn files(&self, url: &str) -> Vec<PathBuf> {
         let mut stmt = self
             .0

@@ -25,9 +25,7 @@ pub fn global_uninstall_path() -> PathBuf {
 
 use crate::transaction::{PackageStatus, PackageStatusError};
 
-use crate::transaction::{
-    install::InstallError, install::ProcessError, uninstall::UninstallError,
-};
+use crate::transaction::{install::InstallError, install::ProcessError, uninstall::UninstallError};
 
 fn from_str<'de, T, D>(deserializer: D) -> Result<T, D::Error>
 where
@@ -186,17 +184,38 @@ impl PackageStore for MacOSPackageStore {
         let disposable = package.download(tmp_path, &download_path, Some(progress))?;
         disposable.wait()
     }
-    
+
     fn status(
         &self,
         key: &PackageKey,
         target: &Self::Target,
     ) -> Result<PackageStatus, PackageStatusError> {
-        unimplemented!()
+        let package = match self.resolve_package(key) {
+            Some(v) => v,
+            None => {
+                return Err(PackageStatusError::NoPackage);
+            }
+        };
+
+        let installer = match package.installer() {
+            None => return Err(PackageStatusError::NoInstaller),
+            Some(v) => v,
+        };
+
+        let installer = match installer {
+            Installer::MacOS(ref v) => v,
+            _ => return Err(PackageStatusError::WrongInstallerType),
+        };
+
+        self.status_impl(installer, key, &package, target)
     }
 
-    fn all_statuses(&self, repo_record: &RepoRecord) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>> {
-        unimplemented!()
+    fn all_statuses(
+        &self,
+        repo_record: &RepoRecord,
+        target: &InstallTarget,
+    ) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>> {
+        crate::repo::all_statuses(self, repo_record, target)
     }
 
     fn resolve_package(&self, key: &PackageKey) -> Option<Package> {
@@ -254,7 +273,6 @@ impl PackageStore for MacOSPackageStore {
         self.refresh_repos();
         Ok(true)
     }
-    
 }
 
 impl std::default::Default for MacOSPackageStore {

@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::error::Error;
 use std::ffi::{CStr, CString};
@@ -10,9 +11,11 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use crate::package_store::PackageStore;
-use crate::transaction::{PackageAction, PackageStatus, PackageStatusError, PackageTransactionError};
-use crate::{MacOSPackageStore, PackageKey, StoreConfig};
 use crate::repo::RepoRecord;
+use crate::transaction::{
+    PackageAction, PackageStatus, PackageStatusError, PackageTransactionError,
+};
+use crate::{MacOSPackageStore, PackageKey, StoreConfig};
 
 use super::{JsonMarshaler, PackageKeyMarshaler};
 
@@ -45,49 +48,26 @@ pub extern "C" fn pahkat_macos_package_store_load(
     Ok(Arc::new(MacOSPackageStore::new(config)))
 }
 
-#[repr(C)]
-#[derive(Debug, Default, Copy, Clone)]
-pub struct CPackageStatus {
-    is_system: bool,
-    status: i8,
-}
-
-impl CPackageStatus {
-    fn new(result: Result<PackageStatus, PackageStatusError>, is_system: bool) -> CPackageStatus {
-        use PackageStatusError::*;
-
-        let status = match result {
-            Ok(status) => match status {
-                PackageStatus::NotInstalled => 0,
-                PackageStatus::UpToDate => 1,
-                PackageStatus::RequiresUpdate => 2,
-                PackageStatus::Skipped => 3,
-            },
-            Err(error) => match error {
-                NoPackage => -1,
-                NoInstaller => -2,
-                WrongInstallerType => -3,
-                ParsingVersion => -4,
-                InvalidInstallPath => -5,
-                InvalidMetadata => -6,
-            },
-        };
-
-        CPackageStatus { is_system, status }
-    }
-}
-
-#[cthulhu::invoke(return_marshaler = "cursed::CopyMarshaler::<CPackageStatus>")]
+#[cthulhu::invoke]
 pub extern "C" fn pahkat_macos_package_store_status(
     #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
     #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
-) -> CPackageStatus {
-    handle
-        .status(&package_key, &MacOSTarget::User)
-        .and_then(|result| Ok(CPackageStatus::new(Ok(result), false)))
-        .unwrap_or_else(|_| {
-            CPackageStatus::new(handle.status(&package_key, &MacOSTarget::System), true)
-        })
+    #[marshal(JsonMarshaler)] target: MacOSTarget,
+) -> i8 {
+    super::status_to_i8(handle.status(&package_key, &target))
+}
+
+#[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
+pub extern "C" fn pahkat_macos_package_store_all_statuses(
+    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
+    #[marshal(JsonMarshaler)] repo_record: RepoRecord,
+    #[marshal(JsonMarshaler)] target: MacOSTarget,
+) -> BTreeMap<String, i8> {
+    let statuses = handle.all_statuses(&repo_record, &target);
+    statuses
+        .into_iter()
+        .map(|(id, result)| (id, super::status_to_i8(result)))
+        .collect()
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::PathMarshaler")]
