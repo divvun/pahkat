@@ -465,6 +465,13 @@ fn path_from_bytes<'p>(path: &[u8]) -> Vec<u8> {
         .collect()
 }
 
+#[cfg(unix)]
+#[inline(always)]
+fn path_from_bytes<'p>(path: Vec<u8>) -> PathBuf {
+    use std::os::unix::ffi::OsStringExt;
+    PathBuf::from(std::ffi::OsString::from_vec(path))
+}
+
 
 impl<'a> PackageDbConnection<'a> {
     fn dependencies(&self, url: &str) -> Vec<String> {
@@ -491,7 +498,7 @@ impl<'a> PackageDbConnection<'a> {
         let res = stmt
             .query_map(&[&url], |row| row.get(0))
             .expect("query_map succeeds")
-            .map(|x: Result<Vec<u8>, _>| path_as_bytes(&x.unwrap()))
+            .map(|x: Result<Vec<u8>, _>| path_from_bytes(x.unwrap()))
             .collect();
 
         res
