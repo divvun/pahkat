@@ -29,7 +29,7 @@ pub trait PackageStore: Send + Sync {
     fn download(
         &self,
         key: &PackageKey,
-        progress: Box<dyn Fn(u64, u64) -> () + Send + 'static>,
+        progress: Box<dyn Fn(u64, u64) -> bool + Send + 'static>,
     ) -> Result<PathBuf, crate::download::DownloadError>;
 
     fn import(

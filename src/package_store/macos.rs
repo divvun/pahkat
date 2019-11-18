@@ -163,7 +163,7 @@ impl PackageStore for MacOSPackageStore {
     fn download(
         &self,
         key: &PackageKey,
-        progress: Box<dyn Fn(u64, u64) -> () + Send + 'static>,
+        progress: Box<dyn Fn(u64, u64) -> bool + Send + 'static>,
     ) -> Result<PathBuf, crate::download::DownloadError> {
         let package = match self.resolve_package(key) {
             Some(v) => v,
@@ -181,8 +181,8 @@ impl PackageStore for MacOSPackageStore {
 
         let download_path = crate::repo::download_path(config, &installer.url());
         let tmp_path = config.tmp_path().to_path_buf();
-        let disposable = package.download(tmp_path, &download_path, Some(progress))?;
-        disposable.wait()
+        let handle = package.download(tmp_path, &download_path, Some(progress));
+        handle.join().unwrap()
     }
 
     fn status(

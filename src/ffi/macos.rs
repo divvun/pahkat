@@ -74,15 +74,13 @@ pub extern "C" fn pahkat_macos_package_store_all_statuses(
 pub extern "C" fn pahkat_macos_package_store_download(
     #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
     #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
-    progress: extern "C" fn(*const PackageKey, u64, u64),
+    progress: extern "C" fn(*const libc::c_char, u64, u64) -> u8,
 ) -> Result<PathBuf, Box<dyn Error>> {
-    let package_key1 = package_key.to_owned();
+    let package_key_str = CString::new(package_key.to_string()).unwrap();
     handle
         .download(
             &package_key,
-            Box::new(move |cur, max| {
-                progress(&package_key1 as *const _, cur, max);
-            }),
+            Box::new(move |cur, max| progress(package_key_str.as_ptr(), cur, max) != 0),
         )
         .map_err(|e| Box::new(e) as _)
 }

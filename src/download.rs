@@ -1,9 +1,9 @@
 use pahkat_types::{Downloadable, Package};
 
+use std::error::Error;
+use std::io::ErrorKind;
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use std::thread::JoinHandle;
 
 pub trait Download {
@@ -12,52 +12,9 @@ pub trait Download {
         tmp_path: PathBuf,
         dir_path: &Path,
         progress: Option<F>,
-    ) -> Result<DownloadDisposable, DownloadError>
+    ) -> JoinHandle<Result<PathBuf, DownloadError>>
     where
-        F: Fn(u64, u64) -> () + Send + 'static;
-}
-
-// pub trait Cancellable {
-//     pub fn cancel(&mut self);
-// }
-
-pub struct DownloadDisposable {
-    is_cancelled: Arc<AtomicBool>,
-    result: Option<Result<PathBuf, DownloadError>>,
-    handle: Option<JoinHandle<Result<PathBuf, DownloadError>>>,
-}
-
-impl DownloadDisposable {
-    fn new() -> DownloadDisposable {
-        DownloadDisposable {
-            is_cancelled: Arc::new(AtomicBool::new(false)),
-            handle: None,
-            result: None,
-        }
-    }
-
-    fn cancel_token(&self) -> Arc<AtomicBool> {
-        self.is_cancelled.clone()
-    }
-
-    pub fn cancel(&mut self) {
-        self.is_cancelled.store(true, Ordering::Relaxed);
-    }
-
-    pub fn wait(mut self) -> Result<PathBuf, DownloadError> {
-        match self.result.take() {
-            Some(v) => return v,
-            None => {}
-        }
-
-        match self.handle.take() {
-            Some(v) => match v.join() {
-                Ok(v) => return v,
-                Err(e) => panic!(e),
-            },
-            None => unreachable!(),
-        }
-    }
+        F: Fn(u64, u64) -> bool + Send + 'static;
 }
 
 impl Download for Package {
@@ -66,27 +23,25 @@ impl Download for Package {
         tmp_path: PathBuf,
         dir_path: &Path,
         progress: Option<F>,
-    ) -> Result<DownloadDisposable, DownloadError>
+    ) -> JoinHandle<Result<PathBuf, DownloadError>>
     where
-        F: Fn(u64, u64) -> () + Send + 'static,
+        F: Fn(u64, u64) -> bool + Send + 'static,
     {
         use reqwest::header::CONTENT_LENGTH;
 
-        let mut disposable = DownloadDisposable::new();
         let dir_path = dir_path.to_owned();
-
-        let installer = match self.installer() {
-            Some(v) => v,
-            None => return Err(DownloadError::NoUrl),
-        };
-
-        let url_str = installer.url();
-        let url = url::Url::parse(&url_str).map_err(|_| DownloadError::InvalidUrl)?;
-        let filename = Path::new(url.path_segments().unwrap().last().unwrap()).to_path_buf();
-
-        let cancel_token = disposable.cancel_token();
+        let installer = self.installer().cloned();
 
         let handle = std::thread::spawn(move || {
+            let installer = match installer {
+                Some(v) => v,
+                None => return Err(DownloadError::NoUrl),
+            };
+
+            let url_str = installer.url();
+            let url = url::Url::parse(&url_str).map_err(|_| DownloadError::InvalidUrl)?;
+            let filename = Path::new(url.path_segments().unwrap().last().unwrap()).to_path_buf();
+
             if filename.exists() {
                 if let Some(cb) = progress {
                     cb(0, 0);
@@ -125,7 +80,8 @@ impl Download for Package {
                             })
                             .unwrap_or(0u64)
                     };
-                    res.copy_to(&mut ProgressWriter::new(buf_writer, len, cb, cancel_token))
+
+                    res.copy_to(&mut ProgressWriter::new(buf_writer, len, cb))
                 }
                 None => res.copy_to(&mut buf_writer),
             };
@@ -134,10 +90,17 @@ impl Download for Package {
                 Ok(v) if v == 0 => {
                     return Err(DownloadError::EmptyFile);
                 }
-                Err(e) => {
-                    log::debug!("{:?}", e);
-                    return Err(DownloadError::UserCancelled);
-                }
+                Err(e) => match e.get_ref().and_then(|e| e.downcast_ref::<std::io::Error>()) {
+                    Some(e)
+                        if e.kind() == ErrorKind::Other && e.description() == "User cancelled" =>
+                    {
+                        return Err(DownloadError::UserCancelled)
+                    }
+                    _ => {
+                        log::debug!("{:?}", e);
+                        return Err(DownloadError::ReqwestError(e));
+                    }
+                },
                 _ => {}
             }
 
@@ -148,8 +111,7 @@ impl Download for Package {
             Ok(out_path)
         });
 
-        disposable.handle = Some(handle);
-        Ok(disposable)
+        handle
     }
 }
 
@@ -173,53 +135,45 @@ impl std::fmt::Display for DownloadError {
 
 struct ProgressWriter<W: Write, F>
 where
-    F: Fn(u64, u64) -> (),
+    F: Fn(u64, u64) -> bool,
 {
     writer: W,
     callback: F,
-    is_cancelled: Arc<AtomicBool>,
     max_count: u64,
     cur_count: u64,
 }
 
 impl<W: Write, F> ProgressWriter<W, F>
 where
-    F: Fn(u64, u64) -> (),
+    F: Fn(u64, u64) -> bool,
 {
-    fn new(
-        writer: W,
-        max_count: u64,
-        callback: F,
-        is_cancelled: Arc<AtomicBool>,
-    ) -> ProgressWriter<W, F> {
+    fn new(writer: W, max_count: u64, callback: F) -> ProgressWriter<W, F> {
         (callback)(0, max_count);
 
         ProgressWriter {
             writer,
             callback,
-            is_cancelled,
             max_count,
             cur_count: 0,
         }
     }
 }
 
-use std::io::ErrorKind;
-
 impl<W: Write, F> Write for ProgressWriter<W, F>
 where
-    F: Fn(u64, u64) -> (),
+    F: Fn(u64, u64) -> bool,
 {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         use std::cmp;
 
-        if self.is_cancelled.load(Ordering::Relaxed) == true {
-            return Err(io::Error::new(ErrorKind::Interrupted, "User cancelled"));
-        }
-
         let new_count = self.cur_count + buf.len() as u64;
         self.cur_count = cmp::min(new_count, self.max_count);
-        (self.callback)(self.cur_count, self.max_count);
+        let is_cancelled = !(self.callback)(self.cur_count, self.max_count);
+
+        if !is_cancelled {
+            return Err(std::io::Error::new(ErrorKind::Other, "user cancelled"));
+        }
+
         self.writer.write(buf)
     }
 

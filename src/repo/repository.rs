@@ -1,9 +1,9 @@
-use sha2::digest::Digest;
-use sha2::Sha256;
 use pahkat_types::{
     Package, PackageMap, Packages, Repository as RepositoryMeta, VirtualMap, Virtuals,
 };
 use serde::{Deserialize, Serialize};
+use sha2::digest::Digest;
+use sha2::Sha256;
 use std::fs::{self, File};
 use std::path::Path;
 use std::time::SystemTime;

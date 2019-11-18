@@ -70,15 +70,13 @@ pub extern "C" fn pahkat_prefix_package_store_import(
 pub extern "C" fn pahkat_prefix_package_store_download(
     #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
     #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
-    progress: extern "C" fn(*const PackageKey, u64, u64),
+    progress: extern "C" fn(*const libc::c_char, u64, u64) -> bool,
 ) -> Result<PathBuf, Box<dyn Error>> {
-    let package_key1 = package_key.to_owned();
+    let package_key_str = CString::new(package_key.to_string()).unwrap();
     handle
         .download(
             &package_key,
-            Box::new(move |cur, max| {
-                progress(&package_key1 as *const _, cur, max);
-            }),
+            Box::new(move |cur, max| progress(package_key_str.as_ptr(), cur, max)),
         )
         .map_err(|e| Box::new(e) as _)
 }

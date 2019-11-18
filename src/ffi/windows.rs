@@ -1,13 +1,13 @@
 use std::error::Error;
-use std::path::{PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
 use cursed::{FromForeign, ToForeign};
 
+use super::{JsonMarshaler, PackageKeyMarshaler};
 use crate::package_store::PackageStore;
 use crate::transaction::{PackageStatus, PackageStatusError};
-use crate::{WindowsPackageStore, PackageKey, StoreConfig};
-use super::{JsonMarshaler, PackageKeyMarshaler};
+use crate::{PackageKey, StoreConfig, WindowsPackageStore};
 
 pub type WindowsTarget = pahkat_types::InstallTarget;
 pub type WindowsPackageAction = crate::transaction::PackageAction<WindowsTarget>;
