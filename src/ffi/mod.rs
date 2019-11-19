@@ -174,6 +174,13 @@ pub extern "C" fn pahkat_store_config_set_repos(
     handle.write().unwrap().set_repos(repos)
 }
 
+#[cthulhu::invoke(return_marshaler = "cursed::PathMarshaler")]
+pub extern "C" fn pahkat_store_config_config_path(
+    #[marshal(cursed::ArcRefMarshaler::<RwLock<StoreConfig>>)] handle: Arc<RwLock<StoreConfig>>,
+) -> std::path::PathBuf {
+    handle.read().unwrap().config_path().to_path_buf()
+}
+
 #[no_mangle]
 pub extern "C" fn pahkat_str_free(ptr: *const libc::c_char) {
     if !ptr.is_null() {
