@@ -35,6 +35,7 @@ use std::sync::{Arc, RwLock};
 use cursed::{FromForeign, InputType, ReturnType, ToForeign};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use url::Url;
 
 use crate::repo::RepoRecord;
 use crate::transaction::{PackageStatus, PackageStatusError};
@@ -179,6 +180,24 @@ pub extern "C" fn pahkat_store_config_config_path(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<StoreConfig>>)] handle: Arc<RwLock<StoreConfig>>,
 ) -> std::path::PathBuf {
     handle.read().unwrap().config_path().to_path_buf()
+}
+
+#[cthulhu::invoke(return_marshaler = "cursed::UrlMarshaler")]
+pub extern "C" fn pahkat_store_config_cache_base_url(
+    #[marshal(cursed::ArcRefMarshaler::<RwLock<StoreConfig>>)] handle: Arc<RwLock<StoreConfig>>,
+) -> Url {
+    handle.read().unwrap().cache_base_path().as_url().to_owned()
+}
+
+use crate::store_config::ConfigPath;
+
+#[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
+pub extern "C" fn pahkat_store_config_set_cache_base_url(
+    #[marshal(cursed::ArcRefMarshaler::<RwLock<StoreConfig>>)] handle: Arc<RwLock<StoreConfig>>,
+    #[marshal(cursed::UrlMarshaler)] url: Url,
+) -> Result<(), Box<dyn Error>> {
+    let path = ConfigPath::from_url(url)?;
+    handle.write().unwrap().set_cache_base_path(path)
 }
 
 #[no_mangle]

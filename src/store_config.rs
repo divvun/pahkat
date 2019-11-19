@@ -145,9 +145,9 @@ impl StoreConfig {
         self.data.read().unwrap().cache_path.join("repos")
     }
 
-    // pub(crate) fn cache_base_path(&self) -> PathBuf {
-    //     self.data.read().unwrap().cache_path.to_owned()
-    // }
+    pub fn cache_base_path(&self) -> ConfigPath {
+        self.data.read().unwrap().cache_path.to_owned()
+    }
 
     pub fn set_cache_base_path(&self, cache_path: ConfigPath) -> SaveResult {
         {
