@@ -140,15 +140,15 @@ pub extern "C" fn pahkat_macos_transaction_actions(
     handle.actions().to_vec()
 }
 
-#[cthulhu::invoke]
+#[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
 pub extern "C" fn pahkat_macos_transaction_process(
     #[marshal(cursed::BoxRefMarshaler::<MacOSPackageTransaction>)] handle: &MacOSPackageTransaction,
     tag: u32,
-    progress_callback: extern "C" fn(u32, *const libc::c_char, u32),
-) {
+    progress_callback: extern "C" fn(u32, *const libc::c_char, u32) -> u8,
+) -> Result<(), Box<dyn Error>> {
     handle.process(move |key, event| {
         let k = PackageKeyMarshaler::to_foreign(&key).unwrap();
-        progress_callback(tag, k, event.to_u32());
+        progress_callback(tag, k, event.to_u32()) != 0
         // PackageKeyMarshaler::drop_foreign(k);
-    })
+    }).join().unwrap().map_err(|e| Box::new(e) as _)
 }

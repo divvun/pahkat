@@ -1,14 +1,16 @@
-use crate::package_store::PackageStore;
-use crate::PackageKey;
-
-use pahkat_types::Package;
-use serde::{Deserialize, Serialize};
 use std::fmt;
-
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
+use std::thread::JoinHandle;
+
+use std::collections::HashSet;
+use pahkat_types::Package;
+use serde::{Deserialize, Serialize};
+
+use crate::package_store::PackageStore;
+use crate::PackageKey;
 
 pub mod install;
 pub mod uninstall;
@@ -22,24 +24,12 @@ pub enum PackageStatus {
     Skipped,
 }
 
-// impl PackageStatus {
-//     fn to_u8(&self) -> u8 {
-//         match self {
-//             PackageStatus::NotInstalled => 0,
-//             PackageStatus::UpToDate => 1,
-//             PackageStatus::RequiresUpdate => 2,
-//             PackageStatus::Skipped => 3
-//         }
-//     }
-// }
-
 impl fmt::Display for PackageStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
             "{}",
             match *self {
-                // PackageStatus::NoPackage => "No package",
                 PackageStatus::NotInstalled => "Not installed",
                 PackageStatus::UpToDate => "Up to date",
                 PackageStatus::RequiresUpdate => "Requires update",
@@ -141,26 +131,19 @@ impl fmt::Display for PackageDependencyError {
 pub struct PackageTransaction<T: PackageTarget> {
     store: Arc<dyn PackageStore<Target = T>>,
     actions: Arc<Vec<PackageAction<T>>>,
-    is_cancelled: Arc<AtomicBool>,
 }
 
 #[derive(Debug)]
 pub enum TransactionEvent {
-    NotStarted,
     Uninstalling,
     Installing,
-    Completed,
-    Error,
 }
 
 impl TransactionEvent {
     pub fn to_u32(&self) -> u32 {
         match self {
-            TransactionEvent::NotStarted => 0,
             TransactionEvent::Uninstalling => 1,
             TransactionEvent::Installing => 2,
-            TransactionEvent::Completed => 3,
-            TransactionEvent::Error => 4,
         }
     }
 }
@@ -228,7 +211,32 @@ fn process_install_action<T: PackageTarget + 'static>(
     Ok(())
 }
 
-use std::collections::HashSet;
+use self::uninstall::UninstallError;
+use self::install::InstallError;
+
+#[derive(Debug)]
+pub enum TransactionError {
+    ValidationFailed,
+    UserCancelled,
+    Uninstall(UninstallError),
+    Install(InstallError),
+}
+
+impl std::error::Error for TransactionError {
+}
+
+impl std::fmt::Display for TransactionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use TransactionError::*;
+
+        match self {
+            ValidationFailed => write!(f, "Validation failed"),
+            UserCancelled => write!(f, "User cancelled"),
+            Uninstall(e) => write!(f, "{:?}", e),
+            Install(e) => write!(f, "{:?}", e),
+        }
+    }
+}
 
 impl<T: PackageTarget + 'static> PackageTransaction<T> {
     pub fn new(
@@ -306,7 +314,6 @@ impl<T: PackageTarget + 'static> PackageTransaction<T> {
         Ok(PackageTransaction {
             store,
             actions: Arc::new(new_actions),
-            is_cancelled: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -318,66 +325,52 @@ impl<T: PackageTarget + 'static> PackageTransaction<T> {
         true
     }
 
-    // pub fn download<F>(&self, progress: F)
-    // where
-    //     F: Fn(PackageKey, u64, u64) -> () + 'static + Send,
-    // {
-
-    // }
-
-    pub fn process<F>(&self, progress: F)
+    pub fn process<F>(&self, progress: F) -> JoinHandle<Result<(), TransactionError>>
     where
-        F: Fn(PackageKey, TransactionEvent) -> () + 'static + Send,
+        F: Fn(PackageKey, TransactionEvent) -> bool + 'static + Send,
     {
-        if !self.validate() {
-            // TODO: early return
-            return;
-        }
+        let is_valid = self.validate();
+        let store = Arc::clone(&self.store);
+        let actions = Arc::clone(&self.actions);
 
-        let is_cancelled = self.is_cancelled.clone();
-        let store = Arc::new(self.store.clone());
-        let actions = self.actions.clone();
+        std::thread::spawn(move || {
+            if !is_valid {
+                // TODO: early return
+                return Err(TransactionError::ValidationFailed);
+            }
 
-        let handle = std::thread::spawn(move || {
+            let mut is_cancelled = false;
+
             for action in actions.iter() {
-                if is_cancelled.load(Ordering::Relaxed) == true {
-                    return;
+                if is_cancelled {
+                    return Err(TransactionError::UserCancelled);
                 }
 
                 match action.action {
                     PackageActionType::Install => {
-                        progress(action.id.clone(), TransactionEvent::Installing);
+                        is_cancelled = !progress(action.id.clone(), TransactionEvent::Installing);
                         match store.install(&action.id, &action.target) {
-                            Ok(_) => progress(action.id.clone(), TransactionEvent::Completed),
+                            Ok(_) => {},
                             Err(e) => {
                                 log::error!("{:?}", &e);
-                                progress(action.id.clone(), TransactionEvent::Error)
+                                return Err(TransactionError::Install(e));
                             }
                         };
                     }
                     PackageActionType::Uninstall => {
-                        progress(action.id.clone(), TransactionEvent::Uninstalling);
+                        is_cancelled = !progress(action.id.clone(), TransactionEvent::Uninstalling);
                         match store.uninstall(&action.id, &action.target) {
-                            Ok(_) => progress(action.id.clone(), TransactionEvent::Completed),
+                            Ok(_) => {},
                             Err(e) => {
                                 log::error!("{:?}", &e);
-                                progress(action.id.clone(), TransactionEvent::Error)
+                                return Err(TransactionError::Uninstall(e));
                             }
                         };
                     }
                 }
             }
 
-            ()
-        });
-
-        handle.join().expect("handle failed to join");
-    }
-
-    pub fn cancel(&self) -> bool {
-        // let prev_value = *self.is_cancelled.read().unwrap();
-        // *self.is_cancelled.write().unwrap() = true;
-        // prev_value
-        unimplemented!()
+            Ok(())
+        })
     }
 }
