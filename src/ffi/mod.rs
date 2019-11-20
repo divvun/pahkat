@@ -80,6 +80,10 @@ where
     type Error = Box<dyn Error>;
 
     fn from_foreign(ptr: *const libc::c_char) -> Result<T, Self::Error> {
+        if ptr.is_null() {
+            return Err(cursed::null_ptr_error())
+        }
+        
         let s = unsafe { CStr::from_ptr(ptr) }.to_string_lossy();
         log::debug!("JSON: {}", s);
         serde_json::from_str(&s).map_err(|e| Box::new(e) as _)
@@ -116,6 +120,10 @@ impl FromForeign<*const libc::c_char, PackageKey> for PackageKeyMarshaler {
     type Error = Box<dyn Error>;
 
     fn from_foreign(string: *const libc::c_char) -> Result<PackageKey, Self::Error> {
+        if string.is_null() {
+            return Err(cursed::null_ptr_error())
+        }
+        
         let s: &str = cursed::StrMarshaler::from_foreign(string)?;
         PackageKey::try_from(s).map_err(|e| Box::new(e) as _)
     }
