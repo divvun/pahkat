@@ -17,6 +17,8 @@ pub trait Download {
         F: Fn(u64, u64) -> bool + Send + 'static;
 }
 
+const USER_CANCELLED_STR: &str = "User cancelled";
+
 impl Download for Package {
     fn download<F>(
         &self,
@@ -92,7 +94,7 @@ impl Download for Package {
                 }
                 Err(e) => match e.get_ref().and_then(|e| e.downcast_ref::<std::io::Error>()) {
                     Some(e)
-                        if e.kind() == ErrorKind::Other && e.description() == "User cancelled" =>
+                        if e.kind() == ErrorKind::Other && e.description() == USER_CANCELLED_STR =>
                     {
                         return Err(DownloadError::UserCancelled)
                     }
@@ -170,8 +172,8 @@ where
         self.cur_count = cmp::min(new_count, self.max_count);
         let is_cancelled = !(self.callback)(self.cur_count, self.max_count);
 
-        if !is_cancelled {
-            return Err(std::io::Error::new(ErrorKind::Other, "user cancelled"));
+        if is_cancelled {
+            return Err(std::io::Error::new(ErrorKind::Other, USER_CANCELLED_STR));
         }
 
         self.writer.write(buf)
