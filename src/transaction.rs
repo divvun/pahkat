@@ -5,9 +5,9 @@ use std::sync::{
 };
 use std::thread::JoinHandle;
 
-use std::collections::HashSet;
 use pahkat_types::Package;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 use crate::package_store::PackageStore;
 use crate::PackageKey;
@@ -211,8 +211,8 @@ fn process_install_action<T: PackageTarget + 'static>(
     Ok(())
 }
 
-use self::uninstall::UninstallError;
 use self::install::InstallError;
+use self::uninstall::UninstallError;
 
 #[derive(Debug)]
 pub enum TransactionError {
@@ -222,8 +222,7 @@ pub enum TransactionError {
     Install(InstallError),
 }
 
-impl std::error::Error for TransactionError {
-}
+impl std::error::Error for TransactionError {}
 
 impl std::fmt::Display for TransactionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -350,7 +349,7 @@ impl<T: PackageTarget + 'static> PackageTransaction<T> {
                     PackageActionType::Install => {
                         is_cancelled = !progress(action.id.clone(), TransactionEvent::Installing);
                         match store.install(&action.id, &action.target) {
-                            Ok(_) => {},
+                            Ok(_) => {}
                             Err(e) => {
                                 log::error!("{:?}", &e);
                                 return Err(TransactionError::Install(e));
@@ -360,7 +359,7 @@ impl<T: PackageTarget + 'static> PackageTransaction<T> {
                     PackageActionType::Uninstall => {
                         is_cancelled = !progress(action.id.clone(), TransactionEvent::Uninstalling);
                         match store.uninstall(&action.id, &action.target) {
-                            Ok(_) => {},
+                            Ok(_) => {}
                             Err(e) => {
                                 log::error!("{:?}", &e);
                                 return Err(TransactionError::Uninstall(e));

@@ -43,7 +43,7 @@ impl ToForeign<MacOSTarget, *const libc::c_char> for TargetMarshaler {
     fn to_foreign(input: MacOSTarget) -> Result<*const libc::c_char, Self::Error> {
         let str_target = match input {
             MacOSTarget::System => "system",
-            MacOSTarget::User => "user"
+            MacOSTarget::User => "user",
         };
 
         let c_str = CString::new(str_target)?;
@@ -56,9 +56,9 @@ impl FromForeign<*const libc::c_char, MacOSTarget> for TargetMarshaler {
 
     fn from_foreign(ptr: *const libc::c_char) -> Result<MacOSTarget, Self::Error> {
         if ptr.is_null() {
-            return Err(cursed::null_ptr_error())
+            return Err(cursed::null_ptr_error());
         }
-        
+
         let s = unsafe { CStr::from_ptr(ptr) }.to_str()?;
         Ok(match s {
             "user" => MacOSTarget::User,
@@ -190,9 +190,13 @@ pub extern "C" fn pahkat_macos_transaction_process(
     tag: u32,
     progress_callback: extern "C" fn(u32, *const libc::c_char, u32) -> u8,
 ) -> Result<(), Box<dyn Error>> {
-    handle.process(move |key, event| {
-        let k = PackageKeyMarshaler::to_foreign(&key).unwrap();
-        progress_callback(tag, k, event.to_u32()) != 0
-        // PackageKeyMarshaler::drop_foreign(k);
-    }).join().unwrap().map_err(|e| Box::new(e) as _)
+    handle
+        .process(move |key, event| {
+            let k = PackageKeyMarshaler::to_foreign(&key).unwrap();
+            progress_callback(tag, k, event.to_u32()) != 0
+            // PackageKeyMarshaler::drop_foreign(k);
+        })
+        .join()
+        .unwrap()
+        .map_err(|e| Box::new(e) as _)
 }

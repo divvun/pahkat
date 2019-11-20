@@ -94,7 +94,8 @@ impl Download for Package {
                 }
                 Err(e) => match e.get_ref().and_then(|e| e.downcast_ref::<std::io::Error>()) {
                     Some(e)
-                        if e.kind() == ErrorKind::Other && e.description() == USER_CANCELLED_STR =>
+                        if e.kind() == ErrorKind::Other
+                            && e.description() == USER_CANCELLED_STR =>
                     {
                         return Err(DownloadError::UserCancelled)
                     }

@@ -152,9 +152,13 @@ pub extern "C" fn pahkat_prefix_transaction_process(
     tag: u32,
     progress_callback: extern "C" fn(u32, *const libc::c_char, u32) -> u8,
 ) -> Result<(), Box<dyn Error>> {
-    handle.process(move |key, event| {
-        let k = PackageKeyMarshaler::to_foreign(&key).unwrap();
-        progress_callback(tag, k, event.to_u32()) != 0
-        // PackageKeyMarshaler::drop_foreign(k);
-    }).join().unwrap().map_err(|e| Box::new(e) as _)
+    handle
+        .process(move |key, event| {
+            let k = PackageKeyMarshaler::to_foreign(&key).unwrap();
+            progress_callback(tag, k, event.to_u32()) != 0
+            // PackageKeyMarshaler::drop_foreign(k);
+        })
+        .join()
+        .unwrap()
+        .map_err(|e| Box::new(e) as _)
 }
