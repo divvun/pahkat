@@ -86,7 +86,12 @@ where
         
         let s = unsafe { CStr::from_ptr(ptr) }.to_str()?;
         log::debug!("JSON: {}, type: {}", s, std::any::type_name::<T>());
-        serde_json::from_str(&s).map_err(|e| Box::new(e) as _)
+        let v: Result<T, _> = serde_json::from_str(&s);
+        v.map_err(|e| {
+            log::error!("Json error: {}", &e);
+            log::debug!("{:?}", &e);
+            Box::new(e) as _
+        })
     }
 
     // fn drop_local(ptr: *const c_char) {
