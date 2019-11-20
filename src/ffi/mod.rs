@@ -84,8 +84,8 @@ where
             return Err(cursed::null_ptr_error())
         }
         
-        let s = unsafe { CStr::from_ptr(ptr) }.to_string_lossy();
-        log::debug!("JSON: {}", s);
+        let s = unsafe { CStr::from_ptr(ptr) }.to_str()?;
+        log::debug!("JSON: {}, type: {}", s, std::any::type_name::<T>());
         serde_json::from_str(&s).map_err(|e| Box::new(e) as _)
     }
 
