@@ -64,8 +64,8 @@ pub(crate) fn resolve_package(
     package_key: &PackageKey,
     repos: &Arc<RwLock<HashMap<RepoRecord, Repository>>>,
 ) -> Option<Package> {
-    log::debug!("Resolving package...");
-    log::debug!("My pkg id: {}", &package_key.id);
+    log::trace!("Resolving package...");
+    log::trace!("My pkg id: {}", &package_key.id);
     repos
         .read()
         .unwrap()
@@ -74,12 +74,12 @@ pub(crate) fn resolve_package(
             channel: package_key.channel.clone(),
         })
         .and_then(|r| {
-            log::debug!("Got repo: {:?}", r);
+            log::trace!("Got repo: {:?}", r);
             let pkg = match r.packages().get(&package_key.id) {
                 Some(x) => Some(x.to_owned()),
                 None => None,
             };
-            log::debug!("Found pkg: {:?}", &pkg);
+            log::trace!("Found pkg: {:?}", &pkg);
             pkg
         })
 }
@@ -116,7 +116,7 @@ pub(crate) fn refresh_repos(config: &StoreConfig) -> HashMap<RepoRecord, Reposit
     log::debug!("Refreshing repos...");
 
     for record in config.repos().iter() {
-        log::debug!("{:?}", &record);
+        log::trace!("{:?}", &record);
         recurse_repo(record, &mut repos, &config.repo_cache_path());
     }
 
@@ -131,7 +131,7 @@ pub(crate) fn clear_cache(config: &StoreConfig) {
             &config.repo_cache_path(),
         ) {
             Err(e) => {
-                log::debug!("{:?}", e);
+                log::error!("{:?}", e);
             }
             Ok(_) => {}
         };
