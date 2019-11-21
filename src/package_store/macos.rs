@@ -95,6 +95,8 @@ impl PackageStore for MacOSPackageStore {
         let pkg_path =
             crate::repo::download_path(&self.config.read().unwrap(), &url.as_str()).join(filename);
 
+        log::debug!("Installing {}: {:?}", &key, &pkg_path);
+
         if !pkg_path.exists() {
             log::error!("Package path doesn't exist: {:?}", &pkg_path);
             return Err(InstallError::PackageNotInCache);
@@ -411,6 +413,7 @@ fn install_macos_package(pkg_path: &Path, target: &InstallTarget) -> Result<(), 
     };
 
     let args = &["-pkg", &pkg_path.to_str().unwrap(), "-target", target_str];
+    log::debug!("Running command: 'installer {}'", args.join(" "));
 
     let res = Command::new("installer").args(args).output();
     let output = match res {

@@ -13,6 +13,12 @@ pub struct PackageKey {
     pub channel: String,
 }
 
+impl fmt::Display for PackageKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.to_string())
+    }
+}
+
 impl PackageKey {
     pub fn new(repo: &RepositoryMeta, channel: &str, package_id: &str) -> PackageKey {
         PackageKey {
@@ -48,7 +54,7 @@ impl std::error::Error for TryFromStringError {}
 
 impl std::fmt::Display for TryFromStringError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "invalid URL")
+        write!(f, "invalid URL")
     }
 }
 
