@@ -81,9 +81,9 @@ where
 
     fn from_foreign(ptr: *const libc::c_char) -> Result<T, Self::Error> {
         if ptr.is_null() {
-            return Err(cursed::null_ptr_error());
+            return Err(cursed::null_ptr_error())
         }
-
+        
         let s = unsafe { CStr::from_ptr(ptr) }.to_str()?;
         log::debug!("JSON: {}, type: {}", s, std::any::type_name::<T>());
         let v: Result<T, _> = serde_json::from_str(&s);
@@ -126,9 +126,9 @@ impl FromForeign<*const libc::c_char, PackageKey> for PackageKeyMarshaler {
 
     fn from_foreign(string: *const libc::c_char) -> Result<PackageKey, Self::Error> {
         if string.is_null() {
-            return Err(cursed::null_ptr_error());
+            return Err(cursed::null_ptr_error())
         }
-
+        
         let s: &str = cursed::StrMarshaler::from_foreign(string)?;
         PackageKey::try_from(s).map_err(|e| Box::new(e) as _)
     }
