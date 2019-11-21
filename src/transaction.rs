@@ -244,12 +244,14 @@ impl std::fmt::Display for TransactionError {
     }
 }
 
-impl<T: PackageTarget + 'static> PackageTransaction<T> {
+impl<T: PackageTarget + std::fmt::Debug + 'static> PackageTransaction<T> {
     pub fn new(
         store: Arc<dyn PackageStore<Target = T>>,
         actions: Vec<PackageAction<T>>,
     ) -> Result<PackageTransaction<T>, PackageTransactionError> {
         let mut new_actions: Vec<PackageAction<T>> = vec![];
+
+        log::debug!("New transaction with actions: {:#?}", &actions);
 
         // Collate all dependencies
         for action in actions.into_iter() {
