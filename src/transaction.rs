@@ -135,11 +135,6 @@ impl fmt::Display for PackageDependencyError {
     }
 }
 
-pub struct PackageTransaction<T: PackageTarget> {
-    store: Arc<dyn PackageStore<Target = T>>,
-    actions: Arc<Vec<PackageAction<T>>>,
-}
-
 #[derive(Debug)]
 pub enum TransactionEvent {
     Uninstalling,
@@ -244,6 +239,11 @@ impl std::fmt::Display for TransactionError {
     }
 }
 
+pub struct PackageTransaction<T: PackageTarget + std::fmt::Debug + 'static> {
+    store: Arc<dyn PackageStore<Target = T>>,
+    actions: Arc<Vec<PackageAction<T>>>,
+}
+
 impl<T: PackageTarget + std::fmt::Debug + 'static> PackageTransaction<T> {
     pub fn new(
         store: Arc<dyn PackageStore<Target = T>>,
@@ -342,7 +342,7 @@ impl<T: PackageTarget + std::fmt::Debug + 'static> PackageTransaction<T> {
         log::debug!("beginning transaction process");
         let is_valid = self.validate();
         let store = Arc::clone(&self.store);
-        let actions = Arc::clone(&self.actions);
+        let actions: Arc<Vec<PackageAction<T>>> = Arc::clone(&self.actions);
 
         std::thread::spawn(move || {
             if !is_valid {
