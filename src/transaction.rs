@@ -319,6 +319,8 @@ impl<T: PackageTarget + std::fmt::Debug + 'static> PackageTransaction<T> {
                 Ok(out)
             })?;
 
+        log::debug!("Processed actions: {:#?}", &new_actions);
+
         Ok(PackageTransaction {
             store,
             actions: Arc::new(new_actions),
