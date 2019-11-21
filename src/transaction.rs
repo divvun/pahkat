@@ -1,8 +1,5 @@
 use std::fmt;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
+use std::sync::Arc;
 use std::thread::JoinHandle;
 
 use pahkat_types::Package;
@@ -67,6 +64,16 @@ pub struct PackageAction<T: PackageTarget> {
     pub id: PackageKey,
     pub action: PackageActionType,
     pub target: T,
+}
+
+impl<T: fmt::Debug + PackageTarget> fmt::Display for PackageAction<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct(&format!("PackageAction<{}>", std::any::type_name::<T>()))
+            .field("id", &self.id.to_string())
+            .field("action", &self.action)
+            .field("target", &self.target)
+            .finish()
+    }
 }
 
 impl<T: PackageTarget> PackageAction<T> {
@@ -328,6 +335,7 @@ impl<T: PackageTarget + 'static> PackageTransaction<T> {
     where
         F: Fn(PackageKey, TransactionEvent) -> bool + 'static + Send,
     {
+        log::debug!("beginning transaction process");
         let is_valid = self.validate();
         let store = Arc::clone(&self.store);
         let actions = Arc::clone(&self.actions);
@@ -341,6 +349,8 @@ impl<T: PackageTarget + 'static> PackageTransaction<T> {
             let mut is_cancelled = false;
 
             for action in actions.iter() {
+                log::debug!("processing action: {}", &action);
+
                 if is_cancelled {
                     return Err(TransactionError::UserCancelled);
                 }

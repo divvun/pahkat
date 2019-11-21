@@ -323,7 +323,7 @@ impl MacOSPackageStore {
 
         let status = self::cmp::cmp(&pkg_info.pkg_version, &package.version, skipped_package);
 
-        log::debug!("Status: {:?}", &status);
+        // log::debug!("Status: {:?}", &status);
         status
     }
 }
@@ -382,7 +382,7 @@ fn get_package_info(
     let output = match res {
         Ok(v) => v,
         Err(e) => {
-            log::error!("{:?}", &e);
+            log::error!("pkgutil: {:?}", &e);
             return Err(ProcessError::Io { source: e });
         }
     };
@@ -390,12 +390,11 @@ fn get_package_info(
     if !output.status.success() {
         if let Some(code) = output.status.code() {
             if code == 1 {
-                log::error!("pkgutil pkg not found");
                 return Err(ProcessError::NotFound);
             }
         }
 
-        log::error!("{:?}", &output);
+        log::error!("pkgutil: {:?}", &output);
         return Err(ProcessError::Unknown { output });
     }
 
