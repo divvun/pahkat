@@ -129,7 +129,7 @@ impl PackageStore for WindowsPackageStore {
     ) -> Result<PathBuf, crate::download::DownloadError> {
         use crate::download::Download;
 
-        let package = match self.resolve_package(key) {
+        let package = match self.find_package_by_key(key) {
             Some(v) => v,
             None => {
                 return Err(crate::download::DownloadError::NoUrl);
@@ -154,7 +154,7 @@ impl PackageStore for WindowsPackageStore {
         key: &PackageKey,
         target: &Self::Target,
     ) -> Result<PackageStatus, InstallError> {
-        let package = match self.resolve_package(key) {
+        let package = match self.find_package_by_key(key) {
             Some(v) => v,
             None => {
                 return Err(InstallError::NoPackage);
@@ -249,7 +249,7 @@ impl PackageStore for WindowsPackageStore {
         key: &PackageKey,
         target: &Self::Target,
     ) -> Result<PackageStatus, UninstallError> {
-        let package = match self.resolve_package(key) {
+        let package = match self.find_package_by_key(key) {
             Some(v) => v,
             None => {
                 return Err(UninstallError::NoPackage);
@@ -338,7 +338,7 @@ impl PackageStore for WindowsPackageStore {
     ) -> Result<PackageStatus, PackageStatusError> {
         log::debug!("status: {}, target: {:?}", &key.to_string(), target);
 
-        let package = match self.resolve_package(key) {
+        let package = match self.find_package_by_key(key) {
             Some(v) => v,
             None => {
                 return Err(PackageStatusError::NoPackage);
@@ -358,8 +358,8 @@ impl PackageStore for WindowsPackageStore {
         self.status_impl(installer, key, &package, target.clone())
     }
 
-    fn resolve_package(&self, key: &PackageKey) -> Option<Package> {
-        crate::repo::resolve_package(key, &self.repos)
+    fn find_package_by_key(&self, key: &PackageKey) -> Option<Package> {
+        crate::repo::find_package_by_key(key, &self.repos)
     }
 
     fn find_package_by_id(&self, package_id: &str) -> Option<(PackageKey, Package)> {
@@ -481,7 +481,7 @@ impl WindowsPackageStore {
 
     // TODO: this is a sneaky FFI hack, booooo
     // pub fn package_path(&self, key: &PackageKey) -> Option<PathBuf> {
-    //     let package = match self.resolve_package(key) {
+    //     let package = match self.find_package_by_key(key) {
     //         Some(v) => v,
     //         None => {
     //             return None;

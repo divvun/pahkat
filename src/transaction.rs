@@ -258,7 +258,7 @@ impl<T: PackageTarget + std::fmt::Debug + 'static> PackageTransaction<T> {
             let package_key = &action.id;
 
             let package = store
-                .resolve_package(&package_key)
+                .find_package_by_key(&package_key)
                 .ok_or_else(|| PackageTransactionError::NoPackage(package_key.to_string()))?;
 
             if action.is_install() {

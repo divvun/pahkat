@@ -70,7 +70,7 @@ impl PackageStore for MacOSPackageStore {
         key: &PackageKey,
         target: &InstallTarget,
     ) -> Result<PackageStatus, InstallError> {
-        let package = match self.resolve_package(key) {
+        let package = match self.find_package_by_key(key) {
             Some(v) => v,
             None => {
                 return Err(InstallError::NoPackage);
@@ -113,7 +113,7 @@ impl PackageStore for MacOSPackageStore {
         key: &PackageKey,
         target: &InstallTarget,
     ) -> Result<PackageStatus, UninstallError> {
-        let package = match self.resolve_package(key) {
+        let package = match self.find_package_by_key(key) {
             Some(v) => v,
             None => {
                 return Err(UninstallError::NoPackage);
@@ -143,7 +143,7 @@ impl PackageStore for MacOSPackageStore {
         key: &PackageKey,
         installer_path: &Path,
     ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-        let package = match self.resolve_package(key) {
+        let package = match self.find_package_by_key(key) {
             Some(v) => v,
             None => {
                 return Err(Box::new(crate::download::DownloadError::NoUrl) as _);
@@ -167,7 +167,7 @@ impl PackageStore for MacOSPackageStore {
         key: &PackageKey,
         progress: Box<dyn Fn(u64, u64) -> bool + Send + 'static>,
     ) -> Result<PathBuf, crate::download::DownloadError> {
-        let package = match self.resolve_package(key) {
+        let package = match self.find_package_by_key(key) {
             Some(v) => v,
             None => {
                 return Err(crate::download::DownloadError::NoUrl);
@@ -192,7 +192,7 @@ impl PackageStore for MacOSPackageStore {
         key: &PackageKey,
         target: &Self::Target,
     ) -> Result<PackageStatus, PackageStatusError> {
-        let package = match self.resolve_package(key) {
+        let package = match self.find_package_by_key(key) {
             Some(v) => v,
             None => {
                 return Err(PackageStatusError::NoPackage);
@@ -220,8 +220,8 @@ impl PackageStore for MacOSPackageStore {
         crate::repo::all_statuses(self, repo_record, target)
     }
 
-    fn resolve_package(&self, key: &PackageKey) -> Option<Package> {
-        crate::repo::resolve_package(key, &self.repos)
+    fn find_package_by_key(&self, key: &PackageKey) -> Option<Package> {
+        crate::repo::find_package_by_key(key, &self.repos)
     }
 
     fn find_package_by_id(&self, package_id: &str) -> Option<(PackageKey, Package)> {
@@ -323,7 +323,6 @@ impl MacOSPackageStore {
 
         let status = self::cmp::cmp(&pkg_info.pkg_version, &package.version, skipped_package);
 
-        // log::debug!("Status: {:?}", &status);
         status
     }
 }

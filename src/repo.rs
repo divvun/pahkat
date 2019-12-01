@@ -60,7 +60,7 @@ where
     map
 }
 
-pub(crate) fn resolve_package(
+pub(crate) fn find_package_by_key(
     package_key: &PackageKey,
     repos: &Arc<RwLock<HashMap<RepoRecord, Repository>>>,
 ) -> Option<Package> {
@@ -94,7 +94,7 @@ where
     T: Send + Sync,
 {
     match PackageKey::from_string(package_id) {
-        Ok(k) => return store.resolve_package(&k).map(|pkg| (k, pkg)),
+        Ok(k) => return store.find_package_by_key(&k).map(|pkg| (k, pkg)),
         Err(_) => {}
     };
 

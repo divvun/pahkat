@@ -82,11 +82,11 @@ pub extern "C" fn pahkat_prefix_package_store_download(
 }
 
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
-pub extern "C" fn pahkat_prefix_package_store_resolve_package(
+pub extern "C" fn pahkat_prefix_package_store_find_package_by_key(
     #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
     #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
 ) -> Option<pahkat_types::Package> {
-    handle.resolve_package(&package_key)
+    handle.find_package_by_key(&package_key)
 }
 
 #[cthulhu::invoke]

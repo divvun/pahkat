@@ -119,8 +119,8 @@ impl PrefixPackageStore {
 impl PackageStore for PrefixPackageStore {
     type Target = ();
 
-    fn resolve_package(&self, key: &PackageKey) -> Option<Package> {
-        crate::repo::resolve_package(key, &self.repos)
+    fn find_package_by_key(&self, key: &PackageKey) -> Option<Package> {
+        crate::repo::find_package_by_key(key, &self.repos)
     }
 
     fn repos(&self) -> super::SharedRepos {
@@ -136,7 +136,7 @@ impl PackageStore for PrefixPackageStore {
         key: &PackageKey,
         installer_path: &Path,
     ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-        let package = match self.resolve_package(key) {
+        let package = match self.find_package_by_key(key) {
             Some(v) => v,
             None => {
                 return Err(Box::new(crate::download::DownloadError::NoUrl) as _);
@@ -171,7 +171,7 @@ impl PackageStore for PrefixPackageStore {
         key: &PackageKey,
         progress: Box<dyn Fn(u64, u64) -> bool + Send + 'static>,
     ) -> Result<PathBuf, crate::download::DownloadError> {
-        let package = match self.resolve_package(key) {
+        let package = match self.find_package_by_key(key) {
             Some(v) => v,
             None => {
                 return Err(crate::download::DownloadError::NoUrl);
@@ -197,7 +197,7 @@ impl PackageStore for PrefixPackageStore {
         target: &Self::Target,
     ) -> Result<PackageStatus, InstallError> {
         let package = self
-            .resolve_package(key)
+            .find_package_by_key(key)
             .with_context(|| crate::transaction::install::NoPackage)?;
         let installer = package
             .installer()
@@ -275,7 +275,7 @@ impl PackageStore for PrefixPackageStore {
         key: &PackageKey,
         target: &Self::Target,
     ) -> Result<PackageStatus, UninstallError> {
-        let package = self.resolve_package(key).ok_or(UninstallError::NoPackage)?;
+        let package = self.find_package_by_key(key).ok_or(UninstallError::NoPackage)?;
 
         let mut conn = self.pool.get().unwrap();
         let record = match PackageDbRecord::find_by_id(&mut conn, &key) {
@@ -323,7 +323,7 @@ impl PackageStore for PrefixPackageStore {
     fn status(&self, key: &PackageKey, _target: &()) -> Result<PackageStatus, PackageStatusError> {
         log::debug!("status: {}", &key.to_string());
 
-        let package = match self.resolve_package(key) {
+        let package = match self.find_package_by_key(key) {
             Some(v) => v,
             None => {
                 return Err(PackageStatusError::NoPackage);

@@ -38,8 +38,6 @@ pub trait PackageStore: Send + Sync {
         installer_path: &Path,
     ) -> Result<PathBuf, Box<dyn std::error::Error>>;
 
-    fn resolve_package(&self, key: &PackageKey) -> Option<Package>;
-
     fn install(
         &self,
         key: &PackageKey,
@@ -59,6 +57,8 @@ pub trait PackageStore: Send + Sync {
     ) -> Result<PackageStatus, PackageStatusError>;
 
     fn find_package_by_id(&self, package_id: &str) -> Option<(PackageKey, Package)>;
+
+    fn find_package_by_key(&self, key: &PackageKey) -> Option<Package>;
 
     fn refresh_repos(&self);
 

@@ -115,6 +115,15 @@ pub extern "C" fn pahkat_macos_package_store_all_statuses(
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::PathMarshaler")]
+pub extern "C" fn pahkat_macos_package_store_import(
+    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
+    #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
+    #[marshal(cursed::PathMarshaler)] installer_path: PathBuf,
+) -> Result<PathBuf, Box<dyn Error>> {
+    handle.import(&package_key, &installer_path)
+}
+
+#[cthulhu::invoke(return_marshaler = "cursed::PathMarshaler")]
 pub extern "C" fn pahkat_macos_package_store_download(
     #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
     #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
@@ -127,6 +136,14 @@ pub extern "C" fn pahkat_macos_package_store_download(
             Box::new(move |cur, max| progress(package_key_str.as_ptr(), cur, max) != 0),
         )
         .map_err(|e| Box::new(e) as _)
+}
+
+#[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
+pub extern "C" fn pahkat_macos_package_store_find_package_by_key(
+    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
+    #[marshal(PackageKeyMarshaler)] package_key: PackageKey
+) -> Option<pahkat_types::Package> {
+    handle.find_package_by_key(&package_key)
 }
 
 #[cthulhu::invoke]
