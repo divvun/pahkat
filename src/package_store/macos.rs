@@ -1,6 +1,4 @@
-use super::PackageStore;
-use hashbrown::HashMap;
-use serde::Deserialize;
+
 use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fs::{remove_dir, remove_file};
@@ -10,13 +8,16 @@ use std::process::Command;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 
-use super::{SharedRepos, SharedStoreConfig};
-use pahkat_types::{Downloadable, InstallTarget, Installer, MacOSInstaller, Package};
+use hashbrown::HashMap;
+use serde::Deserialize;
 use serde::de::{self, Deserializer};
 use snafu::ResultExt;
 use url::Url;
+use pahkat_types::{InstallTarget, Installer, MacOSInstaller, Package, Downloadable};
 
-use crate::{cmp, download::Download, PackageKey, RepoRecord, StoreConfig};
+use super::{SharedRepos, SharedStoreConfig, PackageStore};
+use crate::{cmp, PackageKey, RepoRecord, StoreConfig};
+use crate::download::DownloadManager;
 
 #[cfg(target_os = "macos")]
 pub fn global_uninstall_path() -> PathBuf {
@@ -179,12 +180,17 @@ impl PackageStore for MacOSPackageStore {
             Some(v) => v,
         };
 
-        let config = &self.config.read().unwrap();
+        let url = match Url::parse(&*installer.url()) {
+            Ok(v) => v,
+            Err(e) => return Err(crate::download::DownloadError::InvalidUrl),
+        };
 
-        let download_path = crate::repo::download_path(config, &installer.url());
-        let tmp_path = config.tmp_path().to_path_buf();
-        let handle = package.download(tmp_path, &download_path, Some(progress));
-        handle.join().unwrap()
+        let config = &self.config.read().unwrap();
+        let dm = DownloadManager::new(config.download_cache_path(), config.max_concurrent_downloads());
+        
+        let mut rt = tokio::runtime::Builder::new().basic_scheduler().enable_all().build().expect("new rt");
+        let output_path = crate::repo::download_path(config, &installer.url());
+        rt.block_on(dm.download(&url, output_path, Some(progress)))
     }
 
     fn status(

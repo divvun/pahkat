@@ -1,10 +1,5 @@
 #![cfg(feature = "prefix")]
 
-use hashbrown::HashMap;
-use pahkat_types::*;
-use r2d2_sqlite::SqliteConnectionManager;
-use snafu::{ensure, Backtrace, ErrorCompat, OptionExt, ResultExt, Snafu};
-use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::fs::{create_dir_all, read_dir, remove_dir, remove_file, File};
@@ -14,16 +9,20 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::windows::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
-use xz2::read::XzDecoder;
 
-use crate::transaction::PackageTransaction;
+use hashbrown::HashMap;
+use pahkat_types::*;
+use r2d2_sqlite::SqliteConnectionManager;
+use snafu::{ErrorCompat, OptionExt, ResultExt, Snafu};
+use xz2::read::XzDecoder;
+use url::Url;
+
 use crate::{
-    cmp, download::Download, repo::Repository, transaction::PackageStatus,
+    cmp, download::Download, download::DownloadManager, repo::Repository, transaction::PackageStatus,
     transaction::PackageStatusError, PackageKey, PackageStore, RepoRecord, StoreConfig,
 };
-
 use crate::transaction::{
-    install::InstallError, install::ProcessError, uninstall::UninstallError, PackageActionType,
+    install::InstallError,  uninstall::UninstallError,
     PackageDependencyError,
 };
 
@@ -183,12 +182,17 @@ impl PackageStore for PrefixPackageStore {
             Some(v) => v,
         };
 
-        let config = &self.config.read().unwrap();
+        let url = match Url::parse(&*installer.url()) {
+            Ok(v) => v,
+            Err(e) => return Err(crate::download::DownloadError::InvalidUrl),
+        };
 
-        let download_path = crate::repo::download_path(config, &installer.url());
-        let tmp_path = config.tmp_path().to_path_buf();
-        let handle = package.download(tmp_path, &download_path, Some(progress));
-        handle.join().unwrap()
+        let config = &self.config.read().unwrap();
+        let dm = DownloadManager::new(config.download_cache_path(), config.max_concurrent_downloads());
+        
+        let mut rt = tokio::runtime::Builder::new().basic_scheduler().enable_all().build().expect("new rt");
+        let output_path = crate::repo::download_path(config, &installer.url());
+        rt.block_on(dm.download(&url, output_path, Some(progress)))
     }
 
     fn install(
@@ -275,7 +279,9 @@ impl PackageStore for PrefixPackageStore {
         key: &PackageKey,
         target: &Self::Target,
     ) -> Result<PackageStatus, UninstallError> {
-        let package = self.find_package_by_key(key).ok_or(UninstallError::NoPackage)?;
+        let package = self
+            .find_package_by_key(key)
+            .ok_or(UninstallError::NoPackage)?;
 
         let mut conn = self.pool.get().unwrap();
         let record = match PackageDbRecord::find_by_id(&mut conn, &key) {

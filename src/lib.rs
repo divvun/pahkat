@@ -8,6 +8,7 @@ pub mod transaction;
 
 mod cmp;
 mod download;
+mod ext;
 mod store_config;
 
 pub use self::download::Download;

@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use pahkat_client::*;
 use pahkat_types::Package;
+use pahkat_client::PackageStore;
 use sentry::integrations::panic::register_panic_handler;
 
 use pahkat_client::PrefixPackageStore;
@@ -22,6 +23,8 @@ fn main() {
         .install();
     std::mem::forget(sentry::init(DSN));
     register_panic_handler();
+
+    env_logger::init();
 
     let app = App::new("Páhkat")
         .setting(AppSettings::SubcommandRequiredElseHelp)
@@ -62,6 +65,26 @@ fn main() {
                             .required(true),
                     ),
             ).subcommand(
+                SubCommand::with_name("download")
+                    .about("Download a package.")
+                    .arg(
+                        Arg::with_name("prefix")
+                            .value_name("PREFIX")
+                            .help("The prefix for managing repository.")
+                            .short("p")
+                            .long("prefix")
+                            .takes_value(true)
+                            .required(true),
+                    )
+                    .arg(
+                        Arg::with_name("package-id")
+                            .value_name("PKGID")
+                            .help("The package identifier to install")
+                            .multiple(true)
+                            .required(true)
+                    )
+            )
+            .subcommand(
                 SubCommand::with_name("install")
                     .about("Install a package.")
                     .arg(
@@ -140,6 +163,51 @@ fn main() {
                 }
             }
         }
+        ("download", Some(matches)) => {
+            let prefix_str = matches.value_of("prefix").unwrap();
+            let store = PrefixPackageStore::open(prefix_str).unwrap();
+            let package_ids = matches
+                .values_of("package-id")
+                .expect("package-id to always exist");
+
+            // let config = prefix.config();
+            // let store = prefix.store();
+
+            let mut keys = vec![];
+            for id in package_ids.into_iter() {
+                match store.find_package_by_id(id) {
+                    Some(v) => keys.push(v.0),
+                    None => {
+                        log::error!("No package found with id: {}", id);
+                        return;
+                    }
+                }
+            }
+
+            let store = store.into_arc();
+
+            // Download all of the things
+            for id in keys {
+                let store = &store;
+                let pb = indicatif::ProgressBar::new(0);
+                pb.set_style(indicatif::ProgressStyle::default_bar()
+                    .template("{spinner:.green} {prefix} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+                    .progress_chars("#>-"));
+                pb.set_prefix(&id.id);
+
+                let progress = Box::new(move |cur, max| {
+                    pb.set_length(max);
+                    pb.set_position(cur);
+
+                    if cur >= max {
+                        pb.finish_and_clear();
+                    }
+
+                    true
+                });
+                let _pkg_path = store.download(&id, progress).unwrap();
+            }
+        }
         ("install", Some(matches)) => {
             let prefix_str = matches.value_of("prefix").unwrap();
             let store = PrefixPackageStore::open(prefix_str).unwrap();
@@ -165,7 +233,6 @@ fn main() {
                 .map(|k| PackageAction::install(k, ()))
                 .collect::<Vec<_>>();
 
-            use pahkat_client::transaction::PackageStore;
             let store = store.into_arc();
             let mut transaction = match PackageTransaction::new(Arc::clone(&store), actions) {
                 Ok(v) => v,
@@ -191,12 +258,15 @@ fn main() {
                     if cur >= max {
                         pb.finish_and_clear();
                     }
+
+                    true
                 });
                 let _pkg_path = store.download(&action.id, progress).unwrap();
             }
 
             transaction.process(|key, event| {
                 log::debug!("{}: {:?}", key.id, event);
+                true
             });
         }
         // ("uninstall", Some(matches)) => {

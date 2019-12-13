@@ -107,10 +107,10 @@ impl Repository {
     }
 
     pub fn from_url(url: &Url, channel: String) -> Result<Repository, RepoDownloadError> {
-        let client = reqwest::Client::new();
+        let client = reqwest::blocking::Client::new();
         let hash_id = Repository::path_hash(url, &channel);
 
-        let mut meta_res = client
+        let meta_res = client
             .get(&format!("{}/index.json", url))
             .send()
             .map_err(|e| RepoDownloadError::ReqwestError(e))?;
@@ -126,7 +126,7 @@ impl Repository {
             format!("index.{}.json", &channel)
         };
 
-        let mut pkg_res = client
+        let pkg_res = client
             .get(&format!("{}/packages/{}", url, index_json_path))
             .send()
             .map_err(|e| RepoDownloadError::ReqwestError(e))?;
@@ -136,7 +136,7 @@ impl Repository {
         let packages: Packages =
             serde_json::from_str(&pkg_text).map_err(|e| RepoDownloadError::JsonError(e))?;
 
-        let mut virt_res = client
+        let virt_res = client
             .get(&format!("{}/virtuals/{}", url, index_json_path))
             .send()
             .map_err(|e| RepoDownloadError::ReqwestError(e))?;

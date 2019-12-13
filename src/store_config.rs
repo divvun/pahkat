@@ -137,6 +137,10 @@ impl StoreConfig {
         }
     }
 
+    pub fn download_cache_path(&self) -> PathBuf {
+        self.data.read().unwrap().cache_path.join("downloads")
+    }
+
     pub fn package_cache_path(&self) -> PathBuf {
         self.data.read().unwrap().cache_path.join("packages")
     }
@@ -147,6 +151,21 @@ impl StoreConfig {
 
     pub fn cache_base_path(&self) -> ConfigPath {
         self.data.read().unwrap().cache_path.to_owned()
+    }
+
+    pub fn set_max_concurrent_downloads(&self, value: u8) -> SaveResult {
+        {
+            self.data.write().unwrap().max_concurrent_downloads = value;
+        }
+        if self.save_changes {
+            self.save()
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn max_concurrent_downloads(&self) -> u8 {
+        self.data.read().unwrap().max_concurrent_downloads
     }
 
     pub fn set_cache_base_path(&self, cache_path: ConfigPath) -> SaveResult {
@@ -370,6 +389,8 @@ struct RawStoreConfig {
     pub cache_path: ConfigPath,
     #[serde(default = "defaults::tmp_path")]
     pub tmp_path: ConfigPath,
+    #[serde(default)]
+    pub max_concurrent_downloads: u8,
     #[serde(default = "HashMap::new")]
     pub ui: HashMap<String, String>,
 }
@@ -381,6 +402,7 @@ impl std::default::Default for RawStoreConfig {
             skipped_packages: HashMap::new(),
             cache_path: defaults::cache_path(),
             tmp_path: defaults::tmp_path(),
+            max_concurrent_downloads: 3,
             ui: HashMap::new(),
         }
     }

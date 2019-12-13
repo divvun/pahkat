@@ -1,10 +1,13 @@
-use pahkat_types::{Downloadable, Package};
-
-use std::error::Error;
-use std::io::ErrorKind;
+use std::fs;
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::thread::JoinHandle;
+
+use fd_lock::FdLock;
+use url::Url;
+use reqwest::header;
+
+use crate::ext::PathExt;
 
 pub trait Download {
     fn download<F>(
@@ -17,104 +20,156 @@ pub trait Download {
         F: Fn(u64, u64) -> bool + Send + 'static;
 }
 
-const USER_CANCELLED_STR: &str = "User cancelled";
+pub(crate) struct DownloadManager {
+    client: reqwest::Client,
+    path: PathBuf,
+    max_concurrent_downloads: u8,
+}
 
-impl Download for Package {
-    fn download<F>(
+impl DownloadManager {
+    pub fn new(path: PathBuf, max_concurrent_downloads: u8) -> DownloadManager {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(60))
+            .build()
+            .unwrap();
+            
+        DownloadManager {
+            client,
+            path,
+            max_concurrent_downloads,
+        }
+    }
+
+    #[inline(always)]
+    fn handle_callback<F>(
         &self,
-        tmp_path: PathBuf,
-        dir_path: &Path,
-        progress: Option<F>,
-    ) -> JoinHandle<Result<PathBuf, DownloadError>>
+        cur: u64,
+        max: u64,
+        progress: Option<&F>,
+    ) -> Result<(), DownloadError>
     where
         F: Fn(u64, u64) -> bool + Send + 'static,
     {
-        use reqwest::header::CONTENT_LENGTH;
+        if let Some(cb) = progress {
+            let r = cb(cur, max);
 
-        let dir_path = dir_path.to_owned();
-        let installer = self.installer().cloned();
-
-        let handle = std::thread::spawn(move || {
-            let installer = match installer {
-                Some(v) => v,
-                None => return Err(DownloadError::NoUrl),
-            };
-
-            let url_str = installer.url();
-            let url = url::Url::parse(&url_str).map_err(|_| DownloadError::InvalidUrl)?;
-            let filename = Path::new(url.path_segments().unwrap().last().unwrap()).to_path_buf();
-
-            if filename.exists() {
-                if let Some(cb) = progress {
-                    cb(0, 0);
-                }
-
-                return Ok(filename);
+            if !r {
+                return Err(DownloadError::UserCancelled);
             }
+        }
 
-            let mut res = match reqwest::get(&url_str) {
-                Ok(v) => v,
-                Err(e) => return Err(DownloadError::ReqwestError(e)),
-            };
+        Ok(())
+    }
 
-            if !res.status().is_success() {
-                return Err(DownloadError::HttpStatusFailure(res.status().as_u16()));
+    pub async fn download<F, P: AsRef<Path>>(
+        &self,
+        url: &Url,
+        dest_path: P,
+        progress: Option<F>,
+    ) -> Result<PathBuf, DownloadError>
+    where
+        F: Fn(u64, u64) -> bool + Send + 'static,
+    {
+        let filename = match url.path_segments().and_then(|x| x.last()) {
+            Some(v) => v,
+            None => {
+                return Err(DownloadError::InvalidUrl)
             }
+        };
 
-            if !tmp_path.exists() {
-                std::fs::create_dir_all(&tmp_path).unwrap();
+        let dest_path = dest_path.as_ref();
+
+        // Check destination path exists
+        if dest_path.exists() {
+            self.handle_callback(0, 0, progress.as_ref())?;
+
+            log::debug!("Download already exists at {:?}; using.", &dest_path);
+
+            return Ok(dest_path.to_path_buf());
+        }
+
+        // Create temp dirs if they don't yet exist
+        if !self.path.exists() {
+            fs::create_dir_all(&self.path).map_err(|e| DownloadError::IoError(e))?;
+        }
+
+        // Create download dir for this file
+        let cache_path = self.path.join_sha256(url.as_str().as_bytes());
+        if !cache_path.exists() {
+            fs::create_dir_all(&cache_path).map_err(|e| DownloadError::IoError(e))?;
+        }
+
+        let tmp_dest_path = cache_path.join(filename);
+        let mut req = self.client.get(url.as_str());
+
+        let mut fdlock = {
+            let fd = fs::OpenOptions::new().append(true).open(&tmp_dest_path)
+                .or_else(|_| fs::File::create(&tmp_dest_path))
+                .map_err(|e| DownloadError::IoError(e))?;
+            FdLock::new(fd)
+        };
+
+        // Lock temporary destination file for writing
+        log::debug!("Locking {}", tmp_dest_path.display());
+
+        let mut file = fdlock.lock().map_err(|_| DownloadError::LockFailure)?;
+
+        log::debug!("Got lock");
+        let meta = file.metadata().map_err(|e| DownloadError::IoError(e))?;
+
+        let mut downloaded_bytes = meta.len();
+        log::debug!("Downloaded bytes: {}", downloaded_bytes);
+
+        if downloaded_bytes > 0 {
+            req = req.header(header::RANGE, format!("bytes={}-", downloaded_bytes));
+        }
+
+        let req = req.build().map_err(DownloadError::ReqwestError)?;
+        
+        // Get URL headers
+        let mut res = self.client.execute(req).await.map_err(DownloadError::ReqwestError)?;
+
+        // Get content length and send if exists
+        let content_len = res.headers()
+            .get(header::CONTENT_LENGTH)
+            .map(|ct_len| ct_len.to_str().unwrap_or("").parse::<u64>().unwrap_or(0u64))
+            .unwrap_or(0u64);
+        log::debug!("Content length: {}", content_len);
+
+        // Check if range request was accepted!
+        let is_partial = res.headers().get(header::CONTENT_RANGE).is_some();
+        log::debug!("Is partial: {}", is_partial);
+
+        let total_bytes = if !is_partial {
+            file.set_len(0).map_err(|e| DownloadError::IoError(e))?;
+            content_len
+        } else if content_len > 0 {
+            content_len + downloaded_bytes
+        } else {
+            // If no content len, having downloaded bytes doesn't mean we have a known total...
+            0
+        };
+
+        log::debug!("Total bytes: {}", total_bytes);
+
+        {
+            let mut file = BufWriter::new(&mut *file);
+
+            // Do the download
+            while let Some(chunk) = res.chunk().await.map_err(DownloadError::ReqwestError)? {
+                downloaded_bytes += chunk.len() as u64;
+                file.write(&*chunk).map_err(DownloadError::IoError)?;
+                self.handle_callback(downloaded_bytes, total_bytes, progress.as_ref())?;
             }
+        }
 
-            if !dir_path.exists() {
-                std::fs::create_dir_all(&dir_path).unwrap();
-            }
+        log::debug!("Moving {:?} to {:?}", &tmp_dest_path, &dest_path);
 
-            let file = tempfile::NamedTempFile::new_in(tmp_path).expect("temp files");
-            let mut buf_writer = BufWriter::new(file.reopen().unwrap());
+        // If it's done, move the file!
+        let _ = fs::create_dir_all(dest_path);
+        fs::rename(tmp_dest_path, dest_path.join(filename)).map_err(DownloadError::IoError)?;
 
-            let write_res = match progress {
-                Some(cb) => {
-                    let len = {
-                        res.headers()
-                            .get(CONTENT_LENGTH)
-                            .map(|ct_len| {
-                                ct_len.to_str().unwrap_or("").parse::<u64>().unwrap_or(0u64)
-                            })
-                            .unwrap_or(0u64)
-                    };
-
-                    res.copy_to(&mut ProgressWriter::new(buf_writer, len, cb))
-                }
-                None => res.copy_to(&mut buf_writer),
-            };
-
-            match write_res {
-                Ok(v) if v == 0 => {
-                    return Err(DownloadError::EmptyFile);
-                }
-                Err(e) => match e.get_ref().and_then(|e| e.downcast_ref::<std::io::Error>()) {
-                    Some(e)
-                        if e.kind() == ErrorKind::Other
-                            && e.description() == USER_CANCELLED_STR =>
-                    {
-                        return Err(DownloadError::UserCancelled)
-                    }
-                    _ => {
-                        log::debug!("{:?}", e);
-                        return Err(DownloadError::ReqwestError(e));
-                    }
-                },
-                _ => {}
-            }
-
-            let out_path = (&dir_path).join(&filename).to_path_buf();
-            file.persist(&out_path)
-                .map_err(|e| DownloadError::PersistError(e))?;
-
-            Ok(out_path)
-        });
-
-        handle
+        Ok(dest_path.to_path_buf())
     }
 }
 
@@ -124,6 +179,8 @@ pub enum DownloadError {
     InvalidUrl,
     NoUrl,
     UserCancelled,
+    LockFailure,
+    IoError(std::io::Error),
     ReqwestError(reqwest::Error),
     PersistError(tempfile::PersistError),
     HttpStatusFailure(u16),
@@ -133,54 +190,5 @@ impl std::error::Error for DownloadError {}
 impl std::fmt::Display for DownloadError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?}", self)
-    }
-}
-
-struct ProgressWriter<W: Write, F>
-where
-    F: Fn(u64, u64) -> bool,
-{
-    writer: W,
-    callback: F,
-    max_count: u64,
-    cur_count: u64,
-}
-
-impl<W: Write, F> ProgressWriter<W, F>
-where
-    F: Fn(u64, u64) -> bool,
-{
-    fn new(writer: W, max_count: u64, callback: F) -> ProgressWriter<W, F> {
-        (callback)(0, max_count);
-
-        ProgressWriter {
-            writer,
-            callback,
-            max_count,
-            cur_count: 0,
-        }
-    }
-}
-
-impl<W: Write, F> Write for ProgressWriter<W, F>
-where
-    F: Fn(u64, u64) -> bool,
-{
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        use std::cmp;
-
-        let new_count = self.cur_count + buf.len() as u64;
-        self.cur_count = cmp::min(new_count, self.max_count);
-        let is_cancelled = !(self.callback)(self.cur_count, self.max_count);
-
-        if is_cancelled {
-            return Err(std::io::Error::new(ErrorKind::Other, USER_CANCELLED_STR));
-        }
-
-        self.writer.write(buf)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        self.writer.flush()
     }
 }
