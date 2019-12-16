@@ -25,7 +25,7 @@ required-features = ["binaries", "windows"]
 [dependencies]
 pahkat-types = { git = "https://github.com/divvun/pahkat", branch = "develop" }
 reqwest = { git = "https://github.com/seanmonstar/reqwest", features = ["default-tls-vendored", "blocking", "gzip"], default-features = false }
-serde = { version = "1.0.103", features = ["derive"] }
+serde = { version = "1.0.104", features = ["derive"] }
 serde_json = "1.0.44"
 semver = "0.9.0"
 url = { version = "2.1.0", features = ["serde"] }
@@ -41,10 +41,12 @@ is_executable = "0.1.2"
 snafu = "0.6.0"
 tempfile = "3.1.0"
 itertools = "0.8.2"
-log = "0.4.8"
+log = "0.4.10"
 sha2 = "0.8"
 fd-lock = "1.1.0"
 tokio = { version = "0.2.4", default-features = false, features = ["tcp", "time"] }
+backtrace = "0.3.40"
+ctor = "0.1.12"
 
 # Prefix feature
 xz2 = { version = "0.1.6", optional = true }

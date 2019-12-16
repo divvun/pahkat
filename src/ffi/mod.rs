@@ -7,6 +7,41 @@ pub mod windows;
 #[cfg(feature = "prefix")]
 pub mod prefix;
 
+#[cfg(target_os = "android")]
+mod android {
+    extern "C" {
+        pub fn __android_log_write(
+            prio: ::std::os::raw::c_int,
+            tag: *const ::std::os::raw::c_char,
+            text: *const ::std::os::raw::c_char,
+        ) -> ::std::os::raw::c_int;
+    }
+
+    use ctor::ctor;
+    use std::ffi::CString;
+
+    fn log(text: &str) {
+        let tag = CString::new(env!("CARGO_PKG_NAME")).unwrap();
+        let text = CString::new(text).unwrap();
+        unsafe { __android_log_write(7, tag.as_ptr(), text.as_ptr()) };
+    }
+
+    #[ctor]
+    fn init() {
+        let fatal = 7;
+
+        std::panic::set_hook(Box::new(|info| {
+            if let Some(s) = info.payload().downcast_ref::<&str>() {
+                log(s);
+            } else if let Some(s) = info.payload().downcast_ref::<String>() {
+                log(&s);
+            }
+
+            format!("{:?}", backtrace::Backtrace::new()).split("\n").for_each(|x| log(x));
+        }));
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn pahkat_enable_logging() {
     use std::io::Write;
