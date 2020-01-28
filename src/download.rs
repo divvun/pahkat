@@ -51,9 +51,9 @@ impl DownloadManager {
         F: Fn(u64, u64) -> bool + Send + 'static,
     {
         if let Some(cb) = progress {
-            let r = cb(cur, max);
+            let should_continue = cb(cur, max);
 
-            if !r {
+            if !should_continue {
                 return Err(DownloadError::UserCancelled);
             }
         }
@@ -78,14 +78,15 @@ impl DownloadManager {
         };
 
         let dest_path = dest_path.as_ref();
-
+        let dest_file_path = dest_path.join(filename);
+        
         // Check destination path exists
-        if dest_path.exists() {
+        if dest_path.exists() && dest_file_path.exists() {
             self.handle_callback(0, 0, progress.as_ref())?;
 
-            log::debug!("Download already exists at {:?}; using.", &dest_path);
+            log::debug!("Download already exists at {:?}; using.", &dest_file_path);
 
-            return Ok(dest_path.to_path_buf());
+            return Ok(dest_file_path);
         }
 
         // Create temp dirs if they don't yet exist
@@ -114,7 +115,7 @@ impl DownloadManager {
 
         let mut file = fdlock.lock().map_err(|_| DownloadError::LockFailure)?;
 
-        log::debug!("Got lock");
+        log::debug!("Got lock on {}", tmp_dest_path.display());
         let meta = file.metadata().map_err(|e| DownloadError::IoError(e))?;
 
         let mut downloaded_bytes = meta.len();
@@ -167,9 +168,9 @@ impl DownloadManager {
 
         // If it's done, move the file!
         let _ = fs::create_dir_all(dest_path);
-        fs::rename(tmp_dest_path, dest_path.join(filename)).map_err(DownloadError::IoError)?;
+        fs::rename(tmp_dest_path, &dest_file_path).map_err(DownloadError::IoError)?;
 
-        Ok(dest_path.to_path_buf())
+        Ok(dest_file_path)
     }
 }
 

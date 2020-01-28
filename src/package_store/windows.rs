@@ -144,7 +144,7 @@ impl PackageStore for WindowsPackageStore {
         let config = &self.config.read().unwrap();
 
         let download_path = crate::repo::download_path(config, &installer.url());
-        let tmp_path = config.tmp_path().to_path_buf();
+        let tmp_path = config.tmp_path().to_path_buf().unwrap();
         let disposable = package.download(tmp_path, &download_path, Some(progress))?;
         disposable.wait()
     }

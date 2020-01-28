@@ -224,14 +224,14 @@ impl PackageStore for PrefixPackageStore {
             return Err(crate::transaction::install::InstallError::PackageNotInCache);
         }
 
-        let ext = pkg_path.extension().and_then(OsStr::to_str).unwrap();
-        // .context(InvalidExtension)?;
+        let ext = pkg_path.extension().and_then(OsStr::to_str)
+            .ok_or(InstallError::InvalidFileType)?;
 
         let file = File::open(&pkg_path).unwrap();
 
         let reader = match ext {
             "txz" | "xz" => XzDecoder::new(file),
-            _ => panic!(), //return Err(crate::transaction::install::InstallError::InvalidExtension {}),
+            _ => return Err(InstallError::InvalidFileType)
         };
 
         let mut tar_file = tar::Archive::new(reader);
@@ -366,19 +366,9 @@ impl PackageStore for PrefixPackageStore {
     fn all_statuses(
         &self,
         repo_record: &RepoRecord,
-        _target: &(),
+        target: &(),
     ) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>> {
-        let mut map = BTreeMap::new();
-
-        let repos = self.repos.read().unwrap();
-        if let Some(repo) = repos.get(repo_record) {
-            for (id, package) in repo.packages() {
-                let key = PackageKey::new(repo.meta(), repo.channel(), id);
-                map.insert(id.clone(), self.status(&key, &()));
-            }
-        }
-
-        map
+        crate::repo::all_statuses(self, repo_record, target)
     }
 
     fn find_package_by_id(&self, package_id: &str) -> Option<(PackageKey, Package)> {

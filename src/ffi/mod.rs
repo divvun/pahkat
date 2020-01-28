@@ -7,46 +7,42 @@ pub mod windows;
 #[cfg(feature = "prefix")]
 pub mod prefix;
 
-#[cfg(target_os = "android")]
-mod android {
-    extern "C" {
-        pub fn __android_log_write(
-            prio: ::std::os::raw::c_int,
-            tag: *const ::std::os::raw::c_char,
-            text: *const ::std::os::raw::c_char,
-        ) -> ::std::os::raw::c_int;
-    }
+use std::convert::TryFrom;
+use std::error::Error;
+use std::ffi::{CStr, CString};
+use std::sync::{Arc, RwLock};
+use std::path::PathBuf;
 
-    use ctor::ctor;
-    use std::ffi::CString;
+use cursed::{FromForeign, InputType, ReturnType, ToForeign};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
+use url::Url;
 
-    fn log(text: &str) {
-        let tag = CString::new(env!("CARGO_PKG_NAME")).unwrap();
-        let text = CString::new(text).unwrap();
-        unsafe { __android_log_write(7, tag.as_ptr(), text.as_ptr()) };
-    }
+use crate::repo::RepoRecord;
+use crate::transaction::{PackageStatus, PackageStatusError};
+use crate::{PackageKey, StoreConfig};
 
-    #[ctor]
-    fn init() {
-        let fatal = 7;
-
-        std::panic::set_hook(Box::new(|info| {
-            if let Some(s) = info.payload().downcast_ref::<&str>() {
-                log(s);
-            } else if let Some(s) = info.payload().downcast_ref::<String>() {
-                log(&s);
-            }
-
-            format!("{:?}", backtrace::Backtrace::new()).split("\n").for_each(|x| log(x));
-        }));
-    }
+#[inline(always)]
+fn level_u8_to_str(level: u8) -> Option<&'static str> {
+    Some(match level {
+        0 => return None,
+        1 => "error",
+        2 => "warn",
+        3 => "info",
+        4 => "debug",
+        _ => "trace"
+    })
 }
 
+#[cfg(not(target_os = "android"))]
 #[no_mangle]
-pub extern "C" fn pahkat_enable_logging() {
+pub extern "C" fn pahkat_enable_logging(level: u8) {
     use std::io::Write;
 
-    std::env::set_var("RUST_LOG", "pahkat_client=debug");
+    if let Some(level) = level_u8_to_str(level) {
+        std::env::set_var("RUST_LOG", format!("pahkat_client={}", level));
+    }
+    
     env_logger::builder()
         .format(|buf, record| {
             writeln!(
@@ -62,19 +58,29 @@ pub extern "C" fn pahkat_enable_logging() {
         .init();
 }
 
-use std::convert::TryFrom;
-use std::error::Error;
-use std::ffi::{CStr, CString};
-use std::sync::{Arc, RwLock};
+#[cfg(target_os = "android")]
+#[no_mangle]
+pub extern "C" fn pahkat_enable_logging(level: u8) {
+    use std::io::Write;
 
-use cursed::{FromForeign, InputType, ReturnType, ToForeign};
-use serde::de::DeserializeOwned;
-use serde::Serialize;
-use url::Url;
+    if let Some(level) = level_u8_to_str(level) {
+        std::env::set_var("RUST_LOG", format!("pahkat_client={}", level));
+    }
 
-use crate::repo::RepoRecord;
-use crate::transaction::{PackageStatus, PackageStatusError};
-use crate::{PackageKey, StoreConfig};
+    let mut derp = android_log::LogBuilder::new("PahkatClient");
+    derp.format(|record| {
+            format!(
+                "{} {} {}:{} > {}",
+                record.level(),
+                record.target(),
+                record.file().unwrap_or("<unknown>"),
+                record.line().unwrap_or(0),
+                record.args()
+            )
+        });
+    derp.init()
+        .unwrap();
+}
 
 pub struct JsonMarshaler;
 
@@ -246,6 +252,26 @@ pub extern "C" fn pahkat_store_config_set_cache_base_url(
 ) -> Result<(), Box<dyn Error>> {
     let path = ConfigPath::from_url(url)?;
     handle.write().unwrap().set_cache_base_path(path)
+}
+
+#[cfg(target_os = "android")]
+#[cthulhu::invoke]
+pub extern "C" fn pahkat_android_init(
+    #[marshal(cursed::PathMarshaler)] container_path: PathBuf
+) {
+    let _ = crate::store_config::CONTAINER_PATH.set(container_path).ok();
+
+    std::panic::set_hook(Box::new(|info| {
+        if let Some(s) = info.payload().downcast_ref::<&str>() {
+            log::error!("{}", s);
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            log::error!("{}", s);
+        }
+
+        format!("{:?}", backtrace::Backtrace::new())
+            .split("\n")
+            .for_each(|x| log::error!("{}", x));
+    }));
 }
 
 #[no_mangle]

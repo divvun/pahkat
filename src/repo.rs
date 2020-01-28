@@ -44,17 +44,24 @@ pub(crate) fn all_statuses<P, T>(
 ) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>>
 where
     P: PackageStore<Target = T>,
-    T: Send + Sync,
+    T: Send + Sync + std::fmt::Debug,
 {
+    log::debug!("Getting all statuses for: {:?}, target: {:?}", repo_record, target);
     let mut map = BTreeMap::new();
 
     let repos = store.repos();
     let repos = repos.read().unwrap();
+
     if let Some(repo) = repos.get(repo_record) {
         for id in repo.packages().keys() {
             let key = PackageKey::new(repo.meta(), repo.channel(), id);
-            map.insert(id.clone(), store.status(&key, target));
+            let status = store.status(&key, target);
+            log::trace!("Package: {:?}, status: {:?}", &id, &status);
+            map.insert(id.clone(), status);
         }
+    } else {
+        log::warn!("Did not find repo {:?} in available repos", &repo_record);
+        log::trace!("Repos available: {:?}", &*repos);
     }
 
     map

@@ -13,6 +13,8 @@ use serde::{Deserialize, Serialize};
 use crate::defaults;
 use crate::{repo::RepoRecord, PackageKey, Repository};
 
+use once_cell::sync::{Lazy, OnceCell};
+
 #[derive(Debug, Clone)]
 pub struct StoreConfig {
     /// A reference to the path for this StoreConfig
@@ -21,37 +23,46 @@ pub struct StoreConfig {
     save_changes: bool,
 }
 
-impl std::default::Default for StoreConfig {
-    fn default() -> StoreConfig {
-        StoreConfig {
-            config_path: defaults::config_path().join("config.json"),
-            data: Arc::new(RwLock::new(RawStoreConfig::default())),
-            save_changes: true,
-        }
+#[cfg(target_os = "android")]
+pub(crate) static CONTAINER_PATH: OnceCell<PathBuf> = OnceCell::new();
+
+#[cfg(not(target_os = "android"))]
+pub(crate) static CONTAINER_PATH: Lazy<OnceCell<PathBuf>> = Lazy::new(|| {
+    let mut c = OnceCell::new();
+    if let Some(v) = dirs::home_dir() {
+        let _ = c.set(v);
     }
-}
+    c
+});
 
 type SaveResult = Result<(), Box<dyn std::error::Error>>;
 
 impl StoreConfig {
-    pub fn load_or_default(save_changes: bool) -> StoreConfig {
-        let res = StoreConfig::load(&defaults::config_path().join("config.json"), save_changes);
+    #[cfg(not(target_os = "android"))]
+    pub fn load_or_default(save_changes: bool) -> Result<StoreConfig, std::io::Error> {
+        let path = match defaults::config_path() {
+            Some(v) => v.join("config.json"),
+            None => return Err(std::io::Error::new(std::io::ErrorKind::Other, "no config path available"))
+        };
+
+        let res = StoreConfig::load(&path, save_changes);
 
         let mut config = match res {
             Ok(v) => v,
-            Err(_) => StoreConfig::default(),
+            Err(_) => StoreConfig::new(&path),
         };
+
         config.save_changes = save_changes;
 
         if !config.package_cache_path().exists() {
-            std::fs::create_dir_all(&*config.package_cache_path()).unwrap();
+            std::fs::create_dir_all(&*config.package_cache_path())?;
         }
 
         if !config.repo_cache_path().exists() {
-            std::fs::create_dir_all(&*config.repo_cache_path()).unwrap();
+            std::fs::create_dir_all(&*config.repo_cache_path())?;
         }
 
-        config
+        Ok(config)
     }
 
     pub fn new(config_path: &Path) -> StoreConfig {
@@ -81,8 +92,8 @@ impl StoreConfig {
         let cfg_str = serde_json::to_string_pretty(&*self.data.read().unwrap())?;
         {
             log::debug!("Saving: {:?}", self.config_path);
-            create_dir_all(self.config_dir()).unwrap();
-            let mut file = File::create(&self.config_path).unwrap();
+            create_dir_all(self.config_dir())?;
+            let mut file = File::create(&self.config_path)?;
             file.write_all(cfg_str.as_bytes())?;
         }
 
@@ -94,13 +105,14 @@ impl StoreConfig {
     }
 
     pub fn tmp_path(&self) -> PathBuf {
-        self.data.read().unwrap().tmp_path.to_path_buf()
+        self.data.read().unwrap().tmp_path.to_path_buf().unwrap()
     }
 
     pub fn config_dir(&self) -> &Path {
         &self.config_path.parent().expect("parent dir must exist")
     }
 
+    #[deprecated(note = "bad idea, will be replaced with version pinning")]
     pub fn skipped_package(&self, key: &PackageKey) -> Option<String> {
         self.data
             .read()
@@ -110,6 +122,7 @@ impl StoreConfig {
             .map(|x| x.to_string())
     }
 
+    #[deprecated(note = "bad idea")]
     pub fn remove_skipped_package(&self, key: &PackageKey) -> SaveResult {
         {
             self.data.write().unwrap().skipped_packages.remove(key);
@@ -122,6 +135,7 @@ impl StoreConfig {
         }
     }
 
+    #[deprecated(note = "bad idea")]
     pub fn add_skipped_package(&self, key: PackageKey, version: String) -> SaveResult {
         {
             self.data
@@ -137,16 +151,21 @@ impl StoreConfig {
         }
     }
 
+    #[inline]
+    fn cache_path(&self, path: &str) -> ConfigPath {
+        self.data.read().unwrap().cache_path.join(path)
+    }
+
     pub fn download_cache_path(&self) -> PathBuf {
-        self.data.read().unwrap().cache_path.join("downloads")
+        self.cache_path("downloads").to_path_buf().unwrap()
     }
 
     pub fn package_cache_path(&self) -> PathBuf {
-        self.data.read().unwrap().cache_path.join("packages")
+        self.cache_path("packages").to_path_buf().unwrap()
     }
 
     pub fn repo_cache_path(&self) -> PathBuf {
-        self.data.read().unwrap().cache_path.join("repos")
+        self.cache_path("repos").to_path_buf().unwrap()
     }
 
     pub fn cache_base_path(&self) -> ConfigPath {
@@ -293,39 +312,51 @@ impl ConfigPath {
     }
 
     pub fn from_url(url: Url) -> Result<ConfigPath, Box<dyn std::error::Error>> {
-        let scheme = url.scheme();
-        if scheme == "file" {
-            Ok(ConfigPath::File(url))
-        } else if scheme == "container" {
-            Ok(ConfigPath::Container(url))
-        } else {
-            Err(Box::new(ConfigPathError::InvalidScheme(scheme.to_string())))
+        match url.scheme() { 
+            "file" => Ok(ConfigPath::File(url)),
+            "container" => Ok(ConfigPath::Container(url)),
+            scheme => Err(Box::new(ConfigPathError::InvalidScheme(scheme.to_string())))
         }
     }
 
-    pub fn join<P: AsRef<Path>>(&self, path: P) -> PathBuf {
-        self.to_path_buf().join(path.as_ref())
-    }
-
-    pub fn to_path_buf(&self) -> PathBuf {
-        self.try_as_path().unwrap()
+    pub fn join<S: AsRef<str>>(&self, item: S) -> ConfigPath {
+        let mut url = self.as_url().to_owned();
+        log::debug!("{:?}", url);
+        url.path_segments_mut().unwrap().push(item.as_ref());
+        log::debug!("{:?}", url);
+        ConfigPath::from_url(url).unwrap()
     }
 
     fn container_to_file(&self) -> Option<Url> {
+        log::debug!("container_to_file: {:?}", self);
         let url = match self {
             ConfigPath::File(v) => return Some(v.to_owned()),
             ConfigPath::Container(v) => v,
         };
 
-        let container_path = dirs::home_dir().expect("valid home dir").join(url.path());
-        Url::from_file_path(container_path).ok()
+        log::debug!("{:?}", CONTAINER_PATH);
+        let container_path = match CONTAINER_PATH.get() {
+            Some(v) => v.join(url.path_segments()
+                .map(|x| x.collect::<Vec<_>>().join("/"))
+                .unwrap_or("".into())),
+            None => return None
+        };
+
+        let url = Url::from_file_path(container_path);
+
+        log::debug!("url: {:?}", &url);
+        
+        url.ok()
     }
 
-    fn try_as_path(&self) -> Option<PathBuf> {
+    pub fn to_path_buf(&self) -> Option<PathBuf> {
+        log::debug!("to_path_buf");
         let url = match self {
             ConfigPath::File(ref v) => v.to_owned(),
             ConfigPath::Container(_v) => self.container_to_file()?,
         };
+
+        log::debug!("Path: {:?}", &url);
 
         url.to_file_path().ok()
     }
