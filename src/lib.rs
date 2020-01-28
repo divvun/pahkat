@@ -1,3 +1,5 @@
+pub extern crate pahkat_types as types;
+
 #[cfg(feature = "ffi")]
 pub mod ffi;
 
