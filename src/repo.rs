@@ -50,13 +50,8 @@ pub(crate) fn download(
         config.max_concurrent_downloads(),
     );
 
-    let mut rt = tokio::runtime::Builder::new()
-        .basic_scheduler()
-        .enable_all()
-        .build()
-        .expect("new rt");
     let output_path = crate::repo::download_path(&*config, &installer.url());
-    rt.block_on(dm.download(&url, output_path, Some(progress)))
+    crate::block_on(dm.download(&url, output_path, Some(progress)))
 }
 
 pub(crate) fn download_path(config: &StoreConfig, url: &str) -> std::path::PathBuf {

@@ -193,13 +193,8 @@ impl PackageStore for PrefixPackageStore {
             config.max_concurrent_downloads(),
         );
 
-        let mut rt = tokio::runtime::Builder::new()
-            .basic_scheduler()
-            .enable_all()
-            .build()
-            .expect("new rt");
         let output_path = crate::repo::download_path(config, &installer.url());
-        rt.block_on(dm.download(&url, output_path, Some(progress)))
+        crate::block_on(dm.download(&url, output_path, Some(progress)))
     }
 
     fn install(
