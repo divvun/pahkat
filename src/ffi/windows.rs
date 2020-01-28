@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::ffi::{CStr, CString};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
@@ -13,10 +14,10 @@ pub type WindowsTarget = pahkat_types::InstallTarget;
 pub type WindowsPackageAction = crate::transaction::PackageAction<WindowsTarget>;
 pub type WindowsPackageTransaction = crate::transaction::PackageTransaction<WindowsTarget>;
 
-#[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<WindowsPackageStore>")]
-pub extern "C" fn pahkat_windows_package_store_default() -> Arc<WindowsPackageStore> {
-    Arc::new(WindowsPackageStore::default())
-}
+// #[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<WindowsPackageStore>")]
+// pub extern "C" fn pahkat_windows_package_store_default() -> Arc<WindowsPackageStore> {
+//     Arc::new(WindowsPackageStore::default())
+// }
 
 #[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<WindowsPackageStore>")]
 pub extern "C" fn pahkat_windows_package_store_new(
@@ -87,15 +88,13 @@ pub extern "C" fn pahkat_windows_package_store_status(
 pub extern "C" fn pahkat_windows_package_store_download(
     #[marshal(cursed::ArcRefMarshaler::<WindowsPackageStore>)] handle: Arc<WindowsPackageStore>,
     #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
-    progress: extern "C" fn(*const PackageKey, u64, u64),
+    progress: extern "C" fn(*const libc::c_char, u64, u64) -> u8,
 ) -> Result<PathBuf, Box<dyn Error>> {
-    let package_key1 = package_key.to_owned();
+    let package_key_str = CString::new(package_key.to_string()).unwrap();
     handle
         .download(
             &package_key,
-            Box::new(move |cur, max| {
-                progress(&package_key1 as *const _, cur, max);
-            }),
+            Box::new(move |cur, max| progress(package_key_str.as_ptr(), cur, max) != 0),
         )
         .map_err(|e| Box::new(e) as _)
 }
@@ -149,21 +148,25 @@ pub extern "C" fn pahkat_windows_transaction_new(
 }
 
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
-pub extern "C" fn pahkat_windows_transaction_actions(
+pub extern "C" fn pahkat_macos_transaction_actions(
     #[marshal(cursed::BoxRefMarshaler::<WindowsPackageTransaction>)] handle: &WindowsPackageTransaction,
 ) -> Vec<WindowsPackageAction> {
     handle.actions().to_vec()
 }
 
-#[cthulhu::invoke]
-pub extern "C" fn pahkat_windows_transaction_process(
+#[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
+pub extern "C" fn pahkat_macos_transaction_process(
     #[marshal(cursed::BoxRefMarshaler::<WindowsPackageTransaction>)] handle: &WindowsPackageTransaction,
     tag: u32,
-    progress_callback: extern "C" fn(u32, *const libc::c_char, u32),
-) {
-    handle.process(move |key, event| {
-        let k = PackageKeyMarshaler::to_foreign(&key).unwrap();
-        progress_callback(tag, k, event.to_u32());
-        // PackageKeyMarshaler::drop_foreign(k);
-    })
+    progress_callback: extern "C" fn(u32, *const libc::c_char, u32) -> u8,
+) -> Result<(), Box<dyn Error>> {
+    handle
+        .process(move |key, event| {
+            let k = PackageKeyMarshaler::to_foreign(&key).unwrap();
+            progress_callback(tag, k, event.to_u32()) != 0
+            // PackageKeyMarshaler::drop_foreign(k);
+        })
+        .join()
+        .unwrap()
+        .map_err(|e| Box::new(e) as _)
 }

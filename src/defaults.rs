@@ -1,8 +1,8 @@
 use crate::store_config::ConfigPath;
 use directories::BaseDirs;
+use once_cell::sync::OnceCell;
 use std::path::PathBuf;
 use url::Url;
-use once_cell::sync::OnceCell;
 
 #[cfg(not(target_os = "android"))]
 pub fn config_path() -> Option<PathBuf> {
@@ -14,7 +14,6 @@ pub fn config_path() -> Option<PathBuf> {
 fn raw_cache_path() -> Option<PathBuf> {
     BaseDirs::new().map(|x| x.cache_dir().join("Pahkat"))
 }
-
 
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub fn cache_path() -> ConfigPath {

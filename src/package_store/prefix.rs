@@ -14,16 +14,16 @@ use hashbrown::HashMap;
 use pahkat_types::*;
 use r2d2_sqlite::SqliteConnectionManager;
 use snafu::{ErrorCompat, OptionExt, ResultExt, Snafu};
-use xz2::read::XzDecoder;
 use url::Url;
+use xz2::read::XzDecoder;
 
-use crate::{
-    cmp, download::Download, download::DownloadManager, repo::Repository, transaction::PackageStatus,
-    transaction::PackageStatusError, PackageKey, PackageStore, RepoRecord, StoreConfig,
-};
 use crate::transaction::{
-    install::InstallError,  uninstall::UninstallError,
-    PackageDependencyError,
+    install::InstallError, uninstall::UninstallError, PackageDependencyError,
+};
+use crate::{
+    cmp, download::Download, download::DownloadManager, repo::Repository,
+    transaction::PackageStatus, transaction::PackageStatusError, PackageKey, PackageStore,
+    RepoRecord, StoreConfig,
 };
 
 pub struct PrefixPackageStore {
@@ -188,9 +188,16 @@ impl PackageStore for PrefixPackageStore {
         };
 
         let config = &self.config.read().unwrap();
-        let dm = DownloadManager::new(config.download_cache_path(), config.max_concurrent_downloads());
-        
-        let mut rt = tokio::runtime::Builder::new().basic_scheduler().enable_all().build().expect("new rt");
+        let dm = DownloadManager::new(
+            config.download_cache_path(),
+            config.max_concurrent_downloads(),
+        );
+
+        let mut rt = tokio::runtime::Builder::new()
+            .basic_scheduler()
+            .enable_all()
+            .build()
+            .expect("new rt");
         let output_path = crate::repo::download_path(config, &installer.url());
         rt.block_on(dm.download(&url, output_path, Some(progress)))
     }
@@ -224,14 +231,16 @@ impl PackageStore for PrefixPackageStore {
             return Err(crate::transaction::install::InstallError::PackageNotInCache);
         }
 
-        let ext = pkg_path.extension().and_then(OsStr::to_str)
+        let ext = pkg_path
+            .extension()
+            .and_then(OsStr::to_str)
             .ok_or(InstallError::InvalidFileType)?;
 
         let file = File::open(&pkg_path).unwrap();
 
         let reader = match ext {
             "txz" | "xz" => XzDecoder::new(file),
-            _ => return Err(InstallError::InvalidFileType)
+            _ => return Err(InstallError::InvalidFileType),
         };
 
         let mut tar_file = tar::Archive::new(reader);

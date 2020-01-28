@@ -19,6 +19,46 @@ pub struct RepoRecord {
     pub channel: String,
 }
 
+pub(crate) fn download(
+    config: &Arc<RwLock<StoreConfig>>,
+    package_key: &PackageKey,
+    repos: &Arc<RwLock<HashMap<RepoRecord, Repository>>>,
+    progress: Box<dyn Fn(u64, u64) -> bool + Send + 'static>,
+) -> Result<std::path::PathBuf, crate::download::DownloadError> {
+    use pahkat_types::Downloadable;
+
+    let package = match find_package_by_key(package_key, repos) {
+        Some(v) => v,
+        None => {
+            return Err(crate::download::DownloadError::NoUrl);
+        }
+    };
+
+    let installer = match package.installer() {
+        None => return Err(crate::download::DownloadError::NoUrl),
+        Some(v) => v,
+    };
+
+    let url = match Url::parse(&*installer.url()) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::download::DownloadError::InvalidUrl),
+    };
+
+    let config = config.read().unwrap();
+    let dm = crate::download::DownloadManager::new(
+        config.download_cache_path(),
+        config.max_concurrent_downloads(),
+    );
+
+    let mut rt = tokio::runtime::Builder::new()
+        .basic_scheduler()
+        .enable_all()
+        .build()
+        .expect("new rt");
+    let output_path = crate::repo::download_path(&*config, &installer.url());
+    rt.block_on(dm.download(&url, output_path, Some(progress)))
+}
+
 pub(crate) fn download_path(config: &StoreConfig, url: &str) -> std::path::PathBuf {
     let mut sha = Sha256::new();
     sha.input(url.as_bytes());
@@ -46,7 +86,11 @@ where
     P: PackageStore<Target = T>,
     T: Send + Sync + std::fmt::Debug,
 {
-    log::debug!("Getting all statuses for: {:?}, target: {:?}", repo_record, target);
+    log::debug!(
+        "Getting all statuses for: {:?}, target: {:?}",
+        repo_record,
+        target
+    );
     let mut map = BTreeMap::new();
 
     let repos = store.repos();

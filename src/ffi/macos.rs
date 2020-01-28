@@ -67,10 +67,10 @@ impl FromForeign<*const libc::c_char, MacOSTarget> for TargetMarshaler {
     }
 }
 
-#[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<MacOSPackageStore>")]
-pub extern "C" fn pahkat_macos_package_store_default() -> Arc<MacOSPackageStore> {
-    Arc::new(MacOSPackageStore::default())
-}
+// #[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<MacOSPackageStore>")]
+// pub extern "C" fn pahkat_macos_package_store_default() -> Arc<MacOSPackageStore> {
+//     Arc::new(MacOSPackageStore::default())
+// }
 
 #[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<MacOSPackageStore>")]
 pub extern "C" fn pahkat_macos_package_store_new(
@@ -141,7 +141,7 @@ pub extern "C" fn pahkat_macos_package_store_download(
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_macos_package_store_find_package_by_key(
     #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
-    #[marshal(PackageKeyMarshaler)] package_key: PackageKey
+    #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
 ) -> Option<pahkat_types::Package> {
     handle.find_package_by_key(&package_key)
 }

@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use std::thread::JoinHandle;
 
 use fd_lock::FdLock;
-use url::Url;
 use reqwest::header;
+use url::Url;
 
 use crate::ext::PathExt;
 
@@ -32,7 +32,7 @@ impl DownloadManager {
             .timeout(std::time::Duration::from_secs(60))
             .build()
             .unwrap();
-            
+
         DownloadManager {
             client,
             path,
@@ -72,14 +72,12 @@ impl DownloadManager {
     {
         let filename = match url.path_segments().and_then(|x| x.last()) {
             Some(v) => v,
-            None => {
-                return Err(DownloadError::InvalidUrl)
-            }
+            None => return Err(DownloadError::InvalidUrl),
         };
 
         let dest_path = dest_path.as_ref();
         let dest_file_path = dest_path.join(filename);
-        
+
         // Check destination path exists
         if dest_path.exists() && dest_file_path.exists() {
             self.handle_callback(0, 0, progress.as_ref())?;
@@ -104,7 +102,9 @@ impl DownloadManager {
         let mut req = self.client.get(url.as_str());
 
         let mut fdlock = {
-            let fd = fs::OpenOptions::new().append(true).open(&tmp_dest_path)
+            let fd = fs::OpenOptions::new()
+                .append(true)
+                .open(&tmp_dest_path)
                 .or_else(|_| fs::File::create(&tmp_dest_path))
                 .map_err(|e| DownloadError::IoError(e))?;
             FdLock::new(fd)
@@ -113,7 +113,10 @@ impl DownloadManager {
         // Lock temporary destination file for writing
         log::debug!("Locking {}", tmp_dest_path.display());
 
+        #[cfg(not(windows))]
         let mut file = fdlock.lock().map_err(|_| DownloadError::LockFailure)?;
+        #[cfg(windows)]
+        let mut file = fdlock.try_lock().map_err(|_| DownloadError::LockFailure)?;
 
         log::debug!("Got lock on {}", tmp_dest_path.display());
         let meta = file.metadata().map_err(|e| DownloadError::IoError(e))?;
@@ -126,12 +129,17 @@ impl DownloadManager {
         }
 
         let req = req.build().map_err(DownloadError::ReqwestError)?;
-        
+
         // Get URL headers
-        let mut res = self.client.execute(req).await.map_err(DownloadError::ReqwestError)?;
+        let mut res = self
+            .client
+            .execute(req)
+            .await
+            .map_err(DownloadError::ReqwestError)?;
 
         // Get content length and send if exists
-        let content_len = res.headers()
+        let content_len = res
+            .headers()
             .get(header::CONTENT_LENGTH)
             .map(|ct_len| ct_len.to_str().unwrap_or("").parse::<u64>().unwrap_or(0u64))
             .unwrap_or(0u64);

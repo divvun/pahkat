@@ -10,8 +10,8 @@ pub mod prefix;
 use std::convert::TryFrom;
 use std::error::Error;
 use std::ffi::{CStr, CString};
-use std::sync::{Arc, RwLock};
 use std::path::PathBuf;
+use std::sync::{Arc, RwLock};
 
 use cursed::{FromForeign, InputType, ReturnType, ToForeign};
 use serde::de::DeserializeOwned;
@@ -30,7 +30,7 @@ fn level_u8_to_str(level: u8) -> Option<&'static str> {
         2 => "warn",
         3 => "info",
         4 => "debug",
-        _ => "trace"
+        _ => "trace",
     })
 }
 
@@ -42,7 +42,7 @@ pub extern "C" fn pahkat_enable_logging(level: u8) {
     if let Some(level) = level_u8_to_str(level) {
         std::env::set_var("RUST_LOG", format!("pahkat_client={}", level));
     }
-    
+
     env_logger::builder()
         .format(|buf, record| {
             writeln!(
@@ -69,17 +69,16 @@ pub extern "C" fn pahkat_enable_logging(level: u8) {
 
     let mut derp = android_log::LogBuilder::new("PahkatClient");
     derp.format(|record| {
-            format!(
-                "{} {} {}:{} > {}",
-                record.level(),
-                record.target(),
-                record.file().unwrap_or("<unknown>"),
-                record.line().unwrap_or(0),
-                record.args()
-            )
-        });
-    derp.init()
-        .unwrap();
+        format!(
+            "{} {} {}:{} > {}",
+            record.level(),
+            record.target(),
+            record.file().unwrap_or("<unknown>"),
+            record.line().unwrap_or(0),
+            record.args()
+        )
+    });
+    derp.init().unwrap();
 }
 
 pub struct JsonMarshaler;
@@ -122,9 +121,9 @@ where
 
     fn from_foreign(ptr: *const libc::c_char) -> Result<T, Self::Error> {
         if ptr.is_null() {
-            return Err(cursed::null_ptr_error())
+            return Err(cursed::null_ptr_error());
         }
-        
+
         let s = unsafe { CStr::from_ptr(ptr) }.to_str()?;
         log::debug!("JSON: {}, type: {}", s, std::any::type_name::<T>());
         let v: Result<T, _> = serde_json::from_str(&s);
@@ -167,9 +166,9 @@ impl FromForeign<*const libc::c_char, PackageKey> for PackageKeyMarshaler {
 
     fn from_foreign(string: *const libc::c_char) -> Result<PackageKey, Self::Error> {
         if string.is_null() {
-            return Err(cursed::null_ptr_error())
+            return Err(cursed::null_ptr_error());
         }
-        
+
         let s: &str = cursed::StrMarshaler::from_foreign(string)?;
         PackageKey::try_from(s).map_err(|e| Box::new(e) as _)
     }
@@ -256,9 +255,7 @@ pub extern "C" fn pahkat_store_config_set_cache_base_url(
 
 #[cfg(target_os = "android")]
 #[cthulhu::invoke]
-pub extern "C" fn pahkat_android_init(
-    #[marshal(cursed::PathMarshaler)] container_path: PathBuf
-) {
+pub extern "C" fn pahkat_android_init(#[marshal(cursed::PathMarshaler)] container_path: PathBuf) {
     let _ = crate::store_config::CONTAINER_PATH.set(container_path).ok();
 
     std::panic::set_hook(Box::new(|info| {

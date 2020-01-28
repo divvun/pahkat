@@ -141,14 +141,14 @@ pub extern "C" fn pahkat_prefix_transaction_new(
 
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_prefix_transaction_actions(
-    #[marshal(cursed::BoxRefMarshaler::<PrefixPackageTransaction>)] handle: &PrefixPackageTransaction,
+    handle: &PrefixPackageTransaction,
 ) -> Vec<PrefixPackageAction> {
     handle.actions().to_vec()
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
 pub extern "C" fn pahkat_prefix_transaction_process(
-    #[marshal(cursed::BoxRefMarshaler::<PrefixPackageTransaction>)] handle: &PrefixPackageTransaction,
+    handle: &PrefixPackageTransaction,
     tag: u32,
     progress_callback: extern "C" fn(u32, *const libc::c_char, u32) -> u8,
 ) -> Result<(), Box<dyn Error>> {

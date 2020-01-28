@@ -5,9 +5,9 @@ use clap::{crate_version, App, AppSettings, Arg, SubCommand};
 use std::path::Path;
 use std::sync::Arc;
 
+use pahkat_client::PackageStore;
 use pahkat_client::*;
 use pahkat_types::Package;
-use pahkat_client::PackageStore;
 use sentry::integrations::panic::register_panic_handler;
 
 use pahkat_client::PrefixPackageStore;

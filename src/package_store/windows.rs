@@ -118,6 +118,10 @@ fn uninstall_regkey(installer: &WindowsInstaller) -> Option<RegKey> {
 impl PackageStore for WindowsPackageStore {
     type Target = InstallTarget;
 
+    fn config(&self) -> SharedStoreConfig {
+        Arc::clone(&self.config)
+    }
+
     fn repos(&self) -> SharedRepos {
         Arc::clone(&self.repos)
     }
@@ -125,28 +129,9 @@ impl PackageStore for WindowsPackageStore {
     fn download(
         &self,
         key: &PackageKey,
-        progress: Box<dyn Fn(u64, u64) -> () + Send + 'static>,
+        progress: Box<dyn Fn(u64, u64) -> bool + Send + 'static>,
     ) -> Result<PathBuf, crate::download::DownloadError> {
-        use crate::download::Download;
-
-        let package = match self.find_package_by_key(key) {
-            Some(v) => v,
-            None => {
-                return Err(crate::download::DownloadError::NoUrl);
-            }
-        };
-
-        let installer = match package.installer() {
-            None => return Err(crate::download::DownloadError::NoUrl),
-            Some(v) => v,
-        };
-
-        let config = &self.config.read().unwrap();
-
-        let download_path = crate::repo::download_path(config, &installer.url());
-        let tmp_path = config.tmp_path().to_path_buf().unwrap();
-        let disposable = package.download(tmp_path, &download_path, Some(progress))?;
-        disposable.wait()
+        crate::repo::download(&self.config, key, &self.repos, progress)
     }
 
     fn install(
@@ -425,10 +410,6 @@ impl PackageStore for WindowsPackageStore {
         Ok(true)
     }
 
-    fn config(&self) -> SharedStoreConfig {
-        Arc::clone(&self.config)
-    }
-
     fn import(
         &self,
         key: &PackageKey,
@@ -440,15 +421,9 @@ impl PackageStore for WindowsPackageStore {
     fn all_statuses(
         &self,
         repo_record: &RepoRecord,
+        target: &Self::Target,
     ) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>> {
         unimplemented!()
-    }
-}
-
-impl std::default::Default for WindowsPackageStore {
-    fn default() -> Self {
-        let config = StoreConfig::load_or_default(true);
-        WindowsPackageStore::new(config)
     }
 }
 
@@ -467,50 +442,6 @@ impl WindowsPackageStore {
     pub fn config(&self) -> SharedStoreConfig {
         Arc::clone(&self.config)
     }
-
-    // fn find_package_dependencies_impl(
-    //     &self,
-    //     key: &PackageKey,
-    //     package: &Package,
-    //     target: InstallTarget,
-    //     level: u8,
-    //     resolved: &mut Vec<String>,
-    // ) -> Result<Vec<???>, PackageDependencyError> {
-    //     unimplemented!()
-    // }
-
-    // TODO: this is a sneaky FFI hack, booooo
-    // pub fn package_path(&self, key: &PackageKey) -> Option<PathBuf> {
-    //     let package = match self.find_package_by_key(key) {
-    //         Some(v) => v,
-    //         None => {
-    //             return None;
-    //         }
-    //     };
-
-    //     let installer = match package.installer() {
-    //         None => return None,
-    //         Some(v) => v,
-    //     };
-
-    //     let installer = match *installer {
-    //         Installer::Windows(ref v) => v,
-    //         _ => return None,
-    //     };
-
-    //     let url = match url::Url::parse(&installer.url) {
-    //         Ok(v) => v,
-    //         Err(_) => return None,
-    //     };
-    //     let filename = url.path_segments().unwrap().last().unwrap();
-    //     let pkg_path = crate::repo::download_path(&self.config(), &url.as_str()).join(filename);
-
-    //     if !pkg_path.exists() {
-    //         return None;
-    //     }
-
-    //     Some(pkg_path)
-    // }
 
     fn status_impl(
         &self,
