@@ -17,55 +17,11 @@ use crate::transaction::{
 };
 use crate::{MacOSPackageStore, PackageKey, StoreConfig};
 
-use super::{JsonMarshaler, PackageKeyMarshaler};
+use super::{JsonMarshaler, PackageKeyMarshaler, TargetMarshaler};
 
 pub type MacOSTarget = pahkat_types::InstallTarget;
 pub type MacOSPackageAction = crate::transaction::PackageAction<MacOSTarget>;
 pub type MacOSPackageTransaction = crate::transaction::PackageTransaction<MacOSTarget>;
-
-pub struct TargetMarshaler;
-
-impl InputType for TargetMarshaler {
-    type Foreign = <cursed::StringMarshaler as InputType>::Foreign;
-}
-
-impl ReturnType for TargetMarshaler {
-    type Foreign = *const libc::c_char;
-
-    fn foreign_default() -> Self::Foreign {
-        std::ptr::null()
-    }
-}
-
-impl ToForeign<MacOSTarget, *const libc::c_char> for TargetMarshaler {
-    type Error = Box<dyn Error>;
-
-    fn to_foreign(input: MacOSTarget) -> Result<*const libc::c_char, Self::Error> {
-        let str_target = match input {
-            MacOSTarget::System => "system",
-            MacOSTarget::User => "user",
-        };
-
-        let c_str = CString::new(str_target)?;
-        Ok(c_str.into_raw())
-    }
-}
-
-impl FromForeign<*const libc::c_char, MacOSTarget> for TargetMarshaler {
-    type Error = Box<dyn Error>;
-
-    fn from_foreign(ptr: *const libc::c_char) -> Result<MacOSTarget, Self::Error> {
-        if ptr.is_null() {
-            return Err(cursed::null_ptr_error());
-        }
-
-        let s = unsafe { CStr::from_ptr(ptr) }.to_str()?;
-        Ok(match s {
-            "user" => MacOSTarget::User,
-            _ => MacOSTarget::System,
-        })
-    }
-}
 
 // #[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<MacOSPackageStore>")]
 // pub extern "C" fn pahkat_macos_package_store_default() -> Arc<MacOSPackageStore> {

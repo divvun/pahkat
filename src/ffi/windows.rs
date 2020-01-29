@@ -14,10 +14,12 @@ pub type WindowsTarget = pahkat_types::InstallTarget;
 pub type WindowsPackageAction = crate::transaction::PackageAction<WindowsTarget>;
 pub type WindowsPackageTransaction = crate::transaction::PackageTransaction<WindowsTarget>;
 
-// #[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<WindowsPackageStore>")]
-// pub extern "C" fn pahkat_windows_package_store_default() -> Arc<WindowsPackageStore> {
-//     Arc::new(WindowsPackageStore::default())
-// }
+#[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<WindowsPackageStore>")]
+pub extern "C" fn pahkat_windows_package_store_default(
+) -> Result<Arc<WindowsPackageStore>, Box<dyn Error>> {
+    let config = StoreConfig::load_or_default(true)?;
+    Ok(Arc::new(WindowsPackageStore::new(config)))
+}
 
 #[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<WindowsPackageStore>")]
 pub extern "C" fn pahkat_windows_package_store_new(
@@ -71,17 +73,26 @@ impl CPackageStatus {
     }
 }
 
-#[cthulhu::invoke(return_marshaler = "cursed::CopyMarshaler::<CPackageStatus>")]
+// #[cthulhu::invoke(return_marshaler = "cursed::CopyMarshaler::<CPackageStatus>")]
+// pub extern "C" fn pahkat_windows_package_store_status(
+//     #[marshal(cursed::ArcRefMarshaler::<WindowsPackageStore>)] handle: Arc<WindowsPackageStore>,
+//     #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
+// ) -> CPackageStatus {
+//     handle
+//         .status(&package_key, &WindowsTarget::User)
+//         .and_then(|result| Ok(CPackageStatus::new(Ok(result), false)))
+//         .unwrap_or_else(|_| {
+//             CPackageStatus::new(handle.status(&package_key, &WindowsTarget::System), true)
+//         })
+// }
+
+#[cthulhu::invoke]
 pub extern "C" fn pahkat_windows_package_store_status(
     #[marshal(cursed::ArcRefMarshaler::<WindowsPackageStore>)] handle: Arc<WindowsPackageStore>,
     #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
-) -> CPackageStatus {
-    handle
-        .status(&package_key, &WindowsTarget::User)
-        .and_then(|result| Ok(CPackageStatus::new(Ok(result), false)))
-        .unwrap_or_else(|_| {
-            CPackageStatus::new(handle.status(&package_key, &WindowsTarget::System), true)
-        })
+    #[marshal(super::TargetMarshaler)] target: WindowsTarget,
+) -> i8 {
+    super::status_to_i8(handle.status(&package_key, &target))
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::PathMarshaler")]
@@ -148,14 +159,14 @@ pub extern "C" fn pahkat_windows_transaction_new(
 }
 
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
-pub extern "C" fn pahkat_macos_transaction_actions(
+pub extern "C" fn pahkat_windows_transaction_actions(
     #[marshal(cursed::BoxRefMarshaler::<WindowsPackageTransaction>)] handle: &WindowsPackageTransaction,
 ) -> Vec<WindowsPackageAction> {
     handle.actions().to_vec()
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
-pub extern "C" fn pahkat_macos_transaction_process(
+pub extern "C" fn pahkat_windows_transaction_process(
     #[marshal(cursed::BoxRefMarshaler::<WindowsPackageTransaction>)] handle: &WindowsPackageTransaction,
     tag: u32,
     progress_callback: extern "C" fn(u32, *const libc::c_char, u32) -> u8,

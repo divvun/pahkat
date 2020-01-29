@@ -14,6 +14,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
 use cursed::{FromForeign, InputType, ReturnType, ToForeign};
+use once_cell::sync::Lazy;
+use pahkat_types::InstallTarget;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use url::Url;
@@ -21,6 +23,50 @@ use url::Url;
 use crate::repo::RepoRecord;
 use crate::transaction::{PackageStatus, PackageStatusError};
 use crate::{PackageKey, StoreConfig};
+
+pub struct TargetMarshaler;
+
+impl InputType for TargetMarshaler {
+    type Foreign = <cursed::StringMarshaler as InputType>::Foreign;
+}
+
+impl ReturnType for TargetMarshaler {
+    type Foreign = *const libc::c_char;
+
+    fn foreign_default() -> Self::Foreign {
+        std::ptr::null()
+    }
+}
+
+impl ToForeign<InstallTarget, *const libc::c_char> for TargetMarshaler {
+    type Error = Box<dyn Error>;
+
+    fn to_foreign(input: InstallTarget) -> Result<*const libc::c_char, Self::Error> {
+        let str_target = match input {
+            InstallTarget::System => "system",
+            InstallTarget::User => "user",
+        };
+
+        let c_str = CString::new(str_target)?;
+        Ok(c_str.into_raw())
+    }
+}
+
+impl FromForeign<*const libc::c_char, InstallTarget> for TargetMarshaler {
+    type Error = Box<dyn Error>;
+
+    fn from_foreign(ptr: *const libc::c_char) -> Result<InstallTarget, Self::Error> {
+        if ptr.is_null() {
+            return Err(cursed::null_ptr_error());
+        }
+
+        let s = unsafe { CStr::from_ptr(ptr) }.to_str()?;
+        Ok(match s {
+            "user" => InstallTarget::User,
+            _ => InstallTarget::System,
+        })
+    }
+}
 
 #[inline(always)]
 fn level_u8_to_str(level: u8) -> Option<&'static str> {
@@ -172,6 +218,16 @@ impl FromForeign<*const libc::c_char, PackageKey> for PackageKeyMarshaler {
         let s: &str = cursed::StrMarshaler::from_foreign(string)?;
         PackageKey::try_from(s).map_err(|e| Box::new(e) as _)
     }
+}
+type LoggingCallback =
+    extern "C" fn(u8, *const libc::c_char, *const libc::c_char, *const libc::c_char);
+static LOGGING_CALLBACK: Lazy<RwLock<Option<LoggingCallback>>> = Lazy::new(|| RwLock::new(None));
+
+#[cthulhu::invoke]
+pub extern "C" fn pahkat_set_logging_callback(
+    callback: extern "C" fn(u8, *const libc::c_char, *const libc::c_char, *const libc::c_char),
+) {
+    *LOGGING_CALLBACK.write().unwrap() = Some(callback);
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
