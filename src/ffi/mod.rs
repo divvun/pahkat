@@ -219,15 +219,58 @@ impl FromForeign<*const libc::c_char, PackageKey> for PackageKeyMarshaler {
         PackageKey::try_from(s).map_err(|e| Box::new(e) as _)
     }
 }
+
+struct ExternalLogger {
+    callback: LoggingCallback
+}
+
+fn make_unknown_cstr() -> CString {
+    CString::new("<unknown>").unwrap()
+}
+
+impl log::Log for ExternalLogger {
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        true
+    }
+
+    fn log(&self, record: &log::Record) {
+        use log::Level::*;
+
+        let level = match record.level() {
+            Error => 1,
+            Warn => 2,
+            Info => 3,
+            Debug => 4,
+            Trace => 5,
+        };
+
+        let msg = CString::new(format!("{}", record.args()))
+            .unwrap_or_else(|_| make_unknown_cstr());
+        let module = CString::new(record.module_path().unwrap_or("<unknown>"))
+            .unwrap_or_else(|_| make_unknown_cstr());
+        let file_path = format!("{}:{}", record.file().unwrap_or("<unknown>"), record.line().unwrap_or(0));
+        let file_path = CString::new(file_path)
+            .unwrap_or_else(|_| make_unknown_cstr());
+
+        (self.callback)(level, msg.as_ptr(), module.as_ptr(), file_path.as_ptr()); 
+    }
+
+    fn flush(&self) {
+
+    }
+}
+
 type LoggingCallback =
     extern "C" fn(u8, *const libc::c_char, *const libc::c_char, *const libc::c_char);
-static LOGGING_CALLBACK: Lazy<RwLock<Option<LoggingCallback>>> = Lazy::new(|| RwLock::new(None));
+// static LOGGING_CALLBACK: Lazy<RwLock<Option<Box<ExternalLogger>>> = Lazy::new(|| RwLock::new(None));
 
-#[cthulhu::invoke]
+#[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
 pub extern "C" fn pahkat_set_logging_callback(
     callback: extern "C" fn(u8, *const libc::c_char, *const libc::c_char, *const libc::c_char),
-) {
-    *LOGGING_CALLBACK.write().unwrap() = Some(callback);
+) -> Result<(), Box<dyn Error>> {
+    log::set_boxed_logger(Box::new(ExternalLogger { callback }))
+        .map(|_| log::set_max_level(log::LevelFilter::Trace))
+        .map_err(|err| Box::new(err) as _)
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
