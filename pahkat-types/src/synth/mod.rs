@@ -18,8 +18,8 @@ pub struct Package {
     pub name: LangTagMap<String>,
     #[serde(default = "LangTagMap::new")]
     pub description: LangTagMap<String>,
-
-    pub url: Option<String>,
+    #[serde(default = "Vec::new")]
+    pub tags: Vec<String>,
     pub versions: Vec<Version>,
 }
 
@@ -29,6 +29,7 @@ pub struct Target {
     pub arch: Option<String>,
     #[serde(default = "DependencyMap::new")]
     pub dependencies: DependencyMap,
+    // TODO: have other metadata here for if version not found?
     pub verifier: Verifier,
 }
 

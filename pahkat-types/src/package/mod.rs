@@ -39,5 +39,5 @@ pub struct Version {
     /// Must be a valid SPDX string
     pub license: Option<String>,
     pub license_url: Option<url::Url>,
-    pub payloads: Vec<crate::payload::Payload>,
+    pub targets: Vec<crate::payload::Target>,
 }

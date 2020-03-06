@@ -5,4 +5,5 @@ members = [
     "pahkat-common",
     "pahkat-cli",
     "pahkat-server",
+    "pahkat-rpc",
 ]
