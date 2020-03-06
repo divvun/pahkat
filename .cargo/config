@@ -1,0 +1,6 @@
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-Ctarget-feature=+crt-static", "-Zshare-generics=off"]
+
+
+[target.i686-pc-windows-msvc]
+rustflags = ["-Ctarget-feature=+crt-static", "-Zshare-generics=off"]

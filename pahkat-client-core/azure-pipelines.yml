@@ -1,0 +1,26 @@
+trigger:
+  - master
+  - develop
+
+jobs:
+  - job: "Windows"
+    pool:
+      vmImage: "vs2017-win2016"
+    steps:
+      - bash: |
+          set -e
+          curl -sLo rustup-init.exe https://win.rustup.rs/
+          ./rustup-init.exe -y --default-host=i686-pc-windows-msvc --default-toolchain=nightly
+          git clone https://github.com/divvun/pahkat.git ../pahkat
+          rustup target add i686-pc-windows-msvc
+          rustup default nightly-i686-pc-windows-msvc
+        displayName: "Install prerequisites"
+      - script: |
+          call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Auxiliary\Build\vcvars32.bat"
+          cargo build --target=i686-pc-windows-msvc --release
+        displayName: "Build"
+      - task: PublishPipelineArtifact@0
+        inputs:
+          artifactName: windows-dll
+          targetPath: "target/i686-pc-windows-msvc/release/pahkat_client.dll"
+        displayName: "Publish artifact"

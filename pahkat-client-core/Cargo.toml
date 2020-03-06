@@ -1,0 +1,66 @@
+[package]
+name = "pahkat_client"
+version = "0.1.0"
+authors = ["Brendan Molloy <brendan@bbqsrc.net>"]
+edition = "2018"
+license = "Apache-2.0 OR MIT"
+
+[lib]
+crate-type = ["staticlib", "dylib", "rlib"]
+
+[dependencies]
+pahkat-types = { git = "https://github.com/divvun/pahkat", branch = "develop" }
+reqwest = { version = "0.10.1", features = ["native-tls-vendored", "blocking", "gzip"], default-features = false }
+serde = { version = "1.0.104", features = ["derive"] }
+serde_json = "1.0.45"
+semver = "0.9.0"
+url = { version = "2.1.1", features = ["serde"] }
+libc = "0.2.66"
+lazy_static = "1.4.0"
+maplit = "1.0"
+dirs = "2.0.2"
+directories = "2.0.2"
+chrono = "0.4.10"
+hashbrown = { version = "0.6.3", features = ["serde"] }
+is_executable = "0.1.2"
+snafu = "0.6.2"
+tempfile = "3.1.0"
+itertools = "0.8.2"
+log = "0.4.8"
+sha2 = "0.8"
+fd-lock = "1.1.1"
+tokio = { version = "0.2.11", default-features = false, features = ["tcp", "time"] }
+once_cell = "1.3.1"
+
+# Prefix feature
+xz2 = { version = "0.1.6", optional = true }
+rusqlite = { version = "0.20.0", features = ["bundled"], optional = true }
+tar = { version = "0.4.26", optional = true }
+r2d2 = { version = "0.8.7", optional = true }
+r2d2_sqlite = { version = "0.12.0", optional = true }
+
+# FFI specific
+env_logger = { version = "0.7.1", optional = true }
+cthulhu = { git = "https://github.com/cthulhu-rs/cthulhu", optional = true }
+cursed = { git = "https://github.com/cthulhu-rs/cthulhu", optional = true }
+
+# MacOS-specific
+[target.'cfg(target_os="macos")'.dependencies]
+plist = { version = "0.5.3" }
+
+# Windows-specific
+[target.'cfg(target_os="windows")'.dependencies]
+winapi = { version = "0.3", features = ["shellapi"] }
+winreg = { git = "https://github.com/bbqsrc/winreg-rs", branch = "master" }
+
+# Android-specific
+[target.'cfg(target_os="android")'.dependencies]
+backtrace = "0.3.40"
+ctor = "0.1.12"
+android_log = { git = "https://github.com/bbqsrc/android_log-rs" }
+
+[features]
+ffi = ["env_logger", "cthulhu", "cursed"]
+prefix = ["tar", "xz2", "rusqlite", "r2d2_sqlite", "r2d2"]
+windows = []
+macos = []
