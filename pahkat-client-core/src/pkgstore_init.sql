@@ -25,9 +25,9 @@ CREATE TABLE packages_dependencies (
 
 CREATE TABLE packages_files (
     package_id      INTEGER NOT NULL,
-    file_path       BLOB NOT NULL,
+    file_url       TEXT NOT NULL,
 
-    PRIMARY KEY (package_id, file_path),
+    PRIMARY KEY (package_id, file_url),
     FOREIGN KEY (package_id) REFERENCES packages(id)
 );
 

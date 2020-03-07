@@ -1,26 +1,28 @@
-use snafu::Snafu;
 use std::{io, process};
 
-#[derive(Snafu, Debug)]
-#[snafu(visibility = "pub(crate)")]
+#[derive(thiserror::Error, Debug)]
 pub enum InstallError {
-    NoPackage,
-    NoInstaller,
-    WrongInstallerType,
-    InvalidFileType,
+    #[error("Payload error")]
+    Payload(#[from] crate::repo::PayloadError),
+
+    #[error("Wrong payload type")]
+    WrongPayloadType,
+
+    #[error("Package not found in cache (not downloaded?)")]
     PackageNotInCache,
-    InvalidUrl {
-        source: url::ParseError,
-        url: String,
-    },
-    InstallerFailure {
-        source: ProcessError,
-    },
+
+    #[error("Installation process failed")]
+    InstallerFailure(#[from] ProcessError),
 }
 
-#[derive(Snafu, Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum ProcessError {
-    Io { source: io::Error },
-    Unknown { output: process::Output },
+    #[error("IO error")]
+    Io(#[from] io::Error),
+
+    #[error("Not found")]
     NotFound,
+
+    #[error("Unknown error")]
+    Unknown(process::Output),
 }

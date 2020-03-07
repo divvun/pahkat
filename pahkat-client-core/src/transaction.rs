@@ -2,7 +2,7 @@ use std::fmt;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 
-use pahkat_types::Package;
+use pahkat_types::package::Package;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -36,28 +36,12 @@ impl fmt::Display for PackageStatus {
     }
 }
 
-impl fmt::Display for PackageStatusError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "Error: {}",
-            match *self {
-                PackageStatusError::NoPackage => "No package",
-                PackageStatusError::NoInstaller => "No installer",
-                PackageStatusError::WrongInstallerType => "Wrong installer type",
-                PackageStatusError::ParsingVersion => "Could not parse version",
-                PackageStatusError::InvalidInstallPath => "Invalid install path",
-                PackageStatusError::InvalidMetadata => "Invalid metadata",
-            }
-        )
-    }
-}
-
 pub trait PackageTarget: Send + Sync + Clone {}
 
 /// This is so good.
 impl PackageTarget for () {}
-impl PackageTarget for pahkat_types::InstallTarget {}
+impl PackageTarget for pahkat_types::payload::windows::InstallTarget {}
+impl PackageTarget for pahkat_types::payload::macos::InstallTarget {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PackageAction<T: PackageTarget> {
@@ -104,14 +88,16 @@ impl<T: PackageTarget> PackageAction<T> {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, thiserror::Error, Clone)]
 pub enum PackageStatusError {
-    NoPackage,
-    NoInstaller,
-    WrongInstallerType,
+    #[error("Payload error")]
+    Payload(#[from] crate::repo::PayloadError),
+
+    #[error("Wrong payload type")]
+    WrongPayloadType,
+
+    #[error("Error parsing version")]
     ParsingVersion,
-    InvalidInstallPath,
-    InvalidMetadata,
 }
 
 #[derive(Debug, Clone)]

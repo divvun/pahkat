@@ -1,4 +1,4 @@
-#![cfg(windows)]
+// #![cfg(windows)]
 
 use std::collections::BTreeMap;
 use std::ffi::OsString;
@@ -7,18 +7,22 @@ use std::process::Command;
 use std::sync::{Arc, RwLock};
 
 use hashbrown::HashMap;
-use pahkat_types::{Downloadable, InstallTarget, Installer, Package, WindowsInstaller};
+use indexmap::IndexMap;
+use pahkat_types::payload::windows::InstallTarget;
 use url::Url;
 use winreg::enums::*;
 use winreg::RegKey;
 
-use crate::repo::RepoRecord;
-use crate::store_config::StoreConfig;
 use crate::transaction::{
     install::InstallError, install::ProcessError, uninstall::UninstallError, PackageStatus,
     PackageStatusError,
 };
-use crate::{PackageKey, PackageStore, Repository};
+use crate::Config;
+use crate::{repo::PayloadError, LoadedRepository, PackageKey, PackageStore};
+use pahkat_types::{
+    package::{Descriptor, Package},
+    payload::windows,
+};
 
 mod sys {
     use std::ffi::{OsStr, OsString};
@@ -89,13 +93,11 @@ mod sys {
 mod keys {
     pub const UNINSTALL_PATH: &'static str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall";
     pub const DISPLAY_VERSION: &'static str = "DisplayVersion";
-    // pub const SKIP_VERSION: &'static str = "SkipVersion";
     pub const QUIET_UNINSTALL_STRING: &'static str = "QuietUninstallString";
-    // pub const UNINSTALL_STRING: &'static str = "UninstallString";
 }
 
-type SharedStoreConfig = Arc<RwLock<StoreConfig>>;
-type SharedRepos = Arc<RwLock<HashMap<RepoRecord, Repository>>>;
+type SharedStoreConfig = Arc<RwLock<Config>>;
+type SharedRepos = Arc<RwLock<HashMap<Url, LoadedRepository>>>;
 
 #[derive(Debug)]
 pub struct WindowsPackageStore {
@@ -103,7 +105,7 @@ pub struct WindowsPackageStore {
     config: SharedStoreConfig,
 }
 
-fn uninstall_regkey(installer: &WindowsInstaller) -> Option<RegKey> {
+fn uninstall_regkey(installer: &windows::Executable) -> Option<RegKey> {
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     let path = Path::new(keys::UNINSTALL_PATH).join(&installer.product_code);
     match hklm.open_subkey(&path) {
@@ -131,44 +133,35 @@ impl PackageStore for WindowsPackageStore {
         key: &PackageKey,
         progress: Box<dyn Fn(u64, u64) -> bool + Send + 'static>,
     ) -> Result<PathBuf, crate::download::DownloadError> {
-        crate::repo::download(&self.config, key, &self.repos, progress)
+        let query = crate::repo::ReleaseQuery::from(key);
+        let repos = self.repos.read().unwrap();
+        crate::repo::download(&self.config, key, query, &*repos, progress)
     }
 
     fn install(
         &self,
         key: &PackageKey,
-        target: &Self::Target,
+        install_target: &Self::Target,
     ) -> Result<PackageStatus, InstallError> {
-        let package = match self.find_package_by_key(key) {
-            Some(v) => v,
-            None => {
-                return Err(InstallError::NoPackage);
-            }
-        };
+        let query = crate::repo::ReleaseQuery::from(key);
+        let repos = self.repos.read().unwrap();
 
-        let installer = match package.installer() {
-            None => return Err(InstallError::NoInstaller),
-            Some(v) => v,
+        let (target, release, descriptor) =
+            crate::repo::resolve_payload(key, query, &*repos).map_err(InstallError::Payload)?;
+        let installer = match target.payload {
+            pahkat_types::payload::Payload::WindowsExecutable(v) => v,
+            _ => return Err(InstallError::WrongPayloadType),
         };
-
-        let installer = match *installer {
-            Installer::Windows(ref v) => v,
-            _ => return Err(InstallError::WrongInstallerType),
-        };
-
-        let url = url::Url::parse(&installer.url).map_err(|source| InstallError::InvalidUrl {
-            source,
-            url: installer.url.to_owned(),
-        })?;
-        let filename = url.path_segments().unwrap().last().unwrap();
         let pkg_path =
-            crate::repo::download_path(&self.config.read().unwrap(), &url.as_str()).join(filename);
+            crate::repo::download_file_path(&*self.config.read().unwrap(), &installer.url);
+        log::debug!("Installing {}: {:?}", &key, &pkg_path);
 
         if !pkg_path.exists() {
+            log::error!("Package path doesn't exist: {:?}", &pkg_path);
             return Err(InstallError::PackageNotInCache);
         }
 
-        let mut args: Vec<OsString> = match (&installer.installer_type, &installer.args) {
+        let mut args: Vec<OsString> = match (&installer.kind, &installer.args) {
             (_, &Some(ref v)) => sys::args(&v).map(|x| x.clone()).collect(),
             (&Some(ref type_), &None) => {
                 let mut arg_str = OsString::new();
@@ -193,7 +186,9 @@ impl PackageStore for WindowsPackageStore {
                         //     arg_str.push(" /CurrentUser")
                         // }
                     }
-                    _ => {}
+                    kind => {
+                        log::warn!("Unknown kind: {:?}", &kind);
+                    }
                 };
                 sys::args(&arg_str.as_os_str()).collect()
             }
@@ -211,44 +206,33 @@ impl PackageStore for WindowsPackageStore {
             Ok(v) => v,
             Err(e) => {
                 log::error!("{:?}", e);
-                return Err(InstallError::InstallerFailure {
-                    source: ProcessError::Io { source: e },
-                });
+                return Err(InstallError::InstallerFailure(ProcessError::Io(e)));
             }
         };
 
         if !output.status.success() {
             log::error!("{:?}", output);
-            return Err(InstallError::InstallerFailure {
-                source: ProcessError::Unknown { output },
-            });
+            return Err(InstallError::InstallerFailure(ProcessError::Unknown(
+                output,
+            )));
         }
 
-        Ok(self
-            .status_impl(&installer, key, &package, target.clone())
-            .unwrap())
+        Ok(self.status_impl(key, &descriptor, install_target).unwrap())
     }
 
     fn uninstall(
         &self,
         key: &PackageKey,
-        target: &Self::Target,
+        install_target: &Self::Target,
     ) -> Result<PackageStatus, UninstallError> {
-        let package = match self.find_package_by_key(key) {
-            Some(v) => v,
-            None => {
-                return Err(UninstallError::NoPackage);
-            }
-        };
+        let query = crate::repo::ReleaseQuery::from(key);
+        let repos = self.repos.read().unwrap();
 
-        let installer = match package.installer() {
-            None => return Err(UninstallError::NoInstaller),
-            Some(v) => v,
-        };
-
-        let installer = match installer {
-            &Installer::Windows(ref v) => v,
-            _ => return Err(UninstallError::WrongInstallerType),
+        let (target, release, descriptor) =
+            crate::repo::resolve_payload(key, query, &*repos).map_err(UninstallError::Payload)?;
+        let installer = match target.payload {
+            pahkat_types::payload::Payload::WindowsExecutable(v) => v,
+            _ => return Err(UninstallError::WrongPayloadType),
         };
 
         let regkey = match uninstall_regkey(&installer) {
@@ -262,9 +246,9 @@ impl PackageStore for WindowsPackageStore {
         {
             Ok(v) => v,
             Err(_) => {
-                return Err(UninstallError::PlatformFailure {
-                    message: "No compatible uninstallation method found.",
-                })
+                return Err(UninstallError::Payload(PayloadError::CriteriaUnmet(
+                    "No compatible uninstallation method found.".into(),
+                )))
             }
         };
 
@@ -272,7 +256,7 @@ impl PackageStore for WindowsPackageStore {
         let prog = raw_args[0].clone();
         raw_args.remove(0);
 
-        let args: Vec<OsString> = match (&installer.installer_type, &installer.uninstall_args) {
+        let args: Vec<OsString> = match (&installer.kind, &installer.uninstall_args) {
             (_, &Some(ref v)) => sys::args(&v).map(|x| x.clone()).collect(),
             (&Some(ref type_), &None) => {
                 let arg_str = match type_.as_ref() {
@@ -280,17 +264,17 @@ impl PackageStore for WindowsPackageStore {
                     "msi" => format!("/x \"{}\" /qn /norestart", &installer.product_code),
                     "nsis" => "/S".to_owned(),
                     _ => {
-                        return Err(UninstallError::PlatformFailure {
-                            message: "Invalid type specified for package installer.",
-                        })
+                        return Err(UninstallError::Payload(PayloadError::CriteriaUnmet(
+                            "Invalid type specified for package installer.".into(),
+                        )))
                     }
                 };
                 sys::args(&arg_str).collect()
             }
             _ => {
-                return Err(UninstallError::PlatformFailure {
-                    message: "Invalid type specified for package installer.",
-                })
+                return Err(UninstallError::Payload(PayloadError::CriteriaUnmet(
+                    "Invalid type specified for package installer.".into(),
+                )))
             }
         };
 
@@ -298,137 +282,81 @@ impl PackageStore for WindowsPackageStore {
 
         let output = match res {
             Ok(v) => v,
-            Err(source) => {
-                return Err(UninstallError::ProcessFailed {
-                    source: ProcessError::Io { source },
-                });
+            Err(e) => {
+                log::error!("{:?}", e);
+                return Err(UninstallError::UninstallerFailure(ProcessError::Io(e)));
             }
         };
 
         if !output.status.success() {
-            return Err(UninstallError::ProcessFailed {
-                source: ProcessError::Unknown { output },
-            });
+            log::error!("{:?}", output);
+            return Err(UninstallError::UninstallerFailure(ProcessError::Unknown(
+                output,
+            )));
         }
 
-        Ok(self
-            .status_impl(installer, key, &package, target.clone())
-            .unwrap())
+        Ok(self.status_impl(key, &descriptor, install_target).unwrap())
     }
 
     fn status(
         &self,
         key: &PackageKey,
-        target: &InstallTarget,
+        install_target: &InstallTarget,
     ) -> Result<PackageStatus, PackageStatusError> {
-        log::debug!("status: {}, target: {:?}", &key.to_string(), target);
+        log::debug!("status: {}, target: {:?}", &key.to_string(), install_target);
 
-        let package = match self.find_package_by_key(key) {
-            Some(v) => v,
-            None => {
-                return Err(PackageStatusError::NoPackage);
-            }
+        let query = crate::repo::ReleaseQuery::from(key);
+        let repos = self.repos.read().unwrap();
+
+        let (target, release, descriptor) = crate::repo::resolve_payload(key, query, &*repos)
+            .map_err(PackageStatusError::Payload)?;
+        let installer = match target.payload {
+            pahkat_types::payload::Payload::WindowsExecutable(v) => v,
+            _ => return Err(PackageStatusError::WrongPayloadType),
         };
 
-        let installer = match package.installer() {
-            None => return Err(PackageStatusError::NoInstaller),
-            Some(v) => v,
-        };
-
-        let installer = match installer {
-            &Installer::Windows(ref v) => v,
-            _ => return Err(PackageStatusError::WrongInstallerType),
-        };
-
-        self.status_impl(installer, key, &package, target.clone())
+        self.status_impl(key, &descriptor, install_target)
     }
 
     fn find_package_by_key(&self, key: &PackageKey) -> Option<Package> {
-        crate::repo::find_package_by_key(key, &self.repos)
+        let repos = self.repos.read().unwrap();
+        crate::repo::find_package_by_key(key, &*repos)
     }
 
     fn find_package_by_id(&self, package_id: &str) -> Option<(PackageKey, Package)> {
-        crate::repo::find_package_by_id(self, package_id, &self.repos)
+        let repos = self.repos.read().unwrap();
+        crate::repo::find_package_by_id(self, package_id, &*repos)
     }
 
-    // fn find_package_dependencies(
-    //     &self,
-    //     key: &PackageKey,
-    //     // package: &Package,
-    //     target: &Self::Target,
-    // ) -> Result<Vec<???>, PackageDependencyError> {
-    //     unimplemented!()
-    //     // let mut resolved = Vec::<String>::new();
-    //     // Ok(self.find_package_dependencies_impl(key, package, target.clone(), 0, &mut resolved)?)
-    // }
-
     fn refresh_repos(&self) {
-        let config = self.config.read().unwrap();
-        *self.repos.write().unwrap() = crate::repo::refresh_repos(&self.config.read().unwrap());
+        *self.repos.write().unwrap() = crate::repo::refresh_repos(&self.config);
     }
 
     fn clear_cache(&self) {
-        crate::repo::clear_cache(&self.config.read().unwrap())
-    }
-
-    fn add_repo(&self, url: String, channel: String) -> Result<bool, Box<dyn std::error::Error>> {
-        &self.config.read().unwrap().add_repo(RepoRecord {
-            url: Url::parse(&url).unwrap(),
-            channel,
-        })?;
-        self.refresh_repos();
-        Ok(true)
-    }
-
-    fn remove_repo(
-        &self,
-        url: String,
-        channel: String,
-    ) -> Result<bool, Box<dyn std::error::Error>> {
-        self.config.read().unwrap().remove_repo(RepoRecord {
-            url: Url::parse(&url).unwrap(),
-            channel,
-        })?;
-        self.refresh_repos();
-        Ok(true)
-    }
-
-    fn update_repo(
-        &self,
-        index: usize,
-        url: String,
-        channel: String,
-    ) -> Result<bool, Box<dyn std::error::Error>> {
-        self.config.read().unwrap().update_repo(
-            index,
-            RepoRecord {
-                url: Url::parse(&url).unwrap(),
-                channel,
-            },
-        )?;
-        self.refresh_repos();
-        Ok(true)
+        crate::repo::clear_cache(&self.config)
     }
 
     fn import(
         &self,
         key: &PackageKey,
         installer_path: &Path,
-    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    ) -> Result<PathBuf, crate::package_store::ImportError> {
         unimplemented!()
     }
 
     fn all_statuses(
         &self,
-        repo_record: &RepoRecord,
+        repo_url: &Url,
         target: &Self::Target,
     ) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>> {
         unimplemented!()
     }
 }
 
+use std::convert::{TryFrom, TryInto};
+
 impl WindowsPackageStore {
-    pub fn new(config: StoreConfig) -> WindowsPackageStore {
+    pub fn new(config: Config) -> WindowsPackageStore {
         let store = WindowsPackageStore {
             repos: Arc::new(RwLock::new(HashMap::new())),
             config: Arc::new(RwLock::new(config)),
@@ -445,12 +373,21 @@ impl WindowsPackageStore {
 
     fn status_impl(
         &self,
-        installer: &WindowsInstaller,
         id: &PackageKey,
-        package: &Package,
-        _target: InstallTarget,
+        package: &Descriptor,
+        _target: &InstallTarget,
     ) -> Result<PackageStatus, PackageStatusError> {
-        let inst_key = match uninstall_regkey(&installer) {
+        let mut query = crate::repo::ReleaseQuery::default();
+        query.arch = None;
+
+        let (response, inst_key) = match query
+            .iter(package)
+            .filter_map(|x| match x.target.payload {
+                pahkat_types::payload::Payload::WindowsExecutable(ref v) => Some((x, v)),
+                _ => None,
+            })
+            .find_map(|(x, v)| uninstall_regkey(&v).map(|i| (x, i)))
+        {
             Some(v) => v,
             None => return Ok(PackageStatus::NotInstalled),
         };
@@ -460,15 +397,9 @@ impl WindowsPackageStore {
             Ok(v) => v,
         };
 
-        let config = self.config.read().unwrap();
-
-        let skipped_package = config.skipped_package(id);
-        let skipped_package = skipped_package.as_ref().map(String::as_ref);
-
-        let status = crate::cmp::cmp(&disp_version, &package.version, skipped_package);
+        let status = crate::cmp::cmp(&disp_version, &response.release.version);
 
         log::debug!("Status: {:?}", &status);
         status
-        // .or_else(|_| self::cmp::assembly_cmp(...))
     }
 }

@@ -12,7 +12,7 @@ use crate::ext::PathExt;
 pub trait Download {
     fn download<F>(
         &self,
-        tmp_path: PathBuf,
+        tmp_dir: PathBuf,
         dir_path: &Path,
         progress: Option<F>,
     ) -> JoinHandle<Result<PathBuf, DownloadError>>
@@ -93,12 +93,12 @@ impl DownloadManager {
         }
 
         // Create download dir for this file
-        let cache_path = self.path.join_sha256(url.as_str().as_bytes());
-        if !cache_path.exists() {
-            fs::create_dir_all(&cache_path).map_err(|e| DownloadError::IoError(e))?;
+        let cache_dir = self.path.join_sha256(url.as_str().as_bytes());
+        if !cache_dir.exists() {
+            fs::create_dir_all(&cache_dir).map_err(|e| DownloadError::IoError(e))?;
         }
 
-        let tmp_dest_path = cache_path.join(filename);
+        let tmp_dest_path = cache_dir.join(filename);
         let mut req = self.client.get(url.as_str());
 
         let mut fdlock = {
@@ -182,22 +182,25 @@ impl DownloadManager {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum DownloadError {
-    EmptyFile,
-    InvalidUrl,
-    NoUrl,
-    UserCancelled,
-    LockFailure,
-    IoError(std::io::Error),
-    ReqwestError(reqwest::Error),
-    PersistError(tempfile::PersistError),
-    HttpStatusFailure(u16),
-}
+    #[error("Error getting payload for package identifier")]
+    Payload(#[from] crate::repo::PayloadError),
 
-impl std::error::Error for DownloadError {}
-impl std::fmt::Display for DownloadError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
+    #[error("Invalid URL")]
+    InvalidUrl,
+
+    #[error("User cancelled request")]
+    UserCancelled,
+
+    #[error("Failed to acquire file lock")]
+    LockFailure,
+
+    #[error("File IO error")]
+    IoError(#[from] std::io::Error),
+
+    #[error("Error downloading file")]
+    ReqwestError(#[from] reqwest::Error),
+    // PersistError(tempfile::PersistError),
+    // HttpStatusFailure(u16),
 }

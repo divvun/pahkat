@@ -72,5 +72,5 @@ Virtuals:
     packages:
       @id: pf:virtuals
       @container: @id
-WindowsInstaller:
+windows::Executable:
   @context: {}

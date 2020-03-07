@@ -8,17 +8,19 @@ use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 
 use hashbrown::HashMap;
-use pahkat_types::{Downloadable, InstallTarget, Installer, MacOSInstaller, Package};
+use pahkat_types::package::Package;
+use pahkat_types::payload::macos::{self, InstallTarget};
 use serde::de::{self, Deserializer};
 use serde::Deserialize;
-use snafu::ResultExt;
 use url::Url;
 
 use super::{PackageStore, SharedRepos, SharedStoreConfig};
 use crate::download::DownloadManager;
-use crate::{cmp, PackageKey, RepoRecord, StoreConfig};
+use crate::package_store::ImportError;
+use crate::{cmp, Config, PackageKey};
 
 #[cfg(target_os = "macos")]
+#[inline(always)]
 pub fn global_uninstall_path() -> PathBuf {
     PathBuf::from("/Library/Application Support/Pahkat/uninstall")
 }
@@ -68,33 +70,19 @@ impl PackageStore for MacOSPackageStore {
     fn install(
         &self,
         key: &PackageKey,
-        target: &InstallTarget,
+        install_target: &InstallTarget,
     ) -> Result<PackageStatus, InstallError> {
-        let package = match self.find_package_by_key(key) {
-            Some(v) => v,
-            None => {
-                return Err(InstallError::NoPackage);
-            }
-        };
+        let query = crate::repo::ReleaseQuery::from(key);
+        let repos = self.repos.read().unwrap();
 
-        let installer = match package.installer() {
-            None => return Err(InstallError::NoInstaller),
-            Some(v) => v,
+        let (target, release) =
+            crate::repo::resolve_payload(key, query, &*repos).map_err(InstallError::Payload)?;
+        let installer = match target.payload {
+            pahkat_types::payload::Payload::MacOSPackage(v) => v,
+            _ => return Err(InstallError::WrongPayloadType),
         };
-
-        let installer = match installer {
-            Installer::MacOS(ref v) => v,
-            _ => return Err(InstallError::WrongInstallerType),
-        };
-
-        let url = url::Url::parse(&installer.url).map_err(|source| InstallError::InvalidUrl {
-            source,
-            url: installer.url.to_owned(),
-        })?;
-        let filename = url.path_segments().unwrap().last().unwrap();
         let pkg_path =
-            crate::repo::download_path(&self.config.read().unwrap(), &url.as_str()).join(filename);
-
+            crate::repo::download_file_path(&*self.config.read().unwrap(), &installer.url);
         log::debug!("Installing {}: {:?}", &key, &pkg_path);
 
         if !pkg_path.exists() {
@@ -102,62 +90,51 @@ impl PackageStore for MacOSPackageStore {
             return Err(InstallError::PackageNotInCache);
         }
 
-        install_macos_package(&pkg_path, &target)
-            .context(crate::transaction::install::InstallerFailure {})?;
+        install_macos_package(&pkg_path, &install_target)
+            .map_err(InstallError::InstallerFailure)?;
 
-        Ok(self.status_impl(&installer, key, &package, target).unwrap())
+        Ok(self
+            .status_impl(&release, &installer, key, install_target)
+            .unwrap())
     }
 
     fn uninstall(
         &self,
         key: &PackageKey,
-        target: &InstallTarget,
+        install_target: &InstallTarget,
     ) -> Result<PackageStatus, UninstallError> {
-        let package = match self.find_package_by_key(key) {
-            Some(v) => v,
-            None => {
-                return Err(UninstallError::NoPackage);
-            }
+        let query = crate::repo::ReleaseQuery::from(key);
+        let repos = self.repos.read().unwrap();
+
+        let (target, release) =
+            crate::repo::resolve_payload(key, query, &*repos).map_err(UninstallError::Payload)?;
+        let installer = match target.payload {
+            pahkat_types::payload::Payload::MacOSPackage(v) => v,
+            _ => return Err(UninstallError::WrongPayloadType),
         };
 
-        let installer = match package.installer() {
-            None => return Err(UninstallError::NoInstaller),
-            Some(v) => v,
-        };
+        uninstall_macos_package(&installer.pkg_id, &install_target)
+            .map_err(UninstallError::UninstallerFailure)?;
 
-        let installer = match installer {
-            &Installer::MacOS(ref v) => v,
-            _ => return Err(UninstallError::WrongInstallerType),
-        };
-
-        match uninstall_macos_package(&installer.pkg_id, &target) {
-            Err(e) => return Err(UninstallError::ProcessFailed { source: e }),
-            _ => {}
-        };
-
-        Ok(self.status_impl(installer, key, &package, target).unwrap())
+        Ok(self
+            .status_impl(&release, &installer, key, install_target)
+            .unwrap())
     }
 
-    fn import(
-        &self,
-        key: &PackageKey,
-        installer_path: &Path,
-    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-        let package = match self.find_package_by_key(key) {
-            Some(v) => v,
-            None => {
-                return Err(Box::new(crate::download::DownloadError::NoUrl) as _);
-            }
-        };
+    fn import(&self, key: &PackageKey, installer_path: &Path) -> Result<PathBuf, ImportError> {
+        use std::convert::TryInto;
 
-        let installer = match package.installer() {
-            None => return Err(Box::new(crate::download::DownloadError::NoUrl) as _),
-            Some(v) => v,
-        };
+        let query = crate::repo::ReleaseQuery::from(key);
+        let repos = self.repos.read().unwrap();
 
+        let (target, release) = crate::repo::resolve_payload(key, query, &*repos)?;
+        let installer: macos::Package = target
+            .payload
+            .try_into()
+            .map_err(|_| ImportError::InvalidPayloadType)?;
         let config = &self.config.read().unwrap();
 
-        let output_path = crate::repo::download_path(config, &installer.url());
+        let output_path = crate::repo::download_dir(&**config, &installer.url);
         std::fs::copy(installer_path, &output_path)?;
         Ok(output_path)
     }
@@ -167,135 +144,69 @@ impl PackageStore for MacOSPackageStore {
         key: &PackageKey,
         progress: Box<dyn Fn(u64, u64) -> bool + Send + 'static>,
     ) -> Result<PathBuf, crate::download::DownloadError> {
-        let package = match self.find_package_by_key(key) {
-            Some(v) => v,
-            None => {
-                return Err(crate::download::DownloadError::NoUrl);
-            }
-        };
-
-        let installer = match package.installer() {
-            None => return Err(crate::download::DownloadError::NoUrl),
-            Some(v) => v,
-        };
-
-        let url = match Url::parse(&*installer.url()) {
-            Ok(v) => v,
-            Err(e) => return Err(crate::download::DownloadError::InvalidUrl),
-        };
-
-        let config = &self.config.read().unwrap();
-        let dm = DownloadManager::new(
-            config.download_cache_path(),
-            config.max_concurrent_downloads(),
-        );
-
-        let output_path = crate::repo::download_path(config, &installer.url());
-        crate::block_on(dm.download(&url, output_path, Some(progress)))
+        let query = crate::repo::ReleaseQuery::from(key);
+        let repos = self.repos.read().unwrap();
+        crate::repo::download(&self.config, key, query, &*repos, progress)
     }
 
     fn status(
         &self,
         key: &PackageKey,
-        target: &Self::Target,
+        install_target: &Self::Target,
     ) -> Result<PackageStatus, PackageStatusError> {
-        let package = match self.find_package_by_key(key) {
-            Some(v) => v,
-            None => {
-                return Err(PackageStatusError::NoPackage);
-            }
+        let query = crate::repo::ReleaseQuery::from(key);
+        let repos = self.repos.read().unwrap();
+
+        let (target, release) = crate::repo::resolve_payload(key, query, &*repos)
+            .map_err(PackageStatusError::Payload)?;
+        let installer = match target.payload {
+            pahkat_types::payload::Payload::MacOSPackage(v) => v,
+            _ => return Err(PackageStatusError::WrongPayloadType),
         };
 
-        let installer = match package.installer() {
-            None => return Err(PackageStatusError::NoInstaller),
-            Some(v) => v,
-        };
-
-        let installer = match installer {
-            Installer::MacOS(ref v) => v,
-            _ => return Err(PackageStatusError::WrongInstallerType),
-        };
-
-        self.status_impl(installer, key, &package, target)
+        self.status_impl(&release, &installer, key, install_target)
     }
 
     fn all_statuses(
         &self,
-        repo_record: &RepoRecord,
+        repo_url: &Url,
         target: &InstallTarget,
     ) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>> {
-        crate::repo::all_statuses(self, repo_record, target)
+        crate::repo::all_statuses(self, repo_url, target)
     }
 
     fn find_package_by_key(&self, key: &PackageKey) -> Option<Package> {
-        crate::repo::find_package_by_key(key, &self.repos)
+        let repos = self.repos.read().unwrap();
+        crate::repo::find_package_by_key(key, &*repos)
     }
 
     fn find_package_by_id(&self, package_id: &str) -> Option<(PackageKey, Package)> {
-        crate::repo::find_package_by_id(self, package_id, &self.repos)
+        let repos = self.repos.read().unwrap();
+        crate::repo::find_package_by_id(self, package_id, &*repos)
     }
 
     fn refresh_repos(&self) {
-        let config = self.config.read().unwrap();
-        *self.repos.write().unwrap() = crate::repo::refresh_repos(&*config);
+        *self.repos.write().unwrap() = crate::repo::refresh_repos(&self.config);
     }
 
     fn clear_cache(&self) {
-        crate::repo::clear_cache(&self.config.read().unwrap())
-    }
-
-    fn add_repo(&self, url: String, channel: String) -> Result<bool, Box<dyn std::error::Error>> {
-        &self.config.read().unwrap().add_repo(RepoRecord {
-            url: Url::parse(&url).unwrap(),
-            channel,
-        })?;
-        self.refresh_repos();
-        Ok(true)
-    }
-
-    fn remove_repo(
-        &self,
-        url: String,
-        channel: String,
-    ) -> Result<bool, Box<dyn std::error::Error>> {
-        self.config.read().unwrap().remove_repo(RepoRecord {
-            url: Url::parse(&url).unwrap(),
-            channel,
-        })?;
-        self.refresh_repos();
-        Ok(true)
-    }
-
-    fn update_repo(
-        &self,
-        index: usize,
-        url: String,
-        channel: String,
-    ) -> Result<bool, Box<dyn std::error::Error>> {
-        self.config.read().unwrap().update_repo(
-            index,
-            RepoRecord {
-                url: Url::parse(&url).unwrap(),
-                channel,
-            },
-        )?;
-        self.refresh_repos();
-        Ok(true)
+        crate::repo::clear_cache(&self.config)
     }
 }
 
 impl std::default::Default for MacOSPackageStore {
     fn default() -> Self {
-        let config = StoreConfig::load_or_default(true);
-        MacOSPackageStore::new(config)
+        // let config = StoreConfig::load_or_default(true);
+        // MacOSPackageStore::new(config)
+        todo!()
     }
 }
 
 impl MacOSPackageStore {
-    pub fn new(config: StoreConfig) -> MacOSPackageStore {
+    pub fn new(config: Arc<RwLock<Config>>) -> MacOSPackageStore {
         let store = MacOSPackageStore {
             repos: Arc::new(RwLock::new(HashMap::new())),
-            config: Arc::new(RwLock::new(config)),
+            config,
         };
 
         store.refresh_repos();
@@ -305,9 +216,9 @@ impl MacOSPackageStore {
 
     fn status_impl(
         &self,
-        installer: &MacOSInstaller,
+        release: &pahkat_types::package::Release,
+        installer: &macos::Package,
         id: &PackageKey,
-        package: &Package,
         target: &InstallTarget,
     ) -> Result<PackageStatus, PackageStatusError> {
         let pkg_info = match get_package_info(&installer.pkg_id, target) {
@@ -325,10 +236,7 @@ impl MacOSPackageStore {
         };
 
         let config = self.config.read().unwrap();
-        let skipped_package = config.skipped_package(id);
-        let skipped_package = skipped_package.as_ref().map(String::as_ref);
-
-        let status = self::cmp::cmp(&pkg_info.pkg_version, &package.version, skipped_package);
+        let status = self::cmp::cmp(&pkg_info.pkg_version, &release.version);
 
         status
     }
@@ -389,7 +297,7 @@ fn get_package_info(
         Ok(v) => v,
         Err(e) => {
             log::error!("pkgutil: {:?}", &e);
-            return Err(ProcessError::Io { source: e });
+            return Err(ProcessError::Io(e));
         }
     };
 
@@ -401,7 +309,7 @@ fn get_package_info(
         }
 
         log::error!("pkgutil: {:?}", &output);
-        return Err(ProcessError::Unknown { output });
+        return Err(ProcessError::Unknown(output));
     }
 
     let plist_data = String::from_utf8(output.stdout).expect("plist should always be valid UTF-8");
@@ -425,13 +333,13 @@ fn install_macos_package(pkg_path: &Path, target: &InstallTarget) -> Result<(), 
         Ok(v) => v,
         Err(e) => {
             log::error!("{:?}", &e);
-            return Err(ProcessError::Io { source: e });
+            return Err(ProcessError::Io(e));
         }
     };
     if !output.status.success() {
         log::error!("{:?}", &output);
         let _msg = format!("Exit code: {}", output.status.code().unwrap());
-        return Err(ProcessError::Unknown { output });
+        return Err(ProcessError::Unknown(output));
     }
     Ok(())
 }
@@ -452,13 +360,13 @@ fn run_script(name: &str, bundle_id: &str, target: &InstallTarget) -> Result<(),
         Ok(v) => v,
         Err(e) => {
             log::error!("{:?}", &e);
-            return Err(ProcessError::Io { source: e });
+            return Err(ProcessError::Io(e));
         }
     };
     if !output.status.success() {
         log::error!("{:?}", &output);
         let _msg = format!("Exit code: {}", output.status.code().unwrap());
-        return Err(ProcessError::Unknown { output });
+        return Err(ProcessError::Unknown(output));
     }
     Ok(())
 }
@@ -546,12 +454,12 @@ fn forget_pkg_id(bundle_id: &str, target: &InstallTarget) -> Result<(), ProcessE
         Ok(v) => v,
         Err(e) => {
             log::error!("{:?}", e);
-            return Err(ProcessError::Io { source: e });
+            return Err(ProcessError::Io(e));
         }
     };
     if !output.status.success() {
         log::error!("{:?}", output.status.code().unwrap());
-        return Err(ProcessError::Unknown { output });
+        return Err(ProcessError::Unknown(output));
     }
     Ok(())
 }

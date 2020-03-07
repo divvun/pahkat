@@ -134,7 +134,7 @@ pub extern "C" fn pahkat_macos_package_store_repo_indexes(
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<RwLock<StoreConfig>>")]
-pub extern "C" fn pahkat_macos_package_store_config(
+pub extern "C" fn pahkat_macos_package_config(
     #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
 ) -> Arc<RwLock<StoreConfig>> {
     handle.config()

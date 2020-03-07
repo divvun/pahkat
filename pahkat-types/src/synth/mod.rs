@@ -8,7 +8,7 @@ use crate::{DependencyMap, LangTagMap};
 
 #[derive(Debug, Serialize, Deserialize, Clone, Builder)]
 #[serde(rename_all = "camelCase")]
-pub struct Package {
+pub struct Descriptor {
     #[serde(rename = "_type")]
     /// Always has value "SyntheticPackage"
     _type: String,
@@ -20,7 +20,7 @@ pub struct Package {
     pub description: LangTagMap<String>,
     #[serde(default = "Vec::new")]
     pub tags: Vec<String>,
-    pub versions: Vec<Version>,
+    pub releases: Vec<Release>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -35,7 +35,7 @@ pub struct Target {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Builder)]
 #[serde(rename_all = "camelCase")]
-pub struct Version {
+pub struct Release {
     pub version: String,
     pub channel: String,
     pub targets: Vec<Target>,

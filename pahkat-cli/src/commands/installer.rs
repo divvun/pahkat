@@ -5,7 +5,9 @@ use std::path::Path;
 use termcolor::Color;
 
 use pahkat_common::{index_fn, ld_type, open_package};
-use pahkat_types::{InstallTarget, Installer, MacOSInstaller, TarballInstaller, WindowsInstaller};
+use pahkat_types::{
+    windows::Executable, InstallTarget, Installer, MacOSInstaller, TarballInstaller,
+};
 
 use crate::cli::{progress, prompt_question};
 
@@ -180,8 +182,8 @@ pub fn package_windows_installer(
     let meta = installer_file.metadata().unwrap();
     let installer_size = meta.len() as usize;
 
-    let installer_index = WindowsInstaller {
-        _type: ld_type!("WindowsInstaller"),
+    let installer_index = windows::Executable {
+        _type: ld_type!("windows::Executable"),
         url: url.to_owned(),
         installer_type: type_.map(|x| x.to_owned()),
         args: args.map(|x| x.to_owned()),

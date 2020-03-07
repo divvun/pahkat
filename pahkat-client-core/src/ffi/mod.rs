@@ -221,7 +221,7 @@ impl FromForeign<*const libc::c_char, PackageKey> for PackageKeyMarshaler {
 }
 
 struct ExternalLogger {
-    callback: LoggingCallback
+    callback: LoggingCallback,
 }
 
 fn make_unknown_cstr() -> CString {
@@ -244,20 +244,21 @@ impl log::Log for ExternalLogger {
             Trace => 5,
         };
 
-        let msg = CString::new(format!("{}", record.args()))
-            .unwrap_or_else(|_| make_unknown_cstr());
+        let msg =
+            CString::new(format!("{}", record.args())).unwrap_or_else(|_| make_unknown_cstr());
         let module = CString::new(record.module_path().unwrap_or("<unknown>"))
             .unwrap_or_else(|_| make_unknown_cstr());
-        let file_path = format!("{}:{}", record.file().unwrap_or("<unknown>"), record.line().unwrap_or(0));
-        let file_path = CString::new(file_path)
-            .unwrap_or_else(|_| make_unknown_cstr());
+        let file_path = format!(
+            "{}:{}",
+            record.file().unwrap_or("<unknown>"),
+            record.line().unwrap_or(0)
+        );
+        let file_path = CString::new(file_path).unwrap_or_else(|_| make_unknown_cstr());
 
-        (self.callback)(level, msg.as_ptr(), module.as_ptr(), file_path.as_ptr()); 
+        (self.callback)(level, msg.as_ptr(), module.as_ptr(), file_path.as_ptr());
     }
 
-    fn flush(&self) {
-
-    }
+    fn flush(&self) {}
 }
 
 type LoggingCallback =
@@ -274,7 +275,7 @@ pub extern "C" fn pahkat_set_logging_callback(
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
-pub extern "C" fn pahkat_store_config_set_ui_value(
+pub extern "C" fn pahkat_config_set_ui_value(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<StoreConfig>>)] handle: Arc<RwLock<StoreConfig>>,
     #[marshal(cursed::StrMarshaler)] key: &str,
     #[marshal(cursed::StrMarshaler)] value: Option<&str>,
@@ -284,7 +285,7 @@ pub extern "C" fn pahkat_store_config_set_ui_value(
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::StringMarshaler")]
-pub extern "C" fn pahkat_store_config_ui_value(
+pub extern "C" fn pahkat_config_ui_value(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<StoreConfig>>)] handle: Arc<RwLock<StoreConfig>>,
     #[marshal(cursed::StrMarshaler)] key: &str,
 ) -> Option<String> {
@@ -293,7 +294,7 @@ pub extern "C" fn pahkat_store_config_ui_value(
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::StringMarshaler")]
-pub extern "C" fn pahkat_store_config_skipped_package(
+pub extern "C" fn pahkat_config_skipped_package(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<StoreConfig>>)] handle: Arc<RwLock<StoreConfig>>,
     #[marshal(PackageKeyMarshaler)] key: PackageKey,
 ) -> Option<String> {
@@ -302,7 +303,7 @@ pub extern "C" fn pahkat_store_config_skipped_package(
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
-pub extern "C" fn pahkat_store_config_add_skipped_package(
+pub extern "C" fn pahkat_config_add_skipped_package(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<StoreConfig>>)] handle: Arc<RwLock<StoreConfig>>,
     #[marshal(PackageKeyMarshaler)] key: PackageKey,
     #[marshal(cursed::StrMarshaler)] version: &str,
@@ -312,7 +313,7 @@ pub extern "C" fn pahkat_store_config_add_skipped_package(
 }
 
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
-pub extern "C" fn pahkat_store_config_repos(
+pub extern "C" fn pahkat_config_repos(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<StoreConfig>>)] handle: Arc<RwLock<StoreConfig>>,
 ) -> Vec<RepoRecord> {
     let config = handle.read().unwrap();
@@ -320,7 +321,7 @@ pub extern "C" fn pahkat_store_config_repos(
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
-pub extern "C" fn pahkat_store_config_set_repos(
+pub extern "C" fn pahkat_config_set_repos(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<StoreConfig>>)] handle: Arc<RwLock<StoreConfig>>,
     #[marshal(JsonMarshaler)] repos: Vec<RepoRecord>,
 ) -> Result<(), Box<dyn Error>> {
@@ -328,34 +329,34 @@ pub extern "C" fn pahkat_store_config_set_repos(
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::PathMarshaler")]
-pub extern "C" fn pahkat_store_config_config_path(
+pub extern "C" fn pahkat_config_config_path(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<StoreConfig>>)] handle: Arc<RwLock<StoreConfig>>,
 ) -> std::path::PathBuf {
     handle.read().unwrap().config_path().to_path_buf()
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::UrlMarshaler")]
-pub extern "C" fn pahkat_store_config_cache_base_url(
+pub extern "C" fn pahkat_config_cache_base_url(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<StoreConfig>>)] handle: Arc<RwLock<StoreConfig>>,
 ) -> Url {
-    handle.read().unwrap().cache_base_path().as_url().to_owned()
+    handle.read().unwrap().cache_base_dir().as_url().to_owned()
 }
 
-use crate::store_config::ConfigPath;
+use crate::config::ConfigPath;
 
 #[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
-pub extern "C" fn pahkat_store_config_set_cache_base_url(
+pub extern "C" fn pahkat_config_set_cache_base_url(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<StoreConfig>>)] handle: Arc<RwLock<StoreConfig>>,
     #[marshal(cursed::UrlMarshaler)] url: Url,
 ) -> Result<(), Box<dyn Error>> {
     let path = ConfigPath::from_url(url)?;
-    handle.write().unwrap().set_cache_base_path(path)
+    handle.write().unwrap().set_cache_base_dir(path)
 }
 
 #[cfg(target_os = "android")]
 #[cthulhu::invoke]
 pub extern "C" fn pahkat_android_init(#[marshal(cursed::PathMarshaler)] container_path: PathBuf) {
-    let _ = crate::store_config::CONTAINER_PATH.set(container_path).ok();
+    let _ = crate::config::CONTAINER_PATH.set(container_path).ok();
 
     std::panic::set_hook(Box::new(|info| {
         if let Some(s) = info.payload().downcast_ref::<&str>() {

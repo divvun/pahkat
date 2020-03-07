@@ -29,7 +29,9 @@ impl Database {
         Ok(Database { pool })
     }
 
-    pub fn get_connection(&self) -> Result<PooledConnection<ConnectionManager<SqliteConnection>>, PoolError> {
+    pub fn get_connection(
+        &self,
+    ) -> Result<PooledConnection<ConnectionManager<SqliteConnection>>, PoolError> {
         self.pool.get()
     }
 

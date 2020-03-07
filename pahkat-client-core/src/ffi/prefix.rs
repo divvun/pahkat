@@ -121,7 +121,7 @@ pub extern "C" fn pahkat_prefix_package_store_repo_indexes(
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<RwLock<StoreConfig>>")]
-pub extern "C" fn pahkat_prefix_package_store_config(
+pub extern "C" fn pahkat_prefix_package_config(
     #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
 ) -> Arc<RwLock<StoreConfig>> {
     handle.config()

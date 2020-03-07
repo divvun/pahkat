@@ -142,7 +142,7 @@ pub extern "C" fn pahkat_windows_package_store_repo_indexes(
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<RwLock<StoreConfig>>")]
-pub extern "C" fn pahkat_windows_package_store_config(
+pub extern "C" fn pahkat_windows_package_config(
     #[marshal(cursed::ArcRefMarshaler::<WindowsPackageStore>)] handle: Arc<WindowsPackageStore>,
 ) -> Arc<RwLock<StoreConfig>> {
     handle.config()
@@ -160,14 +160,14 @@ pub extern "C" fn pahkat_windows_transaction_new(
 
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_windows_transaction_actions(
-    #[marshal(cursed::BoxRefMarshaler::<WindowsPackageTransaction>)] handle: &WindowsPackageTransaction,
+    handle: &WindowsPackageTransaction,
 ) -> Vec<WindowsPackageAction> {
     handle.actions().to_vec()
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
 pub extern "C" fn pahkat_windows_transaction_process(
-    #[marshal(cursed::BoxRefMarshaler::<WindowsPackageTransaction>)] handle: &WindowsPackageTransaction,
+    handle: &WindowsPackageTransaction,
     tag: u32,
     progress_callback: extern "C" fn(u32, *const libc::c_char, u32) -> u8,
 ) -> Result<(), Box<dyn Error>> {

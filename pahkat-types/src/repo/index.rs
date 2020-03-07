@@ -1,7 +1,8 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, ops::Deref};
 
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
+use url::Url;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Builder)]
 #[serde(rename_all = "camelCase")]
@@ -11,10 +12,10 @@ use serde::{Deserialize, Serialize};
 pub struct Index {
     #[serde(rename = "_type")]
     _type: String,
-    
-    pub base_url: String,
+
+    pub base_url: Url,
     pub agent: Agent,
-    pub landing_url: Option<String>,
+    pub landing_url: Option<Url>,
     #[serde(default = "BTreeMap::new")]
     pub name: BTreeMap<String, String>,
     #[serde(default = "BTreeMap::new")]
@@ -23,9 +24,9 @@ pub struct Index {
     pub channels: Vec<String>,
     pub default_channel: Option<String>,
     #[serde(default = "Vec::new")]
-    pub linked_repositories: Vec<String>,
+    pub linked_repositories: Vec<Url>,
     #[serde(default = "Vec::new")]
-    pub accepted_redirections: Vec<String>,
+    pub accepted_redirections: Vec<Url>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Builder)]
@@ -33,5 +34,5 @@ pub struct Index {
 pub struct Agent {
     name: String,
     version: String,
-    url: Option<String>,
+    url: Option<Url>,
 }

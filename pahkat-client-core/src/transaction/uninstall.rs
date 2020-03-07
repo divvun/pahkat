@@ -1,12 +1,19 @@
 use super::install::ProcessError;
-use snafu::Snafu;
 
-#[derive(Snafu, Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum UninstallError {
-    NoPackage,
-    NoInstaller,
+    #[error("Payload error")]
+    Payload(#[from] crate::repo::PayloadError),
+
+    #[error("Wrong payload type")]
+    WrongPayloadType,
+
+    #[error("Package not found in cache (not downloaded?)")]
+    PackageNotInCache,
+
+    #[error("Installation process failed")]
+    UninstallerFailure(#[from] ProcessError),
+
+    #[error("The package is not installed")]
     NotInstalled,
-    WrongInstallerType,
-    ProcessFailed { source: ProcessError },
-    PlatformFailure { message: &'static str },
 }

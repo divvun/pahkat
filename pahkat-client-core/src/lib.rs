@@ -9,14 +9,14 @@ pub mod repo;
 pub mod transaction;
 
 mod cmp;
+mod config;
 mod download;
 mod ext;
-mod store_config;
 
+pub use self::config::Config;
 pub use self::download::Download;
 pub use self::package_store::PackageStore;
-pub use self::repo::{PackageKey, RepoRecord, Repository};
-pub use self::store_config::StoreConfig;
+pub use self::repo::{LoadedRepository, PackageKey};
 pub use self::transaction::PackageAction;
 
 #[cfg(all(target_os = "macos", feature = "macos"))]

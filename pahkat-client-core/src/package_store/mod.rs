@@ -8,17 +8,31 @@ pub mod prefix;
 pub mod windows;
 
 use crate::transaction::{PackageStatus, PackageStatusError};
-use crate::{PackageKey, RepoRecord, Repository};
+use crate::{LoadedRepository, PackageKey};
 use hashbrown::HashMap;
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
+use url::Url;
 
+use crate::config::Config;
 use crate::transaction::{install::InstallError, uninstall::UninstallError};
-use pahkat_types::Package;
+use pahkat_types::package::Package;
 use std::path::{Path, PathBuf};
 
-pub type SharedStoreConfig = Arc<RwLock<crate::StoreConfig>>;
-pub type SharedRepos = Arc<RwLock<HashMap<RepoRecord, Repository>>>;
+pub type SharedStoreConfig = Arc<RwLock<Config>>;
+pub type SharedRepos = Arc<RwLock<HashMap<Url, LoadedRepository>>>;
+
+#[derive(Debug, thiserror::Error)]
+pub enum ImportError {
+    #[error("Payload error")]
+    Payload(#[from] crate::repo::PayloadError),
+
+    #[error("IO error")]
+    Io(#[from] std::io::Error),
+
+    #[error("Invalid payload type")]
+    InvalidPayloadType,
+}
 
 pub trait PackageStore: Send + Sync {
     type Target: Send + Sync;
@@ -32,11 +46,7 @@ pub trait PackageStore: Send + Sync {
         progress: Box<dyn Fn(u64, u64) -> bool + Send + 'static>,
     ) -> Result<PathBuf, crate::download::DownloadError>;
 
-    fn import(
-        &self,
-        key: &PackageKey,
-        installer_path: &Path,
-    ) -> Result<PathBuf, Box<dyn std::error::Error>>;
+    fn import(&self, key: &PackageKey, installer_path: &Path) -> Result<PathBuf, ImportError>;
 
     fn install(
         &self,
@@ -56,6 +66,12 @@ pub trait PackageStore: Send + Sync {
         target: &Self::Target,
     ) -> Result<PackageStatus, PackageStatusError>;
 
+    fn all_statuses(
+        &self,
+        repo_url: &Url,
+        target: &Self::Target,
+    ) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>>;
+
     fn find_package_by_id(&self, package_id: &str) -> Option<(PackageKey, Package)>;
 
     fn find_package_by_key(&self, key: &PackageKey) -> Option<Package>;
@@ -68,22 +84,4 @@ pub trait PackageStore: Send + Sync {
         self.clear_cache();
         self.refresh_repos();
     }
-
-    fn add_repo(&self, url: String, channel: String) -> Result<bool, Box<dyn std::error::Error>>;
-
-    fn remove_repo(&self, url: String, channel: String)
-        -> Result<bool, Box<dyn std::error::Error>>;
-
-    fn update_repo(
-        &self,
-        index: usize,
-        url: String,
-        channel: String,
-    ) -> Result<bool, Box<dyn std::error::Error>>;
-
-    fn all_statuses(
-        &self,
-        repo_record: &RepoRecord,
-        target: &Self::Target,
-    ) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>>;
 }

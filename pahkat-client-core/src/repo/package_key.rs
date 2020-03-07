@@ -1,16 +1,20 @@
+use std::convert::TryFrom;
+use std::fmt;
+
 use serde::de::{self, Deserialize, Deserializer, Visitor};
 use serde::ser::{Serialize, Serializer};
-use std::convert::TryFrom;
 use url::Url;
-
-use pahkat_types::Repository as RepositoryMeta;
-use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PackageKey {
-    pub url: Url,
+    pub repository_url: Url,
     pub id: String,
+
+    // Query parameters
     pub channel: String,
+    pub platform: Option<String>,
+    pub version: Option<String>,
+    pub arch: Option<String>,
 }
 
 impl fmt::Display for PackageKey {
@@ -19,68 +23,178 @@ impl fmt::Display for PackageKey {
     }
 }
 
-impl PackageKey {
-    pub fn new(repo: &RepositoryMeta, channel: &str, package_id: &str) -> PackageKey {
-        PackageKey {
-            url: Url::parse(&repo.base).expect("repo base url must be valid"),
-            id: package_id.to_string(),
-            channel: channel.to_string(),
-        }
-    }
+#[derive(Debug, Clone, Default)]
+pub(crate) struct PackageKeyArgs {
+    pub platform: Option<String>,
+    pub version: Option<String>,
+    pub arch: Option<String>,
+}
 
+impl PackageKey {
     #[inline]
     pub fn to_string(&self) -> String {
         String::from(self)
     }
 
-    #[inline]
-    pub fn from_string(url: &str) -> Result<PackageKey, TryFromStringError> {
-        PackageKey::try_from(url)
+    pub(crate) fn unchecked_new(
+        repository_url: Url,
+        id: String,
+        channel: String,
+        args: Option<PackageKeyArgs>,
+    ) -> Self {
+        let args = args.unwrap_or_else(|| Default::default());
+
+        PackageKey {
+            repository_url,
+            id,
+            channel,
+            platform: args.platform,
+            version: args.version,
+            arch: args.arch,
+        }
+    }
+}
+
+impl<'a> From<&'a PackageKey> for Url {
+    fn from(key: &'a PackageKey) -> Url {
+        let mut url = key.repository_url.clone();
+
+        {
+            // URL must always be a base, so this is safe (or we really do want to crash.)
+            let mut segments = url
+                .path_segments_mut()
+                .expect("URL was not a base, but must always be");
+            segments.pop_if_empty().push("packages").push(&key.id);
+        }
+
+        {
+            let mut query = url.query_pairs_mut();
+
+            if let Some(ref arch) = key.arch {
+                query.append_pair("arch", arch);
+            }
+
+            query.append_pair("channel", &key.channel);
+
+            if let Some(ref platform) = key.platform {
+                query.append_pair("platform", platform);
+            }
+
+            if let Some(ref version) = key.version {
+                query.append_pair("version", version);
+            }
+        }
+
+        url
     }
 }
 
 impl<'a> From<&'a PackageKey> for String {
     fn from(key: &'a PackageKey) -> String {
-        format!("{}packages/{}#{}", key.url, key.id, key.channel)
+        Url::from(key).to_string()
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum TryFromStringError {
+#[derive(Debug, Clone, thiserror::Error)]
+#[non_exhaustive]
+pub enum TryFromError {
+    #[error("Invalid URL")]
     InvalidUrl,
+
+    #[error("URL must not be a base")]
+    BaseForbidden,
+
+    #[error("URL does not contain /packages/ segment")]
+    MissingPackagesSegment,
+
+    #[error("Invalid package segment")]
+    InvalidPackageSegment,
+
+    #[error("Missing channel")]
+    MissingChannel,
 }
 
-impl std::error::Error for TryFromStringError {}
+impl<'a> TryFrom<&'a Url> for PackageKey {
+    type Error = TryFromError;
 
-impl std::fmt::Display for TryFromStringError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "invalid URL")
+    fn try_from(url: &'a Url) -> Result<PackageKey, Self::Error> {
+        let query = url.query_pairs();
+
+        let mut url = url.clone();
+        url.set_query(None);
+        url.set_fragment(None);
+
+        let mut version = None;
+        let mut channel = None;
+        let mut platform = None;
+        let mut arch = None;
+
+        for (k, v) in query {
+            match &*k {
+                "version" => version = Some(v.to_string()),
+                "channel" => channel = Some(v.to_string()),
+                "platform" => platform = Some(v.to_string()),
+                "arch" => arch = Some(v.to_string()),
+                _ => {}
+            }
+        }
+
+        let channel = match channel.take() {
+            Some(v) => v,
+            None => return Err(TryFromError::MissingChannel),
+        };
+
+        let (left, id) = {
+            // Find first /packages/ segment
+            let path_segments = url
+                .path_segments()
+                .ok_or_else(|| TryFromError::BaseForbidden)?;
+            let sides = path_segments.collect::<Vec<_>>();
+            let sides = sides.splitn(2, |x| *x == "packages").collect::<Vec<_>>();
+
+            if sides.len() != 2 {
+                return Err(TryFromError::MissingPackagesSegment);
+            }
+
+            if sides[1].len() != 1 {
+                return Err(TryFromError::InvalidPackageSegment);
+            }
+
+            let id = sides[1][0].to_string();
+            (
+                sides[0]
+                    .iter()
+                    .map(|x| x.to_string())
+                    .collect::<Vec<String>>(),
+                id,
+            )
+        };
+
+        {
+            let mut path_segments = url
+                .path_segments_mut()
+                .map_err(|_| TryFromError::BaseForbidden)?;
+            path_segments.clear();
+            path_segments.extend(left);
+        }
+
+        Ok(PackageKey {
+            repository_url: url,
+            id,
+            channel,
+            version,
+            platform,
+            arch,
+        })
     }
 }
 
 impl<'a> TryFrom<&'a str> for PackageKey {
-    type Error = TryFromStringError;
+    type Error = TryFromError;
 
     fn try_from(url: &'a str) -> Result<PackageKey, Self::Error> {
-        let url = Url::parse(url).map_err(|_| TryFromStringError::InvalidUrl)?;
-
-        let channel = url
-            .fragment()
-            .ok_or(TryFromStringError::InvalidUrl)?
-            .to_string();
-        let base = url.join("..").map_err(|_| TryFromStringError::InvalidUrl)?;
-        let id = url
-            .path_segments()
-            .ok_or(TryFromStringError::InvalidUrl)?
-            .last()
-            .ok_or(TryFromStringError::InvalidUrl)?
-            .to_string();
-
-        Ok(PackageKey {
-            url: base,
-            channel,
-            id,
-        })
+        let url = Url::parse(url).map_err(|_| TryFromError::InvalidUrl)?;
+        PackageKey::try_from(&url)
     }
 }
 
@@ -115,6 +229,6 @@ impl<'de> Visitor<'de> for PackageKeyVisitor {
     where
         E: de::Error,
     {
-        PackageKey::from_string(value).map_err(|_| E::custom("Invalid value"))
+        PackageKey::try_from(value).map_err(|e| E::custom(e))
     }
 }

@@ -121,7 +121,7 @@ demo-repo/
 
 In order for packages to be installable, you have to add the installation metadata as the `installer` field. Installers are disjunct data types distinguished by their `@type` field.
 
-Currently supported installer types are: `WindowsInstaller`, `MacOSInstaller` and `TarballInstaller`.
+Currently supported installer types are: `windows::Executable`, `MacOSInstaller` and `TarballInstaller`.
 
 For this example we will use `MacOSInstaller`, but the process is similar for all installer types.
 

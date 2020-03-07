@@ -123,7 +123,9 @@ pub fn run_server(config: TomlConfig, path: &Path, bind: &str, port: &str) {
                     .service(
                         web::resource("/index.json").route(web::get().to(virtuals_index_stable)),
                     )
-                    .service(web::resource("/index.{channel}.json").route(web::get().to(virtuals_index)))
+                    .service(
+                        web::resource("/index.{channel}.json").route(web::get().to(virtuals_index)),
+                    )
                     .service(
                         web::resource("/{packageId}/index.json")
                             .route(web::get().to(virtuals_package_index_stable)),

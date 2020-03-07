@@ -593,8 +593,8 @@ fn package_windows_installer(file_path: &Path, channel: Option<&str>, force_yes:
     let meta = installer_file.metadata().unwrap();
     let installer_size = meta.len() as usize;
 
-    let installer_index = WindowsInstaller {
-        _type: ld_type!("WindowsInstaller"),
+    let installer_index = windows::Executable {
+        _type: ld_type!("windows::Executable"),
         url: url.to_owned(),
         installer_type: type_.map(|x| x.to_owned()),
         args: args.map(|x| x.to_owned()),

@@ -299,7 +299,7 @@ components:
             format: version-pattern
         installer:
           oneOf:
-            - $ref: "#/components/schemas/WindowsInstaller"
+            - $ref: "#/components/schemas/windows::Executable"
             - $ref: "#/components/schemas/MacOSInstaller"
             - $ref: "#/components/schemas/TarballInstaller"
           discriminator:
@@ -325,7 +325,7 @@ components:
         installedSize:
           type: integer
           format: uint64
-    WindowsInstaller:
+    windows::Executable:
       type: object
       required:
         - url
@@ -337,7 +337,7 @@ components:
       properties:
         "@type":
           type: string
-          enum: ["WindowsInstaller"]
+          enum: ["windows::Executable"]
         url:
           type: string
           format: uri

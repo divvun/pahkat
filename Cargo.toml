@@ -6,4 +6,5 @@ members = [
     "pahkat-cli",
     "pahkat-server",
     "pahkat-rpc",
+    "pahkat-client-core",
 ]
