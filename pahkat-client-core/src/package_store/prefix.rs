@@ -32,14 +32,10 @@ pub struct PrefixPackageStore {
 }
 
 #[derive(Debug, Clone, thiserror::Error)]
-pub enum Error {
-
-}
+pub enum Error {}
 
 impl PrefixPackageStore {
-    pub fn create<P: AsRef<Path>>(
-        prefix_path: P,
-    ) -> Result<PrefixPackageStore, Error> {
+    pub fn create<P: AsRef<Path>>(prefix_path: P) -> Result<PrefixPackageStore, Error> {
         // let prefix_path: &Path = prefix_path.as_ref();
 
         // create_dir_all(prefix_path)?;
@@ -67,9 +63,7 @@ impl PrefixPackageStore {
         todo!()
     }
 
-    pub fn open<P: AsRef<Path>>(
-        prefix_path: P,
-    ) -> Result<PrefixPackageStore, Error> {
+    pub fn open<P: AsRef<Path>>(prefix_path: P) -> Result<PrefixPackageStore, Error> {
         // let prefix_path = prefix_path.as_ref().canonicalize()?;
         // log::debug!("{:?}", &prefix_path);
         // let config = StoreConfig::load(&prefix_path.join("config.json"), true)?;
@@ -118,7 +112,7 @@ impl PrefixPackageStore {
 
 impl PackageStore for PrefixPackageStore {
     type Target = ();
-    
+
     fn repos(&self) -> super::SharedRepos {
         Arc::clone(&self.repos)
     }
@@ -266,12 +260,12 @@ impl PackageStore for PrefixPackageStore {
             None => return Ok(PackageStatus::NotInstalled),
             Some(v) => v,
         };
-        
+
         let query = crate::repo::ReleaseQuery::from(key).and_payloads(vec!["TarballPackage"]);
         let repos = self.repos.read().unwrap();
 
-        let (target, release, package) =
-            crate::repo::resolve_payload(key, query, &*repos).map_err(PackageStatusError::Payload)?;
+        let (target, release, package) = crate::repo::resolve_payload(key, query, &*repos)
+            .map_err(PackageStatusError::Payload)?;
         let _installer = match target.payload {
             pahkat_types::payload::Payload::TarballPackage(v) => v,
             _ => return Err(PackageStatusError::WrongPayloadType),
@@ -415,8 +409,8 @@ impl<'a> PackageDbConnection<'a> {
                 dep_stmt.execute_named(&[(":id", &pkg.id), (":dep_url", &*dep_url)])?;
             }
 
-            let mut file_stmt =
-                tx.prepare("INSERT INTO packages_files(package_id, file_path) VALUES (:id, :path)")?;
+            let mut file_stmt = tx
+                .prepare("INSERT INTO packages_files(package_id, file_path) VALUES (:id, :path)")?;
 
             for file_path in &pkg.files {
                 file_stmt

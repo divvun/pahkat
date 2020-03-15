@@ -11,7 +11,7 @@ pub struct PackageKey {
     pub id: String,
 
     // Query parameters
-    pub channel: String,
+    pub channel: Option<String>,
     pub platform: Option<String>,
     pub version: Option<String>,
     pub arch: Option<String>,
@@ -39,7 +39,7 @@ impl PackageKey {
     pub(crate) fn unchecked_new(
         repository_url: Url,
         id: String,
-        channel: String,
+        channel: Option<String>,
         args: Option<PackageKeyArgs>,
     ) -> Self {
         let args = args.unwrap_or_else(|| Default::default());
@@ -74,7 +74,9 @@ impl<'a> From<&'a PackageKey> for Url {
                 query.append_pair("arch", arch);
             }
 
-            query.append_pair("channel", &key.channel);
+            if let Some(ref channel) = key.channel {
+                query.append_pair("channel", channel);
+            }
 
             if let Some(ref platform) = key.platform {
                 query.append_pair("platform", platform);
@@ -109,9 +111,6 @@ pub enum TryFromError {
 
     #[error("Invalid package segment")]
     InvalidPackageSegment,
-
-    #[error("Missing channel")]
-    MissingChannel,
 }
 
 impl<'a> TryFrom<&'a Url> for PackageKey {
@@ -138,11 +137,6 @@ impl<'a> TryFrom<&'a Url> for PackageKey {
                 _ => {}
             }
         }
-
-        let channel = match channel.take() {
-            Some(v) => v,
-            None => return Err(TryFromError::MissingChannel),
-        };
 
         let (left, id) = {
             // Find first /packages/ segment

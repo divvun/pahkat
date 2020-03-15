@@ -38,7 +38,7 @@ pub enum PayloadError {
 use pahkat_types::package::Version;
 use std::convert::TryInto;
 
-#[derive(Debug, Clone, )]
+#[derive(Debug, Clone)]
 pub struct ReleaseQuery<'a> {
     pub platform: &'a str,
     pub arch: Option<&'a str>,
@@ -107,7 +107,11 @@ impl<'a> From<&'a PackageKey> for ReleaseQuery<'a> {
                 .map(|x| &**x)
                 .unwrap_or_else(|| defaults::platform()),
             arch: key.arch.as_ref().map(|x| &**x).or_else(|| defaults::arch()),
-            channels: vec![&*key.channel],
+            channels: key
+                .channel
+                .as_ref()
+                .map(|x| vec![&**x])
+                .unwrap_or_else(|| vec![]),
             versions: key
                 .version
                 .as_ref()

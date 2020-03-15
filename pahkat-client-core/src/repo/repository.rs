@@ -39,7 +39,7 @@ impl std::fmt::Display for RepoDownloadError {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct LoadedRepositoryMeta {
-    pub channel: String,
+    pub channel: Option<String>,
     pub hash_id: String,
     // TODO: last update
 }
