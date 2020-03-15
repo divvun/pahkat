@@ -6,7 +6,6 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use hashbrown::HashMap;
-use indexmap::IndexMap;
 use pahkat_types::package::{Descriptor, Package};
 use r2d2_sqlite::SqliteConnectionManager;
 use url::Url;
@@ -21,6 +20,10 @@ use crate::{
     PackageKey, PackageStore,
 };
 
+// type Result<T> = std::result::Result<T, Error>;
+
+const SQL_INIT: &str = include_str!("prefix/prefix_init.sql");
+
 pub struct PrefixPackageStore {
     pool: r2d2::Pool<SqliteConnectionManager>,
     prefix: PathBuf,
@@ -28,10 +31,15 @@ pub struct PrefixPackageStore {
     config: Arc<RwLock<Config>>,
 }
 
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum Error {
+
+}
+
 impl PrefixPackageStore {
     pub fn create<P: AsRef<Path>>(
         prefix_path: P,
-    ) -> Result<PrefixPackageStore, Box<dyn std::error::Error>> {
+    ) -> Result<PrefixPackageStore, Error> {
         // let prefix_path: &Path = prefix_path.as_ref();
 
         // create_dir_all(prefix_path)?;
@@ -44,7 +52,7 @@ impl PrefixPackageStore {
         // let manager = SqliteConnectionManager::file(&db_file_path);
         // let pool = Self::make_pool(manager)?;
         // let conn = pool.get()?;
-        // conn.execute_batch(PKG_STORE_INIT)?;
+        // conn.execute_batch(SQL_INIT)?;
 
         // let store = PrefixPackageStore {
         //     pool,
@@ -61,7 +69,7 @@ impl PrefixPackageStore {
 
     pub fn open<P: AsRef<Path>>(
         prefix_path: P,
-    ) -> Result<PrefixPackageStore, Box<dyn std::error::Error>> {
+    ) -> Result<PrefixPackageStore, Error> {
         // let prefix_path = prefix_path.as_ref().canonicalize()?;
         // log::debug!("{:?}", &prefix_path);
         // let config = StoreConfig::load(&prefix_path.join("config.json"), true)?;
@@ -99,23 +107,18 @@ impl PrefixPackageStore {
         config.settings().config_dir().join("packages.sqlite")
     }
 
-    pub(crate) fn into_arc(self) -> Arc<dyn PackageStore<Target = ()>> {
-        Arc::new(self)
+    fn package_dir(&self, package_id: &str) -> PathBuf {
+        self.prefix.join("pkg").join(package_id)
     }
 
-    fn package_path(&self, package: &Descriptor) -> PathBuf {
-        self.prefix.join("pkg").join(&package.id)
+    pub(crate) fn into_arc(self) -> Arc<dyn PackageStore<Target = ()>> {
+        Arc::new(self)
     }
 }
 
 impl PackageStore for PrefixPackageStore {
     type Target = ();
-
-    fn find_package_by_key(&self, key: &PackageKey) -> Option<Package> {
-        let repos = self.repos.read().unwrap();
-        crate::repo::find_package_by_key(key, &*repos)
-    }
-
+    
     fn repos(&self) -> super::SharedRepos {
         Arc::clone(&self.repos)
     }
@@ -125,35 +128,9 @@ impl PackageStore for PrefixPackageStore {
     }
 
     fn import(&self, key: &PackageKey, installer_path: &Path) -> Result<PathBuf, ImportError> {
-        // let package = match self.find_package_by_key(key) {
-        //     Some(v) => v,
-        //     None => {
-        //         return Err(Box::new(crate::download::DownloadError::NoUrl) as _);
-        //     }
-        // };
-
-        // let installer = match package.installer() {
-        //     None => return Err(Box::new(crate::download::DownloadError::NoUrl) as _),
-        //     Some(v) => v,
-        // };
-
-        // let config = &self.config.read().unwrap();
-        // let installer_url = installer.url();
-        // let output_path = crate::repo::download_dir(config, &installer_url);
-        // println!("{:?}", output_path);
-
-        // std::fs::create_dir_all(&output_path).unwrap();
-        // let url = url::Url::parse(&installer_url).map_error(|| {
-        //     crate::transaction::install::InvalidUrl {
-        //         url: installer_url.to_owned(),
-        //     }
-        // })?;
-        // let filename = url.path_segments().unwrap().last().unwrap();
-        // let output_file = output_path.join(filename);
-
-        // std::fs::copy(installer_path, &output_file)?;
-        // Ok(output_file)
-        todo!()
+        let query = crate::repo::ReleaseQuery::from(key);
+        let repos = self.repos.read().unwrap();
+        crate::repo::import(&self.config, key, query, &*repos, installer_path)
     }
 
     fn download(
@@ -161,32 +138,9 @@ impl PackageStore for PrefixPackageStore {
         key: &PackageKey,
         progress: Box<dyn Fn(u64, u64) -> bool + Send + 'static>,
     ) -> Result<PathBuf, crate::download::DownloadError> {
-        // let package = match self.find_package_by_key(key) {
-        //     Some(v) => v,
-        //     None => {
-        //         return Err(crate::download::DownloadError::NoUrl);
-        //     }
-        // };
-
-        // let installer = match package.installer() {
-        //     None => return Err(crate::download::DownloadError::NoUrl),
-        //     Some(v) => v,
-        // };
-
-        // let url = match Url::parse(&*installer.url()) {
-        //     Ok(v) => v,
-        //     Err(e) => return Err(crate::download::DownloadError::InvalidUrl),
-        // };
-
-        // let config = &self.config.read().unwrap();
-        // let dm = DownloadManager::new(
-        //     config.download_cache_dir(),
-        //     config.max_concurrent_downloads(),
-        // );
-
-        // let output_path = crate::repo::download_dir(config, &installer.url());
-        // crate::block_on(dm.download(&url, output_path, Some(progress)))
-        todo!()
+        let query = crate::repo::ReleaseQuery::from(key);
+        let repos = self.repos.read().unwrap();
+        crate::repo::download(&self.config, key, query, &*repos, progress)
     }
 
     fn install(
@@ -194,81 +148,68 @@ impl PackageStore for PrefixPackageStore {
         key: &PackageKey,
         target: &Self::Target,
     ) -> Result<PackageStatus, InstallError> {
-        // let package = self
-        //     .find_package_by_key(key)
-        //     .with_context(|| crate::transaction::install::NoPackage)?;
-        // let installer = package
-        //     .installer()
-        //     .with_context(|| crate::transaction::install::NoInstaller)?;
-        // let installer = match *installer {
-        //     Installer::Tarball(ref v) => v,
-        //     _ => return Err(crate::transaction::install::InstallError::WrongInstallerType),
-        // };
-        // let url = url::Url::parse(&installer.url).with_context(|| {
-        //     crate::transaction::install::InvalidUrl {
-        //         url: installer.url.to_owned(),
-        //     }
-        // })?;
-        // let filename = url.path_segments().unwrap().last().unwrap();
-        // let pkg_path =
-        //     crate::repo::download_dir(&*self.config.read().unwrap(), &url.as_str()).join(filename);
+        let query = crate::repo::ReleaseQuery::from(key).and_payloads(vec!["TarballPackage"]);
 
-        // if !pkg_path.exists() {
-        //     log::error!("Package path doesn't exist: {:?}", &pkg_path);
-        //     return Err(crate::transaction::install::InstallError::PackageNotInCache);
-        // }
+        let repos = self.repos.read().unwrap();
 
-        // let ext = pkg_path
-        //     .extension()
-        //     .and_then(OsStr::to_str)
-        //     .ok_or(InstallError::InvalidFileType)?;
+        let (target, release, package) =
+            crate::repo::resolve_payload(key, query, &*repos).map_err(InstallError::Payload)?;
+        let installer = match target.payload {
+            pahkat_types::payload::Payload::TarballPackage(v) => v,
+            _ => return Err(InstallError::WrongPayloadType),
+        };
+        let pkg_path =
+            crate::repo::download_file_path(&*self.config.read().unwrap(), &installer.url);
+        log::debug!("Installing {}: {:?}", &key, &pkg_path);
 
-        // let file = File::open(&pkg_path).unwrap();
+        if !pkg_path.exists() {
+            log::error!("Package path doesn't exist: {:?}", &pkg_path);
+            return Err(InstallError::PackageNotInCache);
+        }
 
-        // let reader = match ext {
-        //     "txz" | "xz" => XzDecoder::new(file),
-        //     _ => return Err(InstallError::InvalidFileType),
-        // };
+        let file = File::open(&pkg_path).unwrap();
+        let reader = XzDecoder::new(std::io::BufReader::new(file));
 
-        // let mut tar_file = tar::Archive::new(reader);
-        // let mut files: Vec<PathBuf> = vec![];
+        let mut tar_file = tar::Archive::new(reader);
+        let mut files = vec![];
 
-        // let pkg_path = self.package_path(&package);
-        // create_dir_all(&pkg_path).unwrap(); //.context(CreateDirFailed)?;
+        let pkg_path = self.package_dir(&package.id);
+        create_dir_all(&pkg_path).unwrap(); // map_err(InstallError::CreateDirFailed)?;
 
-        // for entry in tar_file.entries().unwrap() {
-        //     let mut entry = entry.unwrap();
-        //     let unpack_res;
-        //     {
-        //         unpack_res = entry.unpack_in(&pkg_path).unwrap(); //.context(UnpackFailed)?;
-        //     }
+        for entry in tar_file.entries().unwrap() {
+            let mut entry = entry.unwrap();
+            let unpack_res;
+            {
+                unpack_res = entry.unpack_in(&pkg_path).unwrap(); //.context(UnpackFailed)?;
+            }
 
-        //     if unpack_res {
-        //         let entry_path = entry.header().path().unwrap();
-        //         files.push(entry_path.to_path_buf());
-        //     } else {
-        //         continue;
-        //     }
-        // }
+            if unpack_res {
+                let entry_path = entry.header().path().unwrap();
+                let entry_path = entry_path.strip_prefix(&self.prefix).unwrap();
+                let entry_path = entry_path.to_str().unwrap().to_string();
+                files.push(entry_path);
+            } else {
+                continue;
+            }
+        }
 
-        // let deps = &package.dependencies;
-        // let dependencies: Vec<String> = deps.keys().map(|x| x.to_owned()).collect();
+        let deps = &target.dependencies;
+        let dependencies: Vec<String> = deps.keys().map(|x| x.to_owned()).collect();
 
-        // {
-        //     let record = PackageDbRecord {
-        //         id: 0,
-        //         url: key.to_string(),
-        //         version: package.version.to_owned(),
-        //         files,
-        //         dependencies,
-        //     };
+        {
+            let record = PackageDbRecord {
+                id: 0,
+                url: key.to_string(),
+                version: release.version.to_string(),
+                files,
+                dependencies,
+            };
 
-        //     let mut conn = self.pool.get().unwrap();
-        //     record.save(&mut conn).unwrap();
-        // };
+            let mut conn = self.pool.get().unwrap();
+            record.save(&mut conn).unwrap();
+        };
 
-        // Ok(PackageStatus::UpToDate)
-        todo!()
+        Ok(PackageStatus::UpToDate)
     }
 
     fn uninstall(
@@ -276,90 +217,71 @@ impl PackageStore for PrefixPackageStore {
         key: &PackageKey,
         target: &Self::Target,
     ) -> Result<PackageStatus, UninstallError> {
-        // let package = self
-        //     .find_package_by_key(key)
-        //     .ok_or(UninstallError::NoPackage)?;
+        let mut conn = self.pool.get().unwrap();
+        let record = match PackageDbRecord::find_by_id(&mut conn, &key) {
+            None => return Err(UninstallError::NotInstalled),
+            Some(v) => v,
+        };
 
-        // let mut conn = self.pool.get().unwrap();
-        // let record = match PackageDbRecord::find_by_id(&mut conn, &key) {
-        //     None => return Err(UninstallError::NoPackage),
-        //     Some(v) => v,
-        // };
+        let pkg_path = self.package_dir(&key.id);
+        for file in &record.files {
+            let file = match pkg_path.join(file).canonicalize() {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
 
-        // let pkg_path = self.package_path(&package);
-        // for file in &record.files {
-        //     let file = match pkg_path.join(file).canonicalize() {
-        //         Ok(v) => v,
-        //         Err(_) => continue,
-        //     };
+            if file.is_dir() {
+                continue;
+            }
 
-        //     if file.is_dir() {
-        //         continue;
-        //     }
+            if file.exists() {
+                remove_file(file).unwrap();
+            }
+        }
 
-        //     if file.exists() {
-        //         remove_file(file).unwrap();
-        //     }
-        // }
+        for file in &record.files {
+            let file = match pkg_path.join(file).canonicalize() {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
 
-        // for file in &record.files {
-        //     let file = match pkg_path.join(file).canonicalize() {
-        //         Ok(v) => v,
-        //         Err(_) => continue,
-        //     };
+            if !file.is_dir() {
+                continue;
+            }
 
-        //     if !file.is_dir() {
-        //         continue;
-        //     }
+            let dir = read_dir(&file).unwrap();
+            if dir.count() == 0 {
+                remove_dir(&file).unwrap();
+            }
+        }
 
-        //     let dir = read_dir(&file).unwrap();
-        //     if dir.count() == 0 {
-        //         remove_dir(&file).unwrap();
-        //     }
-        // }
+        record.delete(&mut conn).unwrap();
 
-        // record.delete(&mut conn).unwrap();
-
-        // Ok(PackageStatus::NotInstalled)
-        todo!()
+        Ok(PackageStatus::NotInstalled)
     }
 
     fn status(&self, key: &PackageKey, _target: &()) -> Result<PackageStatus, PackageStatusError> {
-        // log::debug!("status: {}", &key.to_string());
+        let mut conn = self.pool.get().unwrap();
+        let record = match PackageDbRecord::find_by_id(&mut conn, &key) {
+            None => return Ok(PackageStatus::NotInstalled),
+            Some(v) => v,
+        };
+        
+        let query = crate::repo::ReleaseQuery::from(key).and_payloads(vec!["TarballPackage"]);
+        let repos = self.repos.read().unwrap();
 
-        // let package = match self.find_package_by_key(key) {
-        //     Some(v) => v,
-        //     None => {
-        //         return Err(PackageStatusError::NoPackage);
-        //     }
-        // };
+        let (target, release, package) =
+            crate::repo::resolve_payload(key, query, &*repos).map_err(PackageStatusError::Payload)?;
+        let _installer = match target.payload {
+            pahkat_types::payload::Payload::TarballPackage(v) => v,
+            _ => return Err(PackageStatusError::WrongPayloadType),
+        };
 
-        // let installer = match package.installer() {
-        //     None => return Err(PackageStatusError::NoInstaller),
-        //     Some(v) => v,
-        // };
+        let config = self.config.read().unwrap();
+        let status = self::cmp::cmp(&record.version, &release.version);
 
-        // let installer = match installer {
-        //     &Installer::Tarball(ref v) => v,
-        //     _ => return Err(PackageStatusError::WrongInstallerType),
-        // };
-
-        // let mut conn = self.pool.get().unwrap();
-        // let record = match PackageDbRecord::find_by_id(&mut conn, &key) {
-        //     None => return Ok(PackageStatus::NotInstalled),
-        //     Some(v) => v,
-        // };
-
-        // let config = self.config.read().unwrap();
-
-        // let skipped_package = config.skipped_package(key);
-        // let skipped_package = skipped_package.as_ref().map(String::as_ref);
-
-        // let status = self::cmp::cmp(&record.version, &package.version, skipped_package);
-
-        // log::debug!("Status: {:?}", &status);
-        // status
-        todo!()
+        log::debug!("Status: {:?}", &status);
+        status
     }
 
     fn all_statuses(
@@ -367,55 +289,52 @@ impl PackageStore for PrefixPackageStore {
         repo_url: &Url,
         target: &(),
     ) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>> {
-        // crate::repo::all_statuses(self, repo_record, target)
-        todo!()
+        crate::repo::all_statuses(self, repo_url, target)
+    }
+
+    fn find_package_by_key(&self, key: &PackageKey) -> Option<Package> {
+        let repos = self.repos.read().unwrap();
+        crate::repo::find_package_by_key(key, &*repos)
     }
 
     fn find_package_by_id(&self, package_id: &str) -> Option<(PackageKey, Package)> {
-        // crate::repo::find_package_by_id(self, package_id, &self.repos)
-        todo!()
+        let repos = self.repos.read().unwrap();
+        crate::repo::find_package_by_id(self, package_id, &*repos)
     }
 
     fn refresh_repos(&self) {
-        // let config = self.config.read().unwrap();
-        // let repos = crate::repo::refresh_repos(&config);
-        // *self.repos.write().unwrap() = repos;
-        todo!()
+        *self.repos.write().unwrap() = crate::repo::refresh_repos(&self.config);
     }
 
     fn clear_cache(&self) {
-        todo!()
+        crate::repo::clear_cache(&self.config)
     }
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("No installer found for package: {id}")]
-    NoInstaller { id: String },
+// #[derive(Debug, thiserror::Error)]
+// pub enum Error {
+//     #[error("No installer found for package: {id}")]
+//     NoInstaller { id: String },
 
-    #[error("Wrong installer type")]
-    WrongInstallerType,
+//     #[error("Wrong installer type")]
+//     WrongInstallerType,
 
-    #[error("Invalid extension")]
-    InvalidExtension,
+//     #[error("Invalid extension")]
+//     InvalidExtension,
 
-    #[error("Create directory failed")]
-    CreateDirFailed(#[source] std::io::Error),
+//     #[error("Create directory failed")]
+//     CreateDirFailed(#[source] std::io::Error),
 
-    #[error("Unpack failed")]
-    UnpackFailed(#[source] std::io::Error),
-}
-
-type Result<T, E = Error> = std::result::Result<T, E>;
-
-static PKG_STORE_INIT: &'static str = include_str!("../pkgstore_init.sql");
+//     #[error("Unpack failed")]
+//     UnpackFailed(#[source] std::io::Error),
+// }
 
 #[derive(Debug)]
 struct PackageDbRecord {
     id: i64,
     url: String,
     version: String,
-    files: Vec<Url>,
+    files: Vec<String>,
     dependencies: Vec<String>,
 }
 
@@ -437,16 +356,16 @@ impl<'a> PackageDbConnection<'a> {
         res
     }
 
-    fn files(&self, url: &str) -> Vec<Url> {
+    fn files(&self, url: &str) -> Vec<String> {
         let mut stmt = self
             .0
-            .prepare("SELECT file_url FROM packages_files WHERE package_id = (SELECT id FROM packages WHERE url = ?)")
+            .prepare("SELECT file_path FROM packages_files WHERE package_id = (SELECT id FROM packages WHERE url = ?)")
             .expect("prepared statement");
 
         let res = stmt
             .query_map(&[&url], |row| row.get(0))
             .expect("query_map succeeds")
-            .map(|x: Result<String, _>| Url::parse(&x.unwrap()).unwrap())
+            .map(|x: Result<String, _>| x.unwrap())
             .collect();
 
         res
@@ -497,7 +416,7 @@ impl<'a> PackageDbConnection<'a> {
             }
 
             let mut file_stmt =
-                tx.prepare("INSERT INTO packages_files(package_id, file_url) VALUES (:id, :path)")?;
+                tx.prepare("INSERT INTO packages_files(package_id, file_path) VALUES (:id, :path)")?;
 
             for file_path in &pkg.files {
                 file_stmt

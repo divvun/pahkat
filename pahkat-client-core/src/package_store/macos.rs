@@ -122,21 +122,9 @@ impl PackageStore for MacOSPackageStore {
     }
 
     fn import(&self, key: &PackageKey, installer_path: &Path) -> Result<PathBuf, ImportError> {
-        use std::convert::TryInto;
-
         let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
-
-        let (target, release) = crate::repo::resolve_payload(key, query, &*repos)?;
-        let installer: macos::Package = target
-            .payload
-            .try_into()
-            .map_err(|_| ImportError::InvalidPayloadType)?;
-        let config = &self.config.read().unwrap();
-
-        let output_path = crate::repo::download_dir(&**config, &installer.url);
-        std::fs::copy(installer_path, &output_path)?;
-        Ok(output_path)
+        crate::repo::import(&self.config, key, query, &*repos, installer_path)
     }
 
     fn download(

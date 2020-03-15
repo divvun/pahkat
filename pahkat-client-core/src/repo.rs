@@ -38,13 +38,20 @@ pub enum PayloadError {
 use pahkat_types::package::Version;
 use std::convert::TryInto;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, )]
 pub struct ReleaseQuery<'a> {
     pub platform: &'a str,
     pub arch: Option<&'a str>,
     pub channels: Vec<&'a str>,
     pub versions: Vec<VersionQuery<'a>>,
     pub payloads: Vec<&'a str>,
+}
+
+impl<'a> ReleaseQuery<'a> {
+    pub(crate) fn and_payloads(mut self, payloads: Vec<&'a str>) -> Self {
+        self.payloads = payloads;
+        self
+    }
 }
 
 impl<'a> Default for ReleaseQuery<'a> {
@@ -132,20 +139,13 @@ impl<'a> ReleaseQueryIter<'a> {
     #[inline(always)]
     fn next_release(&mut self) -> Option<ReleaseQueryResponse<'a>> {
         while let Some(release) = self.descriptor.releases.get(self.next_release) {
-            if !self.query.channels.is_empty() && !self.query.channels.contains(&&*release.channel)
-            {
-                self.next_release += 1;
-                continue;
-            }
-
-            if !self.query.versions.is_empty()
-                && self
-                    .query
-                    .versions
-                    .iter()
-                    .find(|q| q.matches(&release.version))
-                    .is_none()
-            {
+            // If query is empty, it means search only for the main empty channel
+            if let Some(channel) = release.channel.as_ref().map(|x| x.as_str()) {
+                if !self.query.channels.contains(&channel) {
+                    self.next_release += 1;
+                    continue;
+                }
+            } else if self.query.channels.is_empty() {
                 self.next_release += 1;
                 continue;
             }
@@ -237,6 +237,23 @@ pub(crate) fn resolve_payload<'a>(
         .next()
         .map(|x| (x.target.clone(), x.release.clone(), descriptor.clone()))
         .ok_or(PayloadError::NoPayloadFound)
+}
+
+pub(crate) fn import<'a>(
+    config: &Arc<RwLock<Config>>,
+    package_key: &PackageKey,
+    query: ReleaseQuery<'a>,
+    repos: &HashMap<Url, LoadedRepository>,
+    installer_path: &Path,
+) -> Result<std::path::PathBuf, crate::package_store::ImportError> {
+    use pahkat_types::payload::AsDownloadUrl;
+
+    let (target, _, _) = resolve_payload(package_key, query, &*repos)?;
+    let config = config.read().unwrap();
+
+    let output_path = download_dir(&config, target.payload.as_download_url());
+    std::fs::copy(installer_path, &output_path)?;
+    Ok(output_path)
 }
 
 pub(crate) fn download<'a>(

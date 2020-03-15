@@ -7,9 +7,13 @@ CREATE TABLE meta (
 REPLACE INTO meta(schema_version) VALUES (1);
 
 CREATE TABLE packages (
-    id              INTEGER PRIMARY KEY,
-    url             TEXT NOT NULL,
-    version         TEXT NOT NULL
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    url             TEXT NOT NULL UNIQUE,
+    version         TEXT NOT NULL,
+    installed_on    TEXT NOT NULL,
+    updated_on      TEXT NOT NULL,
+    is_dependent    BOOLEAN NOT NULL DEFAULT 0,
+    is_pegged       BOOLEAN NOT NULL DEFAULT 0,
 );
 
 CREATE INDEX idx_packages_url ON packages (url);
@@ -25,9 +29,9 @@ CREATE TABLE packages_dependencies (
 
 CREATE TABLE packages_files (
     package_id      INTEGER NOT NULL,
-    file_url       TEXT NOT NULL,
+    file_path       TEXT NOT NULL,
 
-    PRIMARY KEY (package_id, file_url),
+    PRIMARY KEY (package_id, file_path),
     FOREIGN KEY (package_id) REFERENCES packages(id)
 );
 

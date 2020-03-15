@@ -1,4 +1,4 @@
-// #![cfg(windows)]
+mod sys;
 
 use std::collections::BTreeMap;
 use std::ffi::OsString;
@@ -7,7 +7,6 @@ use std::process::Command;
 use std::sync::{Arc, RwLock};
 
 use hashbrown::HashMap;
-use indexmap::IndexMap;
 use pahkat_types::payload::windows::InstallTarget;
 use url::Url;
 use winreg::enums::*;
@@ -24,77 +23,9 @@ use pahkat_types::{
     payload::windows,
 };
 
-mod sys {
-    use std::ffi::{OsStr, OsString};
-    use std::ops::Range;
-    use std::os::windows::ffi::OsStrExt;
-    use std::os::windows::ffi::OsStringExt;
-    use std::slice;
-    use winapi::ctypes::c_void;
-    use winapi::um::shellapi::CommandLineToArgvW;
-    use winapi::um::winbase::LocalFree;
-
-    // https://github.com/rust-lang/rust/blob/f76d9bcfc2c269452522fbbe19f66fe653325646/src/libstd/sys/windows/os.rs#L286-L289
-    pub struct Args {
-        range: Range<isize>,
-        cur: *mut *mut u16,
-    }
-
-    impl Iterator for Args {
-        type Item = OsString;
-        fn next(&mut self) -> Option<OsString> {
-            self.range.next().map(|i| unsafe {
-                let ptr = *self.cur.offset(i);
-                let mut len = 0;
-                while *ptr.offset(len) != 0 {
-                    len += 1;
-                }
-
-                // Push it onto the list.
-                let ptr = ptr as *const u16;
-                let buf = slice::from_raw_parts(ptr, len as usize);
-                OsStringExt::from_wide(buf)
-            })
-        }
-        fn size_hint(&self) -> (usize, Option<usize>) {
-            self.range.size_hint()
-        }
-    }
-
-    impl ExactSizeIterator for Args {
-        fn len(&self) -> usize {
-            self.range.len()
-        }
-    }
-
-    impl Drop for Args {
-        fn drop(&mut self) {
-            unsafe {
-                LocalFree(self.cur as *mut c_void);
-            }
-        }
-    }
-
-    pub fn args<S: AsRef<OsStr>>(input: S) -> Args {
-        let input_vec: Vec<u16> = OsStr::new(&input)
-            .encode_wide()
-            .chain(Some(0).into_iter())
-            .collect();
-        let lp_cmd_line = input_vec.as_ptr();
-        let mut args: i32 = 0;
-        let arg_list: *mut *mut u16 = unsafe { CommandLineToArgvW(lp_cmd_line, &mut args) };
-        Args {
-            range: 0..(args as isize),
-            cur: arg_list,
-        }
-    }
-}
-
-mod keys {
-    pub const UNINSTALL_PATH: &'static str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall";
-    pub const DISPLAY_VERSION: &'static str = "DisplayVersion";
-    pub const QUIET_UNINSTALL_STRING: &'static str = "QuietUninstallString";
-}
+const UNINSTALL_PATH: &'static str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall";
+const DISPLAY_VERSION: &'static str = "DisplayVersion";
+const QUIET_UNINSTALL_STRING: &'static str = "QuietUninstallString";
 
 type SharedStoreConfig = Arc<RwLock<Config>>;
 type SharedRepos = Arc<RwLock<HashMap<Url, LoadedRepository>>>;
@@ -107,7 +38,7 @@ pub struct WindowsPackageStore {
 
 fn uninstall_regkey(installer: &windows::Executable) -> Option<RegKey> {
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    let path = Path::new(keys::UNINSTALL_PATH).join(&installer.product_code);
+    let path = Path::new(UNINSTALL_PATH).join(&installer.product_code);
     match hklm.open_subkey(&path) {
         Err(_e) => match hklm.open_subkey_with_flags(&path, KEY_READ | KEY_WOW64_64KEY) {
             Err(_e) => None,
@@ -241,8 +172,8 @@ impl PackageStore for WindowsPackageStore {
         };
 
         let uninst_string: String = match regkey
-            .get_value(keys::QUIET_UNINSTALL_STRING)
-            .or_else(|_| regkey.get_value(keys::QUIET_UNINSTALL_STRING))
+            .get_value(QUIET_UNINSTALL_STRING)
+            .or_else(|_| regkey.get_value(QUIET_UNINSTALL_STRING))
         {
             Ok(v) => v,
             Err(_) => {
@@ -392,7 +323,7 @@ impl WindowsPackageStore {
             None => return Ok(PackageStatus::NotInstalled),
         };
 
-        let disp_version: String = match inst_key.get_value(keys::DISPLAY_VERSION) {
+        let disp_version: String = match inst_key.get_value(DISPLAY_VERSION) {
             Err(_) => return Err(PackageStatusError::ParsingVersion),
             Ok(v) => v,
         };
