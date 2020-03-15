@@ -4,8 +4,11 @@ use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+#[serde(tag = "_type")]
 pub enum Repository {
+    #[serde(rename = "Repository")]
     Index(index::Index),
+    #[serde(rename = "RepositoryRedirect")]
     Redirect(Redirect),
 }
 

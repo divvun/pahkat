@@ -46,18 +46,19 @@ impl FromStr for TimestampVersion {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash, Eq)]
+#[serde(untagged)]
+#[non_exhaustive]
 pub enum Version {
     Semantic(SemanticVersion),
     Timestamp(TimestampVersion),
-    Unknown(String),
 }
 
 #[derive(Debug, Clone, Error)]
 pub enum Error {
     #[error("Error parsing timestamp version")]
     Timestamp(#[from] TimestampError),
-    #[error("Invalid input: {0}")]
-    InvalidInput(String),
+    #[error("Unhandled input: {0}")]
+    UnhandledInput(String),
 }
 
 impl Version {
@@ -73,7 +74,7 @@ impl Version {
             Err(_) => { /* fall through */ }
         }
 
-        Ok(Version::Unknown(version.to_string()))
+        Err(Error::UnhandledInput(version.to_string()))
     }
 }
 
@@ -84,7 +85,6 @@ impl Display for Version {
             Version::Timestamp(date) => {
                 f.write_str(&date.0.to_rfc3339_opts(SecondsFormat::Millis, true))
             }
-            Version::Unknown(unknown) => f.write_str(unknown),
         }
     }
 }
@@ -105,7 +105,6 @@ impl PartialOrd for Version {
             (Version::Timestamp(my), Version::Timestamp(other)) => Some(my.cmp(other)),
             (Version::Timestamp(_), Version::Semantic(_)) => Some(Ordering::Greater),
             (Version::Semantic(_), Version::Timestamp(_)) => Some(Ordering::Less),
-            _ => None,
         }
     }
 }
