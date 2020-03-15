@@ -1,10 +1,12 @@
-use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
+use typed_builder::TypedBuilder;
 
-#[derive(Clone, Debug, Serialize, Deserialize, Builder)]
+#[derive(
+    Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct RegistryKey {
-    #[serde(rename = "_type")]
+    #[builder(default = "WindowsRegistryKey".into())]
     _type: String,
 
     pub path: String,

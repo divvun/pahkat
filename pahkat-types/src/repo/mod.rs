@@ -1,10 +1,9 @@
 pub mod index;
 
-use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
+use typed_builder::TypedBuilder;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(untagged)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub enum Repository {
     Index(index::Index),
     Redirect(Redirect),
@@ -19,10 +18,13 @@ pub struct Localisation {
     // TODO
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Builder)]
+#[derive(
+    Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
+)]
+#[serde(rename_all = "camelCase")]
 pub struct Redirect {
-    #[serde(rename = "_type")]
-    pub _type: String,
+    #[builder(default = "RepositoryRedirect".into())]
+    _type: String,
 
-    pub redirect: String,
+    pub redirect: url::Url,
 }

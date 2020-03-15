@@ -38,15 +38,14 @@ impl FromStr for TimestampVersion {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match chrono::DateTime::from_str(s) {
             Ok(v) if s.ends_with('Z') => Ok(v),
-            Ok(v) => Err(TimestampError::NonUTC),
+            Ok(_) => Err(TimestampError::NonUTC),
             Err(e) => Err(TimestampError::InvalidDate(e)),
         }
         .map(TimestampVersion)
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[non_exhaustive]
+#[derive(Debug, Serialize, Deserialize, Clone, Hash, Eq)]
 pub enum Version {
     Semantic(SemanticVersion),
     Timestamp(TimestampVersion),

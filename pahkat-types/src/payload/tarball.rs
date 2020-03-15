@@ -1,12 +1,14 @@
-use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
+use typed_builder::TypedBuilder;
 
-#[derive(Clone, Debug, Serialize, Deserialize, Builder)]
+#[derive(
+    Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct Package {
-    #[serde(rename = "_type")]
-    /// Always has value `TarballPackage`.
-    pub _type: String,
+    #[builder(default = "TarballPackage".into())]
+    _type: String,
+
     pub url: url::Url,
     pub size: usize,
     pub installed_size: usize,

@@ -2,13 +2,15 @@ use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::str::FromStr;
 
-use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
+use typed_builder::TypedBuilder;
 
-#[derive(Clone, Debug, Serialize, Deserialize, Builder)]
+#[derive(
+    Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct Package {
-    #[serde(rename = "_type")]
+    #[builder(default = "MacOSPackage".into())]
     _type: String,
 
     pub url: url::Url,
@@ -29,7 +31,7 @@ impl super::AsDownloadUrl for Package {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Hash, Eq)]
 pub enum InstallTarget {
     System,
     User,
@@ -41,21 +43,9 @@ impl std::default::Default for InstallTarget {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, thiserror::Error)]
+#[error("Invalid value passed")]
 pub struct ParseInstallTargetError;
-
-impl std::error::Error for ParseInstallTargetError {
-    fn description(&self) -> &str {
-        "Invalid value passed"
-    }
-}
-
-impl std::fmt::Display for ParseInstallTargetError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        use std::error::Error;
-        write!(f, "{}", self.description())
-    }
-}
 
 impl FromStr for InstallTarget {
     type Err = ParseInstallTargetError;
@@ -71,14 +61,10 @@ impl FromStr for InstallTarget {
 
 impl std::fmt::Display for InstallTarget {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match *self {
-                InstallTarget::System => "system",
-                InstallTarget::User => "user",
-            }
-        )
+        match *self {
+            InstallTarget::System => f.write_str("system"),
+            InstallTarget::User => f.write_str("user"),
+        }
     }
 }
 

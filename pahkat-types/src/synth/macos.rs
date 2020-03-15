@@ -1,9 +1,11 @@
-use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
-#[derive(Clone, Debug, Serialize, Deserialize, Builder)]
+use typed_builder::TypedBuilder;
+#[derive(
+    Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct PackageRef {
-    #[serde(rename = "_type")]
+    #[builder(default = "MacOSPackageRef".into())]
     _type: String,
 
     pub pkg_id: String,
@@ -13,10 +15,12 @@ pub struct PackageRef {
     pub max_build: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Builder)]
+#[derive(
+    Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct PathRef {
-    #[serde(rename = "_type")]
+    #[builder(default = "MacOSPathRef".into())]
     _type: String,
 
     pub app_paths: Vec<String>,

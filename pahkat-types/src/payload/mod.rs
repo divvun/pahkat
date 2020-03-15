@@ -5,17 +5,21 @@ pub mod windows;
 use crate::DependencyMap;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
+use typed_builder::TypedBuilder;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[serde(tag = "_type")]
 #[non_exhaustive]
-#[serde(untagged)]
 pub enum Payload {
     WindowsExecutable(windows::Executable),
     MacOSPackage(macos::Package),
     TarballPackage(tarball::Package),
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(
+    Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
+)]
+#[serde(rename_all = "camelCase")]
 pub struct Target {
     pub platform: String,
     pub arch: Option<String>,
