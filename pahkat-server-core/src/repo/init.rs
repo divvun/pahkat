@@ -1,19 +1,25 @@
-use std::io::{self, Read, Write};
-use std::fs::{self, File, create_dir_all};
-use std::path::{Path, PathBuf};
 use std::borrow::Cow;
+use std::fs::{self, create_dir_all, File};
+use std::io::{self, Read, Write};
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use typed_builder::TypedBuilder;
 use url::Url;
 
-use pahkat_types::{package::Index as PackagesIndex, repo::{Repository, Index, Agent}};
+use pahkat_types::{
+    package::Index as PackagesIndex,
+    repo::{Agent, Index, Repository},
+    LangTagMap,
+};
 
 #[non_exhaustive]
 #[derive(Debug, Clone, TypedBuilder)]
 pub struct InitRequest<'a> {
     pub path: Cow<'a, Path>,
     pub base_url: Cow<'a, Url>,
+    pub name: Cow<'a, str>,
+    pub description: Cow<'a, str>,
 }
 
 #[non_exhaustive]
@@ -23,6 +29,10 @@ pub struct PartialInitRequest<'a> {
     pub path: Option<&'a Path>,
     #[builder(default)]
     pub base_url: Option<&'a Url>,
+    #[builder(default)]
+    pub name: Option<&'a str>,
+    #[builder(default)]
+    pub description: Option<&'a str>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -42,31 +52,60 @@ impl<'a> crate::Request for InitRequest<'a> {
     type Partial = PartialInitRequest<'a>;
 
     fn new_from_user_input(partial: Self::Partial) -> Result<Self, Self::Error> {
-        use dialoguer::{Input};
+        use dialoguer::Input;
 
         let path = match partial.path {
             Some(path) => Cow::Borrowed(path),
-            None => {
-                Input::<String>::new()
-                    .default(std::env::current_dir().ok().and_then(|x| x.to_str().map(str::to_string)).unwrap_or_else(|| ".".into()))
-                    .with_prompt("Path")
-                    .interact()
-                    .map(|p| Cow::Owned(PathBuf::from(p)))
-                    .map_err(RequestError::PathError)?
-            }
+            None => Input::<String>::new()
+                .default(
+                    std::env::current_dir()
+                        .ok()
+                        .and_then(|x| x.to_str().map(str::to_string))
+                        .unwrap_or_else(|| ".".into()),
+                )
+                .with_prompt("Path")
+                .interact()
+                .map(|p| Cow::Owned(PathBuf::from(p)))
+                .map_err(RequestError::PathError)?,
         };
 
         let base_url = match partial.base_url {
             Some(url) => Cow::Borrowed(url),
             None => {
-                let base_url = Input::<String>::new().with_prompt("Base URL")
+                let base_url = Input::<String>::new()
+                    .with_prompt("Base URL")
                     .interact()
                     .map_err(|_| RequestError::InvalidInput)?;
                 Cow::Owned(Url::parse(&base_url)?)
             }
         };
 
-        Ok(InitRequest { path, base_url })
+        let name = match partial.name {
+            Some(name) => Cow::Borrowed(name),
+            None => Cow::Owned(
+                Input::<String>::new()
+                    .with_prompt("Repo name (in English)")
+                    .interact()
+                    .map_err(|_| RequestError::InvalidInput)?,
+            ),
+        };
+
+        let description = match partial.description {
+            Some(description) => Cow::Borrowed(description),
+            None => Cow::Owned(
+                Input::<String>::new()
+                    .with_prompt("Repo description (in English)")
+                    .interact()
+                    .map_err(|_| RequestError::InvalidInput)?,
+            ),
+        };
+
+        Ok(InitRequest {
+            path,
+            base_url,
+            name,
+            description,
+        })
     }
 }
 
@@ -74,7 +113,7 @@ pub fn create_agent() -> Agent {
     Agent {
         name: "pahkat".into(),
         version: env!("CARGO_PKG_VERSION").into(),
-        url: Some(Url::parse("https://github.com/divvun/pahkat/").unwrap())
+        url: Some(Url::parse("https://github.com/divvun/pahkat/").unwrap()),
     }
 }
 
@@ -103,9 +142,17 @@ pub fn init<'a>(request: InitRequest<'a>) -> Result<(), Error> {
         .map_err(|e| Error::DirCreateFailed(request.path.to_path_buf(), e))?;
 
     // Create empty repository index
+    let mut name = LangTagMap::new();
+    name.insert("en".into(), request.name.to_string());
+
+    let mut description = LangTagMap::new();
+    description.insert("en".into(), request.description.to_string());
+
     let index = Index::builder()
         .base_url(request.base_url.into_owned())
         .agent(create_agent())
+        .name(name)
+        .description(description)
         .build();
 
     let repo_index_path = request.path.join("index.toml");

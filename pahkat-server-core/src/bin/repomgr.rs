@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use url::Url;
 
-use pahkat_server_core::{Request, repo};
+use pahkat_server_core::{repo, Request};
 
 #[derive(Debug, StructOpt)]
 #[structopt()]
@@ -17,6 +17,12 @@ struct RepoInitCommand {
     #[structopt(short = "u", long, parse(try_from_str = Url::parse))]
     base_url: Option<Url>,
 
+    #[structopt(short, long)]
+    name: Option<String>,
+
+    #[structopt(short, long)]
+    description: Option<String>,
+
     #[structopt(parse(from_os_str))]
     output_path: Option<PathBuf>,
 }
@@ -26,13 +32,15 @@ impl RepoInitCommand {
         repo::init::PartialInitRequest::builder()
             .path(self.output_path.as_ref().map(|x| &**x))
             .base_url(self.base_url.as_ref())
+            .name(self.name.as_ref().map(|x| &**x))
+            .description(self.description.as_ref().map(|x| &**x))
             .build()
     }
 }
 
 #[derive(Debug, StructOpt)]
 enum RepoCommand {
-    Init(RepoInitCommand)
+    Init(RepoInitCommand),
 }
 
 #[derive(Debug, StructOpt)]
@@ -50,7 +58,7 @@ fn main() -> anyhow::Result<()> {
                 let req = repo::init::InitRequest::new_from_user_input(init.to_partial())?;
                 repo::init::init(req)?;
             }
-        }
+        },
     }
 
     Ok(())
