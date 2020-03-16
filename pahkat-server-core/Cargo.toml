@@ -1,0 +1,24 @@
+[package]
+name = "pahkat-server-core"
+version = "1.0.0-alpha.0"
+authors = ["Brendan Molloy <brendan@bbqsrc.net>"]
+edition = "2018"
+
+[dependencies]
+pahkat-types = { path = "../pahkat-types" }
+tokio = { version = "0.2", features = ["net"] }
+dialoguer = { version = "0.5.0", optional = true }
+termcolor = { version = "1.1.0", optional = true }
+url = "2.1.1"
+serde = "1.0.104"
+serde_json = "1.0.48"
+anyhow = "1.0.27"
+structopt = { version = "0.3.11", optional = true }
+typed-builder = "0.5.1"
+thiserror = "1.0.11"
+toml = "0.5.6"
+log = "0.4.8"
+
+[features]
+default = ["cli"]
+cli = ["dialoguer", "termcolor", "structopt"]

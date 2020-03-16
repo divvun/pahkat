@@ -6,13 +6,13 @@ use std::path::Path;
 
 use termcolor::Color;
 
-use pahkat_common::{
-    index_fn, ld_type, open_repo, repo_index, OpenIndexError, ProgressOutput, LD_CONTEXT,
-};
-use pahkat_types::{
-    MacOSPackageRef, MacOSPathRef, Package, RegistryKey, Repository, RepositoryAgent, Virtual,
-    VirtualTarget, OS,
-};
+// use pahkat_common::{
+//     index_fn, ld_type, open_repo, repo_index, OpenIndexError, ProgressOutput, LD_CONTEXT,
+// };
+// use pahkat_types::{
+//     MacOSPackageRef, MacOSPathRef, Package, RegistryKey, Repository, RepositoryAgent, Virtual,
+//     VirtualTarget, OS,
+// };
 
 use crate::cli::{
     parse_platform_list, progress, prompt_line, prompt_multi_select, prompt_question, prompt_select,

@@ -8,33 +8,34 @@ use cursed::{FromForeign, ToForeign};
 use super::{JsonMarshaler, PackageKeyMarshaler};
 use crate::package_store::PackageStore;
 use crate::transaction::{PackageStatus, PackageStatusError};
-use crate::{PackageKey, StoreConfig, WindowsPackageStore};
+use crate::{PackageKey, Config, WindowsPackageStore};
 
-pub type WindowsTarget = pahkat_types::InstallTarget;
+use super::BoxError;
+
+pub type WindowsTarget = pahkat_types::payload::windows::InstallTarget;
 pub type WindowsPackageAction = crate::transaction::PackageAction<WindowsTarget>;
 pub type WindowsPackageTransaction = crate::transaction::PackageTransaction<WindowsTarget>;
 
 #[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<WindowsPackageStore>")]
 pub extern "C" fn pahkat_windows_package_store_default(
 ) -> Result<Arc<WindowsPackageStore>, Box<dyn Error>> {
-    let config = StoreConfig::load_or_default(true)?;
+    let config = Config::load_default()?;
     Ok(Arc::new(WindowsPackageStore::new(config)))
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<WindowsPackageStore>")]
 pub extern "C" fn pahkat_windows_package_store_new(
-    #[marshal(cursed::PathMarshaler)] path: PathBuf,
+    #[marshal(cursed::PathBufMarshaler)] path: PathBuf,
 ) -> Result<Arc<WindowsPackageStore>, Box<dyn Error>> {
-    let config = StoreConfig::new(&path);
-    config.save()?;
+    let config = Config::load(&path, crate::config::Permission::ReadWrite)?;
     Ok(Arc::new(WindowsPackageStore::new(config)))
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<WindowsPackageStore>")]
 pub extern "C" fn pahkat_windows_package_store_load(
-    #[marshal(cursed::PathMarshaler)] path: PathBuf,
+    #[marshal(cursed::PathBufMarshaler)] path: PathBuf,
 ) -> Result<Arc<WindowsPackageStore>, Box<dyn Error>> {
-    let config = match StoreConfig::load(&path, true) {
+    let config = match Config::load(&path, crate::config::Permission::ReadWrite) {
         Ok(v) => v,
         Err(err) => return Err(Box::new(err) as _),
     };
@@ -50,25 +51,7 @@ pub struct CPackageStatus {
 
 impl CPackageStatus {
     fn new(result: Result<PackageStatus, PackageStatusError>, is_system: bool) -> CPackageStatus {
-        use PackageStatusError::*;
-
-        let status = match result {
-            Ok(status) => match status {
-                PackageStatus::NotInstalled => 0,
-                PackageStatus::UpToDate => 1,
-                PackageStatus::RequiresUpdate => 2,
-                PackageStatus::Skipped => 3,
-            },
-            Err(error) => match error {
-                NoPackage => -1,
-                NoInstaller => -2,
-                WrongInstallerType => -3,
-                ParsingVersion => -4,
-                InvalidInstallPath => -5,
-                InvalidMetadata => -6,
-            },
-        };
-
+        let status = super::status_to_i8(result);
         CPackageStatus { is_system, status }
     }
 }
@@ -95,7 +78,7 @@ pub extern "C" fn pahkat_windows_package_store_status(
     super::status_to_i8(handle.status(&package_key, &target))
 }
 
-#[cthulhu::invoke(return_marshaler = "cursed::PathMarshaler")]
+#[cthulhu::invoke(return_marshaler = "cursed::PathBufMarshaler")]
 pub extern "C" fn pahkat_windows_package_store_download(
     #[marshal(cursed::ArcRefMarshaler::<WindowsPackageStore>)] handle: Arc<WindowsPackageStore>,
     #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
@@ -141,10 +124,10 @@ pub extern "C" fn pahkat_windows_package_store_repo_indexes(
     serde_json::to_string(&indexes).map_err(|e| Box::new(e) as _)
 }
 
-#[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<RwLock<StoreConfig>>")]
+#[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<RwLock<Config>>")]
 pub extern "C" fn pahkat_windows_package_config(
     #[marshal(cursed::ArcRefMarshaler::<WindowsPackageStore>)] handle: Arc<WindowsPackageStore>,
-) -> Arc<RwLock<StoreConfig>> {
+) -> Arc<RwLock<Config>> {
     handle.config()
 }
 
@@ -160,14 +143,16 @@ pub extern "C" fn pahkat_windows_transaction_new(
 
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_windows_transaction_actions(
-    handle: &WindowsPackageTransaction,
+    #[marshal(cursed::BoxRefMarshaler::<WindowsPackageTransaction>)]
+    handle: &Box<WindowsPackageTransaction>,
 ) -> Vec<WindowsPackageAction> {
     handle.actions().to_vec()
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
 pub extern "C" fn pahkat_windows_transaction_process(
-    handle: &WindowsPackageTransaction,
+    #[marshal(cursed::BoxRefMarshaler::<WindowsPackageTransaction>)]
+    handle: &Box<WindowsPackageTransaction>,
     tag: u32,
     progress_callback: extern "C" fn(u32, *const libc::c_char, u32) -> u8,
 ) -> Result<(), Box<dyn Error>> {

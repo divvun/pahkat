@@ -1,10 +1,9 @@
 [workspace]
-
 members = [
     "pahkat-types",
     "pahkat-common",
-    "pahkat-cli",
     "pahkat-server",
     "pahkat-rpc",
     "pahkat-client-core",
+    "pahkat-server-core",
 ]

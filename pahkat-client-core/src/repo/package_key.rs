@@ -5,16 +5,19 @@ use serde::de::{self, Deserialize, Deserializer, Visitor};
 use serde::ser::{Serialize, Serializer};
 use url::Url;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct PackageKey {
-    pub repository_url: Url,
-    pub id: String,
-
-    // Query parameters
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+pub struct PackageKeyParams {
     pub channel: Option<String>,
     pub platform: Option<String>,
     pub version: Option<String>,
     pub arch: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PackageKey {
+    pub repository_url: Url,
+    pub id: String,
+    pub query: PackageKeyParams,
 }
 
 impl fmt::Display for PackageKey {
@@ -23,34 +26,26 @@ impl fmt::Display for PackageKey {
     }
 }
 
-#[derive(Debug, Clone, Default)]
-pub(crate) struct PackageKeyArgs {
-    pub platform: Option<String>,
-    pub version: Option<String>,
-    pub arch: Option<String>,
-}
-
 impl PackageKey {
     #[inline]
     pub fn to_string(&self) -> String {
         String::from(self)
     }
 
+    pub fn without_query_params(mut self) -> Self {
+        self.query = Default::default();
+        self
+    }
+
     pub(crate) fn unchecked_new(
         repository_url: Url,
         id: String,
-        channel: Option<String>,
-        args: Option<PackageKeyArgs>,
+        args: Option<PackageKeyParams>,
     ) -> Self {
-        let args = args.unwrap_or_else(|| Default::default());
-
         PackageKey {
             repository_url,
             id,
-            channel,
-            platform: args.platform,
-            version: args.version,
-            arch: args.arch,
+            query: args.unwrap_or_default(),
         }
     }
 }
@@ -70,19 +65,19 @@ impl<'a> From<&'a PackageKey> for Url {
         {
             let mut query = url.query_pairs_mut();
 
-            if let Some(ref arch) = key.arch {
+            if let Some(arch) = key.query.arch.as_ref() {
                 query.append_pair("arch", arch);
             }
 
-            if let Some(ref channel) = key.channel {
+            if let Some(channel) = key.query.channel.as_ref() {
                 query.append_pair("channel", channel);
             }
 
-            if let Some(ref platform) = key.platform {
+            if let Some(platform) = key.query.platform.as_ref() {
                 query.append_pair("platform", platform);
             }
 
-            if let Some(ref version) = key.version {
+            if let Some(version) = key.query.version.as_ref() {
                 query.append_pair("version", version);
             }
         }
@@ -117,23 +112,20 @@ impl<'a> TryFrom<&'a Url> for PackageKey {
     type Error = TryFromError;
 
     fn try_from(url: &'a Url) -> Result<PackageKey, Self::Error> {
-        let query = url.query_pairs();
+        let query_pairs = url.query_pairs();
 
         let mut url = url.clone();
         url.set_query(None);
         url.set_fragment(None);
 
-        let mut version = None;
-        let mut channel = None;
-        let mut platform = None;
-        let mut arch = None;
+        let mut query = PackageKeyParams::default();
 
-        for (k, v) in query {
+        for (k, v) in query_pairs {
             match &*k {
-                "version" => version = Some(v.to_string()),
-                "channel" => channel = Some(v.to_string()),
-                "platform" => platform = Some(v.to_string()),
-                "arch" => arch = Some(v.to_string()),
+                "version" => query.version = Some(v.to_string()),
+                "channel" => query.channel = Some(v.to_string()),
+                "platform" => query.platform = Some(v.to_string()),
+                "arch" => query.arch = Some(v.to_string()),
                 _ => {}
             }
         }
@@ -175,10 +167,7 @@ impl<'a> TryFrom<&'a Url> for PackageKey {
         Ok(PackageKey {
             repository_url: url,
             id,
-            channel,
-            version,
-            platform,
-            arch,
+            query,
         })
     }
 }

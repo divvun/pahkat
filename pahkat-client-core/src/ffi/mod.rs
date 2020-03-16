@@ -15,14 +15,15 @@ use std::sync::{Arc, RwLock};
 
 use cursed::{FromForeign, InputType, ReturnType, ToForeign};
 use once_cell::sync::Lazy;
-use pahkat_types::InstallTarget;
+use pahkat_types::payload::{macos::InstallTarget as MacOSInstallTarget, windows::InstallTarget as WindowsInstallTarget};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use url::Url;
 
-use crate::repo::RepoRecord;
 use crate::transaction::{PackageStatus, PackageStatusError};
-use crate::{PackageKey, StoreConfig};
+use crate::{PackageKey, Config};
+use crate::config::ConfigPath;
+use crate::repo::PayloadError;
 
 pub struct TargetMarshaler;
 
@@ -31,42 +32,66 @@ impl InputType for TargetMarshaler {
 }
 
 impl ReturnType for TargetMarshaler {
-    type Foreign = *const libc::c_char;
+    type Foreign = cursed::Slice<u8>;
 
     fn foreign_default() -> Self::Foreign {
-        std::ptr::null()
+        cursed::Slice::default()
     }
 }
 
-impl ToForeign<InstallTarget, *const libc::c_char> for TargetMarshaler {
-    type Error = Box<dyn Error>;
+impl ToForeign<MacOSInstallTarget, cursed::Slice<u8>> for TargetMarshaler {
+    type Error = std::convert::Infallible;
 
-    fn to_foreign(input: InstallTarget) -> Result<*const libc::c_char, Self::Error> {
+    fn to_foreign(input: MacOSInstallTarget) -> Result<cursed::Slice<u8>, Self::Error> {
         let str_target = match input {
-            InstallTarget::System => "system",
-            InstallTarget::User => "user",
+            MacOSInstallTarget::System => "system",
+            MacOSInstallTarget::User => "user",
         };
 
-        let c_str = CString::new(str_target)?;
-        Ok(c_str.into_raw())
+        cursed::StringMarshaler::to_foreign(str_target.to_string())
     }
 }
 
-impl FromForeign<*const libc::c_char, InstallTarget> for TargetMarshaler {
+impl FromForeign<cursed::Slice<u8>, MacOSInstallTarget> for TargetMarshaler {
     type Error = Box<dyn Error>;
 
-    fn from_foreign(ptr: *const libc::c_char) -> Result<InstallTarget, Self::Error> {
-        if ptr.is_null() {
-            return Err(cursed::null_ptr_error());
-        }
+    unsafe fn from_foreign(ptr: cursed::Slice<u8>) -> Result<MacOSInstallTarget, Self::Error> {
+        let str_target = cursed::StringMarshaler::from_foreign(ptr)?;
 
-        let s = unsafe { CStr::from_ptr(ptr) }.to_str()?;
-        Ok(match s {
-            "user" => InstallTarget::User,
-            _ => InstallTarget::System,
+        Ok(match &*str_target {
+            "user" => MacOSInstallTarget::User,
+            _ => MacOSInstallTarget::System,
         })
     }
 }
+
+
+impl ToForeign<WindowsInstallTarget, cursed::Slice<u8>> for TargetMarshaler {
+    type Error = std::convert::Infallible;
+
+    fn to_foreign(input: WindowsInstallTarget) -> Result<cursed::Slice<u8>, Self::Error> {
+        let str_target = match input {
+            WindowsInstallTarget::System => "system",
+            WindowsInstallTarget::User => "user",
+        };
+
+        cursed::StringMarshaler::to_foreign(str_target.to_string())
+    }
+}
+
+impl FromForeign<cursed::Slice<u8>, WindowsInstallTarget> for TargetMarshaler {
+    type Error = Box<dyn Error>;
+
+    unsafe fn from_foreign(ptr: cursed::Slice<u8>) -> Result<WindowsInstallTarget, Self::Error> {
+        let str_target = cursed::StringMarshaler::from_foreign(ptr)?;
+
+        Ok(match &*str_target {
+            "user" => WindowsInstallTarget::User,
+            _ => WindowsInstallTarget::System,
+        })
+    }
+}
+
 
 #[inline(always)]
 fn level_u8_to_str(level: u8) -> Option<&'static str> {
@@ -134,55 +159,42 @@ impl InputType for JsonMarshaler {
 }
 
 impl ReturnType for JsonMarshaler {
-    type Foreign = *const libc::c_char;
+    type Foreign = cursed::Slice<u8>;
 
     fn foreign_default() -> Self::Foreign {
-        std::ptr::null()
+        cursed::Slice::default()
     }
 }
 
-impl<T> ToForeign<T, *const libc::c_char> for JsonMarshaler
+impl<T> ToForeign<T, cursed::Slice<u8>> for JsonMarshaler
 where
     T: Serialize,
 {
     type Error = Box<dyn Error>;
 
-    fn to_foreign(input: T) -> Result<*const libc::c_char, Self::Error> {
-        let vec = serde_json::to_vec(&input)?;
-        let c_str = CString::new(vec)?;
-        log::debug!("JSON MARSHAL: {:?}", &c_str);
-        Ok(c_str.into_raw())
+    fn to_foreign(input: T) -> Result<cursed::Slice<u8>, Self::Error> {
+        let json_str = serde_json::to_string(&input)?;
+        Ok(cursed::StringMarshaler::to_foreign(json_str).unwrap())
     }
-
-    // fn drop_foreign(ptr: *const c_char) {
-    //     unsafe { CString::from_raw(ptr as *mut _) };
-    // }
 }
 
-impl<T> FromForeign<*const libc::c_char, T> for JsonMarshaler
+impl<T> FromForeign<cursed::Slice<u8>, T> for JsonMarshaler
 where
     T: DeserializeOwned,
 {
     type Error = Box<dyn Error>;
 
-    fn from_foreign(ptr: *const libc::c_char) -> Result<T, Self::Error> {
-        if ptr.is_null() {
-            return Err(cursed::null_ptr_error());
-        }
+    unsafe fn from_foreign(ptr: cursed::Slice<u8>) -> Result<T, Self::Error> {
+        let json_str = cursed::StringMarshaler::from_foreign(ptr)?;
+        log::debug!("JSON: {}, type: {}", &json_str, std::any::type_name::<T>());
 
-        let s = unsafe { CStr::from_ptr(ptr) }.to_str()?;
-        log::debug!("JSON: {}, type: {}", s, std::any::type_name::<T>());
-        let v: Result<T, _> = serde_json::from_str(&s);
+        let v: Result<T, _> = serde_json::from_str(&json_str);
         v.map_err(|e| {
             log::error!("Json error: {}", &e);
             log::debug!("{:?}", &e);
             Box::new(e) as _
         })
     }
-
-    // fn drop_local(ptr: *const c_char) {
-    //     unsafe { CString::from_raw(ptr as *mut _) };
-    // }
 }
 
 pub struct PackageKeyMarshaler;
@@ -195,28 +207,24 @@ impl ReturnType for PackageKeyMarshaler {
     type Foreign = <cursed::StringMarshaler as ReturnType>::Foreign;
 
     fn foreign_default() -> Self::Foreign {
-        std::ptr::null()
+        Default::default()
     }
 }
 
-impl<'a> ToForeign<&'a PackageKey, *const libc::c_char> for PackageKeyMarshaler {
-    type Error = Box<dyn Error>;
+impl<'a> ToForeign<&'a PackageKey, cursed::Slice<u8>> for PackageKeyMarshaler {
+    type Error = std::convert::Infallible;
 
-    fn to_foreign(key: &'a PackageKey) -> Result<*const libc::c_char, Self::Error> {
+    fn to_foreign(key: &'a PackageKey) -> Result<cursed::Slice<u8>, Self::Error> {
         cursed::StringMarshaler::to_foreign(key.to_string())
     }
 }
 
-impl FromForeign<*const libc::c_char, PackageKey> for PackageKeyMarshaler {
+impl FromForeign<cursed::Slice<u8>, PackageKey> for PackageKeyMarshaler {
     type Error = Box<dyn Error>;
 
-    fn from_foreign(string: *const libc::c_char) -> Result<PackageKey, Self::Error> {
-        if string.is_null() {
-            return Err(cursed::null_ptr_error());
-        }
-
-        let s: &str = cursed::StrMarshaler::from_foreign(string)?;
-        PackageKey::try_from(s).map_err(|e| Box::new(e) as _)
+    unsafe fn from_foreign(string: cursed::Slice<u8>) -> Result<PackageKey, Self::Error> {
+        let s = cursed::StringMarshaler::from_foreign(string)?;
+        PackageKey::try_from(&*s).box_err()
     }
 }
 
@@ -271,91 +279,51 @@ pub extern "C" fn pahkat_set_logging_callback(
 ) -> Result<(), Box<dyn Error>> {
     log::set_boxed_logger(Box::new(ExternalLogger { callback }))
         .map(|_| log::set_max_level(log::LevelFilter::Trace))
-        .map_err(|err| Box::new(err) as _)
-}
-
-#[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
-pub extern "C" fn pahkat_config_set_ui_value(
-    #[marshal(cursed::ArcRefMarshaler::<RwLock<StoreConfig>>)] handle: Arc<RwLock<StoreConfig>>,
-    #[marshal(cursed::StrMarshaler)] key: &str,
-    #[marshal(cursed::StrMarshaler)] value: Option<&str>,
-) -> Result<(), Box<dyn Error>> {
-    let config = handle.write().unwrap();
-    config.set_ui_value(key, value.map(|x| x.to_string()))
-}
-
-#[cthulhu::invoke(return_marshaler = "cursed::StringMarshaler")]
-pub extern "C" fn pahkat_config_ui_value(
-    #[marshal(cursed::ArcRefMarshaler::<RwLock<StoreConfig>>)] handle: Arc<RwLock<StoreConfig>>,
-    #[marshal(cursed::StrMarshaler)] key: &str,
-) -> Option<String> {
-    let config = handle.read().unwrap();
-    config.ui_value(key)
-}
-
-#[cthulhu::invoke(return_marshaler = "cursed::StringMarshaler")]
-pub extern "C" fn pahkat_config_skipped_package(
-    #[marshal(cursed::ArcRefMarshaler::<RwLock<StoreConfig>>)] handle: Arc<RwLock<StoreConfig>>,
-    #[marshal(PackageKeyMarshaler)] key: PackageKey,
-) -> Option<String> {
-    let config = handle.read().unwrap();
-    config.skipped_package(&key)
-}
-
-#[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
-pub extern "C" fn pahkat_config_add_skipped_package(
-    #[marshal(cursed::ArcRefMarshaler::<RwLock<StoreConfig>>)] handle: Arc<RwLock<StoreConfig>>,
-    #[marshal(PackageKeyMarshaler)] key: PackageKey,
-    #[marshal(cursed::StrMarshaler)] version: &str,
-) -> Result<(), Box<dyn Error>> {
-    let config = handle.read().unwrap();
-    config.add_skipped_package(key, version.into())
+        .box_err()
 }
 
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
-pub extern "C" fn pahkat_config_repos(
-    #[marshal(cursed::ArcRefMarshaler::<RwLock<StoreConfig>>)] handle: Arc<RwLock<StoreConfig>>,
-) -> Vec<RepoRecord> {
+pub extern "C" fn pahkat_config_repos_get(
+    #[marshal(cursed::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
+) -> crate::config::ReposData {
     let config = handle.read().unwrap();
-    config.repos()
+    config.repos().get().clone()
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
-pub extern "C" fn pahkat_config_set_repos(
-    #[marshal(cursed::ArcRefMarshaler::<RwLock<StoreConfig>>)] handle: Arc<RwLock<StoreConfig>>,
-    #[marshal(JsonMarshaler)] repos: Vec<RepoRecord>,
+pub extern "C" fn pahkat_config_repos_set(
+    #[marshal(cursed::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
+    #[marshal(JsonMarshaler)] repos: crate::config::ReposData,
 ) -> Result<(), Box<dyn Error>> {
-    handle.write().unwrap().set_repos(repos)
+    handle.write().unwrap().repos_mut().set(repos).box_err()
 }
 
-#[cthulhu::invoke(return_marshaler = "cursed::PathMarshaler")]
-pub extern "C" fn pahkat_config_config_path(
-    #[marshal(cursed::ArcRefMarshaler::<RwLock<StoreConfig>>)] handle: Arc<RwLock<StoreConfig>>,
+#[cthulhu::invoke(return_marshaler = "cursed::PathBufMarshaler")]
+pub extern "C" fn pahkat_config_settings_config_dir(
+    #[marshal(cursed::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
 ) -> std::path::PathBuf {
-    handle.read().unwrap().config_path().to_path_buf()
+    handle.read().unwrap().settings().config_dir().to_path_buf()
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::UrlMarshaler")]
-pub extern "C" fn pahkat_config_cache_base_url(
-    #[marshal(cursed::ArcRefMarshaler::<RwLock<StoreConfig>>)] handle: Arc<RwLock<StoreConfig>>,
+pub extern "C" fn pahkat_config_settings_cache_base_url(
+    #[marshal(cursed::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
 ) -> Url {
-    handle.read().unwrap().cache_base_dir().as_url().to_owned()
+    handle.read().unwrap().settings().cache_base_dir().as_url().to_owned()
 }
 
-use crate::config::ConfigPath;
-
-#[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
-pub extern "C" fn pahkat_config_set_cache_base_url(
-    #[marshal(cursed::ArcRefMarshaler::<RwLock<StoreConfig>>)] handle: Arc<RwLock<StoreConfig>>,
-    #[marshal(cursed::UrlMarshaler)] url: Url,
-) -> Result<(), Box<dyn Error>> {
-    let path = ConfigPath::from_url(url)?;
-    handle.write().unwrap().set_cache_base_dir(path)
-}
+// #[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
+// pub extern "C" fn pahkat_config_set_cache_base_url(
+//     #[marshal(cursed::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
+//     #[marshal(cursed::UrlMarshaler)] url: Url,
+// ) -> Result<(), Box<dyn Error>> {
+//     let path = ConfigPath::from_url(url)?;
+//     handle.write().unwrap().settings().set_cache_base_dir(path)
+// }
 
 #[cfg(target_os = "android")]
 #[cthulhu::invoke]
-pub extern "C" fn pahkat_android_init(#[marshal(cursed::PathMarshaler)] container_path: PathBuf) {
+pub extern "C" fn pahkat_android_init(#[marshal(cursed::PathBufMarshaler)] container_path: PathBuf) {
     let _ = crate::config::CONTAINER_PATH.set(container_path).ok();
 
     std::panic::set_hook(Box::new(|info| {
@@ -380,22 +348,35 @@ pub extern "C" fn pahkat_str_free(ptr: *const libc::c_char) {
 
 #[inline(always)]
 pub(crate) fn status_to_i8(result: Result<PackageStatus, PackageStatusError>) -> i8 {
-    use PackageStatusError::*;
-
     match result {
         Ok(status) => match status {
             PackageStatus::NotInstalled => 0,
             PackageStatus::UpToDate => 1,
             PackageStatus::RequiresUpdate => 2,
-            PackageStatus::Skipped => 3,
         },
         Err(error) => match error {
-            NoPackage => -1,
-            NoInstaller => -2,
-            WrongInstallerType => -3,
-            ParsingVersion => -4,
-            InvalidInstallPath => -5,
-            InvalidMetadata => -6,
+            PackageStatusError::Payload(e) => match e {
+                PayloadError::NoPackage | PayloadError::NoConcretePackage => -1,
+                PayloadError::NoPayloadFound => -2,
+                PayloadError::CriteriaUnmet(_) => -5, 
+            },
+            PackageStatusError::WrongPayloadType => -3,
+            PackageStatusError::ParsingVersion => -4,
         },
+    }
+}
+
+trait BoxError {
+    type Item;
+
+    fn box_err(self) -> Result<Self::Item, Box<dyn Error>>;
+}
+
+impl<T, E: std::error::Error + 'static> BoxError for Result<T, E> {
+    type Item = T;
+
+    #[inline(always)]
+    fn box_err(self) -> Result<Self::Item, Box<dyn Error>> {
+        self.map_err(|e| Box::new(e) as _)
     }
 }

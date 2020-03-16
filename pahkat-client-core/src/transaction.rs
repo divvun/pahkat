@@ -18,7 +18,6 @@ pub enum PackageStatus {
     NotInstalled,
     UpToDate,
     RequiresUpdate,
-    Skipped,
 }
 
 impl fmt::Display for PackageStatus {
@@ -30,7 +29,6 @@ impl fmt::Display for PackageStatus {
                 PackageStatus::NotInstalled => "Not installed",
                 PackageStatus::UpToDate => "Up to date",
                 PackageStatus::RequiresUpdate => "Requires update",
-                PackageStatus::Skipped => "Skipped",
             }
         )
     }

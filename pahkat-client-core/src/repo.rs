@@ -102,17 +102,20 @@ impl<'a> From<&'a PackageKey> for ReleaseQuery<'a> {
     fn from(key: &'a PackageKey) -> Self {
         ReleaseQuery {
             platform: key
+                .query
                 .platform
                 .as_ref()
                 .map(|x| &**x)
                 .unwrap_or_else(|| defaults::platform()),
-            arch: key.arch.as_ref().map(|x| &**x).or_else(|| defaults::arch()),
+            arch: key.query.arch.as_ref().map(|x| &**x).or_else(|| defaults::arch()),
             channels: key
+                .query
                 .channel
                 .as_ref()
                 .map(|x| vec![&**x])
                 .unwrap_or_else(|| vec![]),
             versions: key
+                .query
                 .version
                 .as_ref()
                 .map(|v| vec![VersionQuery::Match(&*v)])
@@ -336,7 +339,6 @@ where
             let key = PackageKey::unchecked_new(
                 repo.info().base_url.clone(),
                 id.clone(),
-                repo.meta().channel.clone(),
                 None,
             );
             let status = store.status(&key, target);
@@ -390,7 +392,6 @@ where
             let key = PackageKey::unchecked_new(
                 repo.info().base_url.clone(),
                 package_id.to_string(),
-                repo.meta().channel.clone(),
                 None,
             );
             (key, x.to_owned())

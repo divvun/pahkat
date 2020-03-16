@@ -18,7 +18,7 @@ use commands::{
     package_init, repo_init, virtual_init,
 };
 
-use pahkat_common::{repo_index, ProgressOutput, UploadParams};
+// use pahkat_common::{repo_index, ProgressOutput, UploadParams};
 use pahkat_types::{Downloadable, Installer};
 
 mod cli;
@@ -390,212 +390,212 @@ fn main() {
 
     let output = StderrOutput;
 
-    match matches.subcommand() {
-        ("package", Some(matches)) => match matches.subcommand() {
-            ("init", Some(matches)) => {
-                let current_dir = &env::current_dir().unwrap();
-                let path: &Path = matches
-                    .value_of("path")
-                    .map_or(&current_dir, |v| Path::new(v));
-                let channel = matches.value_of("channel");
-                package_init(&path, channel)
-            }
-            _ => {}
-        },
-        ("virtual", Some(matches)) => match matches.subcommand() {
-            ("init", Some(matches)) => {
-                let current_dir = &env::current_dir().unwrap();
-                let path: &Path = matches
-                    .value_of("path")
-                    .map_or(&current_dir, |v| Path::new(v));
-                let channel = matches.value_of("channel");
-                virtual_init(&path, channel)
-            }
-            _ => {}
-        },
-        ("installer", Some(matches)) => {
-            let current_dir = &env::current_dir().unwrap();
-            let path: &Path = matches
-                .value_of("path")
-                .map_or(&current_dir, |v| Path::new(v));
+    // match matches.subcommand() {
+    //     ("package", Some(matches)) => match matches.subcommand() {
+    //         ("init", Some(matches)) => {
+    //             let current_dir = &env::current_dir().unwrap();
+    //             let path: &Path = matches
+    //                 .value_of("path")
+    //                 .map_or(&current_dir, |v| Path::new(v));
+    //             let channel = matches.value_of("channel");
+    //             package_init(&path, channel)
+    //         }
+    //         _ => {}
+    //     },
+    //     ("virtual", Some(matches)) => match matches.subcommand() {
+    //         ("init", Some(matches)) => {
+    //             let current_dir = &env::current_dir().unwrap();
+    //             let path: &Path = matches
+    //                 .value_of("path")
+    //                 .map_or(&current_dir, |v| Path::new(v));
+    //             let channel = matches.value_of("channel");
+    //             virtual_init(&path, channel)
+    //         }
+    //         _ => {}
+    //     },
+    //     ("installer", Some(matches)) => {
+    //         let current_dir = &env::current_dir().unwrap();
+    //         let path: &Path = matches
+    //             .value_of("path")
+    //             .map_or(&current_dir, |v| Path::new(v));
 
-            match matches.subcommand() {
-                ("macos", Some(matches)) => {
-                    let installer = matches.value_of("package").unwrap();
-                    let channel = matches.value_of("channel");
-                    let version = matches.value_of("version").unwrap();
-                    let targets: Vec<&str> =
-                        matches.value_of("targets").unwrap().split(',').collect();
-                    let pkg_id = matches.value_of("pkg-id").unwrap();
-                    let url = matches.value_of("url").unwrap();
-                    let size = matches
-                        .value_of("installed-size")
-                        .unwrap()
-                        .parse::<usize>()
-                        .unwrap();
-                    let requires_reboot = matches.is_present("requires-reboot");
-                    let requires_uninst_reboot = matches.is_present("requires-uninst-reboot");
-                    let skip_confirm = matches.is_present("skip-confirmation");
+    //         match matches.subcommand() {
+    //             ("macos", Some(matches)) => {
+    //                 let installer = matches.value_of("package").unwrap();
+    //                 let channel = matches.value_of("channel");
+    //                 let version = matches.value_of("version").unwrap();
+    //                 let targets: Vec<&str> =
+    //                     matches.value_of("targets").unwrap().split(',').collect();
+    //                 let pkg_id = matches.value_of("pkg-id").unwrap();
+    //                 let url = matches.value_of("url").unwrap();
+    //                 let size = matches
+    //                     .value_of("installed-size")
+    //                     .unwrap()
+    //                     .parse::<usize>()
+    //                     .unwrap();
+    //                 let requires_reboot = matches.is_present("requires-reboot");
+    //                 let requires_uninst_reboot = matches.is_present("requires-uninst-reboot");
+    //                 let skip_confirm = matches.is_present("skip-confirmation");
 
-                    package_macos_installer(
-                        path,
-                        channel,
-                        version,
-                        skip_confirm,
-                        installer,
-                        targets,
-                        pkg_id,
-                        url,
-                        size,
-                        requires_reboot,
-                        requires_uninst_reboot,
-                    );
-                }
-                ("windows", Some(matches)) => {
-                    let product_code = matches.value_of("product-code").unwrap();
-                    let channel = matches.value_of("channel");
-                    let type_ = matches.value_of("type");
-                    let installer = matches.value_of("installer").unwrap();
-                    let args = matches.value_of("args");
-                    let uninstall_args = matches.value_of("uninst-args");
-                    let url = matches.value_of("url").unwrap();
-                    let size = matches
-                        .value_of("installed-size")
-                        .unwrap()
-                        .parse::<usize>()
-                        .unwrap();
-                    let requires_reboot = matches.is_present("requires-reboot");
-                    let requires_uninst_reboot = matches.is_present("requires-uninst-reboot");
-                    let skip_confirm = matches.is_present("skip-confirmation");
+    //                 package_macos_installer(
+    //                     path,
+    //                     channel,
+    //                     version,
+    //                     skip_confirm,
+    //                     installer,
+    //                     targets,
+    //                     pkg_id,
+    //                     url,
+    //                     size,
+    //                     requires_reboot,
+    //                     requires_uninst_reboot,
+    //                 );
+    //             }
+    //             ("windows", Some(matches)) => {
+    //                 let product_code = matches.value_of("product-code").unwrap();
+    //                 let channel = matches.value_of("channel");
+    //                 let type_ = matches.value_of("type");
+    //                 let installer = matches.value_of("installer").unwrap();
+    //                 let args = matches.value_of("args");
+    //                 let uninstall_args = matches.value_of("uninst-args");
+    //                 let url = matches.value_of("url").unwrap();
+    //                 let size = matches
+    //                     .value_of("installed-size")
+    //                     .unwrap()
+    //                     .parse::<usize>()
+    //                     .unwrap();
+    //                 let requires_reboot = matches.is_present("requires-reboot");
+    //                 let requires_uninst_reboot = matches.is_present("requires-uninst-reboot");
+    //                 let skip_confirm = matches.is_present("skip-confirmation");
 
-                    package_windows_installer(
-                        path,
-                        channel,
-                        skip_confirm,
-                        product_code,
-                        installer,
-                        type_,
-                        args,
-                        uninstall_args,
-                        url,
-                        size,
-                        requires_reboot,
-                        requires_uninst_reboot,
-                    );
-                }
-                ("tarball", Some(matches)) => {
-                    let tarball = matches.value_of("tarball").unwrap();
-                    let channel = matches.value_of("channel");
-                    let url = matches.value_of("url").unwrap();
-                    let size = matches
-                        .value_of("installed-size")
-                        .unwrap()
-                        .parse::<usize>()
-                        .unwrap();
-                    let skip_confirm = matches.is_present("skip-confirmation");
+    //                 package_windows_installer(
+    //                     path,
+    //                     channel,
+    //                     skip_confirm,
+    //                     product_code,
+    //                     installer,
+    //                     type_,
+    //                     args,
+    //                     uninstall_args,
+    //                     url,
+    //                     size,
+    //                     requires_reboot,
+    //                     requires_uninst_reboot,
+    //                 );
+    //             }
+    //             ("tarball", Some(matches)) => {
+    //                 let tarball = matches.value_of("tarball").unwrap();
+    //                 let channel = matches.value_of("channel");
+    //                 let url = matches.value_of("url").unwrap();
+    //                 let size = matches
+    //                     .value_of("installed-size")
+    //                     .unwrap()
+    //                     .parse::<usize>()
+    //                     .unwrap();
+    //                 let skip_confirm = matches.is_present("skip-confirmation");
 
-                    package_tarball_installer(path, channel, skip_confirm, tarball, url, size);
-                }
-                _ => {}
-            }
-        }
-        ("repo", Some(matches)) => {
-            let current_dir = &env::current_dir().unwrap();
-            let path: &Path = matches
-                .value_of("path")
-                .map_or(&current_dir, |v| Path::new(v));
+    //                 package_tarball_installer(path, channel, skip_confirm, tarball, url, size);
+    //             }
+    //             _ => {}
+    //         }
+    //     }
+    //     ("repo", Some(matches)) => {
+    //         let current_dir = &env::current_dir().unwrap();
+    //         let path: &Path = matches
+    //             .value_of("path")
+    //             .map_or(&current_dir, |v| Path::new(v));
 
-            match matches.subcommand() {
-                ("init", _) => repo_init(&path, &output),
-                ("index", _) => repo_index(&path, &output),
-                _ => {}
-            }
-        }
-        ("database", Some(matches)) => match matches.subcommand() {
-            ("user", Some(matches)) => match matches.subcommand() {
-                ("create", Some(matches)) => {
-                    let username = matches.value_of("username").unwrap();
-                    let token = matches.value_of("token").unwrap();
-                    let db_path = matches.value_of("db_path");
+    //         match matches.subcommand() {
+    //             ("init", _) => repo_init(&path, &output),
+    //             ("index", _) => repo_index(&path, &output),
+    //             _ => {}
+    //         }
+    //     }
+    //     ("database", Some(matches)) => match matches.subcommand() {
+    //         ("user", Some(matches)) => match matches.subcommand() {
+    //             ("create", Some(matches)) => {
+    //                 let username = matches.value_of("username").unwrap();
+    //                 let token = matches.value_of("token").unwrap();
+    //                 let db_path = matches.value_of("db_path");
 
-                    create_user(username, token, db_path.map(|s| s.to_string()))
-                }
-                _ => {}
-            },
-            _ => {}
-        },
-        ("upload", Some(matches)) => {
-            let repo_url = matches.value_of("url").unwrap();
+    //                 create_user(username, token, db_path.map(|s| s.to_string()))
+    //             }
+    //             _ => {}
+    //         },
+    //         _ => {}
+    //     },
+    //     ("upload", Some(matches)) => {
+    //         let repo_url = matches.value_of("url").unwrap();
 
-            let token = matches.value_of("token").unwrap();
-            let package_id = matches.value_of("package").unwrap();
-            let channel = matches.value_of("channel").unwrap();
-            let installer_file = matches.value_of("installer").unwrap();
-            let version = matches.value_of("version").unwrap();
+    //         let token = matches.value_of("token").unwrap();
+    //         let package_id = matches.value_of("package").unwrap();
+    //         let channel = matches.value_of("channel").unwrap();
+    //         let installer_file = matches.value_of("installer").unwrap();
+    //         let version = matches.value_of("version").unwrap();
 
-            // Only required if installer url is "pahkat:payload"
-            let payload_file = matches.value_of("file");
+    //         // Only required if installer url is "pahkat:payload"
+    //         let payload_file = matches.value_of("file");
 
-            let patch_url = format!("{}/packages/{}", repo_url, package_id);
+    //         let patch_url = format!("{}/packages/{}", repo_url, package_id);
 
-            let file = File::open(installer_file).expect("the installer file to be valid");
-            let mut installer: Installer =
-                serde_json::from_reader(file).expect("the json in the installer file to be valid");
+    //         let file = File::open(installer_file).expect("the installer file to be valid");
+    //         let mut installer: Installer =
+    //             serde_json::from_reader(file).expect("the json in the installer file to be valid");
 
-            let client = reqwest::Client::new();
+    //         let client = reqwest::Client::new();
 
-            let installer_url = installer.url();
+    //         let installer_url = installer.url();
 
-            let mut form = multipart::Form::new();
+    //         let mut form = multipart::Form::new();
 
-            if installer_url == "pahkat:payload" || payload_file.is_some() {
-                match payload_file {
-                    Some(file) => {
-                        let installer_file =
-                            File::open(file).expect("Installer could not be opened.");
-                        let meta = installer_file.metadata().unwrap();
-                        let installer_size = meta.len() as usize;
-                        match installer {
-                            Installer::Windows(ref mut installer) => {
-                                installer.url = "pahkat:payload".to_string();
-                                installer.size = installer_size;
-                            }
-                            Installer::MacOS(ref mut installer) => {
-                                installer.url = "pahkat:payload".to_string();
-                                installer.size = installer_size;
-                            }
-                            _ => panic!("Installer type not supported"),
-                        };
+    //         if installer_url == "pahkat:payload" || payload_file.is_some() {
+    //             match payload_file {
+    //                 Some(file) => {
+    //                     let installer_file =
+    //                         File::open(file).expect("Installer could not be opened.");
+    //                     let meta = installer_file.metadata().unwrap();
+    //                     let installer_size = meta.len() as usize;
+    //                     match installer {
+    //                         Installer::Windows(ref mut installer) => {
+    //                             installer.url = "pahkat:payload".to_string();
+    //                             installer.size = installer_size;
+    //                         }
+    //                         Installer::MacOS(ref mut installer) => {
+    //                             installer.url = "pahkat:payload".to_string();
+    //                             installer.size = installer_size;
+    //                         }
+    //                         _ => panic!("Installer type not supported"),
+    //                     };
 
-                        form = form
-                            .file("payload", file)
-                            .expect("payload file to be valid");
-                    }
-                    None => {
-                        panic!("A file must be provided if installer url is pahkat:payload");
-                    }
-                }
-            }
+    //                     form = form
+    //                         .file("payload", file)
+    //                         .expect("payload file to be valid");
+    //                 }
+    //                 None => {
+    //                     panic!("A file must be provided if installer url is pahkat:payload");
+    //                 }
+    //             }
+    //         }
 
-            let upload_params = UploadParams {
-                channel: channel.to_owned(),
-                version: version.to_owned(),
-                installer: installer.clone(),
-            };
+    //         let upload_params = UploadParams {
+    //             channel: channel.to_owned(),
+    //             version: version.to_owned(),
+    //             installer: installer.clone(),
+    //         };
 
-            form = form.text("params", serde_json::to_string(&upload_params).unwrap());
+    //         form = form.text("params", serde_json::to_string(&upload_params).unwrap());
 
-            let mut response = client
-                .patch(&patch_url)
-                .bearer_auth(token)
-                .multipart(form)
-                .send()
-                .unwrap();
+    //         let mut response = client
+    //             .patch(&patch_url)
+    //             .bearer_auth(token)
+    //             .multipart(form)
+    //             .send()
+    //             .unwrap();
 
-            let text = response.text().unwrap();
+    //         let text = response.text().unwrap();
 
-            println!("Response: {:?}, body: {}", &response, &text);
-        }
-        _ => {}
-    }
+    //         println!("Response: {:?}, body: {}", &response, &text);
+    //     }
+    //     _ => {}
+    // }
 }

@@ -21,8 +21,8 @@ use once_cell::sync::{Lazy, OnceCell};
 use thiserror::Error;
 
 pub use path::ConfigPath;
-pub use repos::Repos;
-pub use settings::Settings;
+pub use repos::{Repos, ReposData, RepoRecord};
+pub use settings::{Settings, SettingsData};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -60,21 +60,27 @@ pub struct Config {
     settings: Settings,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Permission {
+    ReadOnly,
+    ReadWrite,
+}
+
 impl Config {
     #[cfg(not(target_os = "android"))]
-    fn load_default() -> Result<Config, Error> {
+    pub fn load_default() -> Result<Config, Error> {
         let path = defaults::config_path().ok_or(Error::NoDefaultConfigPath)?;
-        Self::load(path, false)
+        Self::load(path, Permission::ReadWrite)
     }
 
-    pub fn load<P: AsRef<Path>>(path: P, is_read_only: bool) -> Result<Config, Error> {
+    pub fn load<P: AsRef<Path>>(path: P, permission: Permission) -> Result<Config, Error> {
         let config_path = path.as_ref();
 
         let settings_path = config_path.join("settings.toml");
 
-        let settings = match Settings::load(&settings_path, is_read_only) {
+        let settings = match Settings::load(&settings_path, permission) {
             Ok(v) => v,
-            Err(FileError::Read(_)) if !is_read_only => {
+            Err(FileError::Read(_)) if permission != Permission::ReadOnly => {
                 Settings::create(&settings_path).map_err(Error::SettingsFile)?
             }
             Err(e) => return Err(Error::SettingsFile(e)),
@@ -82,9 +88,9 @@ impl Config {
 
         let repos_path = config_path.join("repos.toml");
 
-        let repos = match Repos::load(&repos_path, is_read_only) {
+        let repos = match Repos::load(&repos_path, permission) {
             Ok(v) => v,
-            Err(FileError::Read(_)) if !is_read_only => {
+            Err(FileError::Read(_)) if permission != Permission::ReadOnly => {
                 Repos::create(&repos_path).map_err(Error::ReposFile)?
             }
             Err(e) => return Err(Error::ReposFile(e)),
@@ -103,7 +109,15 @@ impl Config {
         &self.repos
     }
 
+    pub fn repos_mut(&mut self) -> &mut Repos {
+        &mut self.repos
+    }
+
     pub fn settings(&self) -> &Settings {
         &self.settings
+    }
+
+    pub fn settings_mut(&mut self) -> &mut Settings {
+        &mut self.settings
     }
 }

@@ -19,6 +19,7 @@ use thiserror::Error;
 
 use super::path::ConfigPath;
 use super::FileError;
+use crate::config::Permission;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepoRecord {
@@ -26,10 +27,10 @@ pub struct RepoRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-struct ReposFile(IndexMap<Url, RepoRecord>);
+pub struct ReposData(IndexMap<Url, RepoRecord>);
 
-impl ReposFile {
-    fn load<P: AsRef<Path>>(path: P) -> Result<ReposFile, FileError> {
+impl ReposData {
+    fn load<P: AsRef<Path>>(path: P) -> Result<ReposData, FileError> {
         let file = std::fs::read_to_string(path).map_err(FileError::Read)?;
         let file = toml::from_str(&file)?;
         Ok(file)
@@ -42,7 +43,7 @@ impl ReposFile {
         Ok(())
     }
 
-    fn create<P: AsRef<Path>>(path: P) -> Result<ReposFile, FileError> {
+    fn create<P: AsRef<Path>>(path: P) -> Result<ReposData, FileError> {
         let file = Self::default();
         file.save(path)?;
         Ok(file)
@@ -52,8 +53,8 @@ impl ReposFile {
 #[derive(Debug, Clone)]
 pub struct Repos {
     path: PathBuf,
-    data: ReposFile,
-    is_read_only: bool,
+    data: ReposData,
+    permission: Permission,
 }
 
 impl std::ops::Deref for Repos {
@@ -66,34 +67,51 @@ impl std::ops::Deref for Repos {
 
 impl Repos {
     pub fn create<P: AsRef<Path>>(path: P) -> Result<Repos, FileError> {
-        let data = ReposFile::create(path.as_ref())?;
+        let data = ReposData::create(path.as_ref())?;
 
         Ok(Repos {
             path: path.as_ref().to_path_buf(),
             data,
-            is_read_only: false,
+            permission: Permission::ReadWrite,
         })
     }
 
-    pub fn load<P: AsRef<Path>>(path: P, is_read_only: bool) -> Result<Repos, FileError> {
-        let data = ReposFile::load(path.as_ref())?;
+    pub fn load<P: AsRef<Path>>(path: P, permission: Permission) -> Result<Repos, FileError> {
+        let data = ReposData::load(path.as_ref())?;
 
         Ok(Repos {
             path: path.as_ref().to_path_buf(),
             data,
-            is_read_only,
+            permission,
         })
     }
 
     fn reload(&mut self) -> Result<(), FileError> {
-        self.data = ReposFile::load(&self.path)?;
+        if self.permission == Permission::ReadOnly {
+            return Err(FileError::ReadOnly);
+        }
+        self.data = ReposData::load(&self.path)?;
         Ok(())
     }
 
     fn save(&self) -> Result<(), FileError> {
-        if self.is_read_only {
+        if self.permission == Permission::ReadOnly {
             return Err(FileError::ReadOnly);
         }
         self.data.save(&self.path)
+    }
+
+    pub fn set(&mut self, data: ReposData) -> Result<(), FileError> {
+        self.data = data;
+        
+        if self.permission == Permission::ReadWrite {
+            return self.data.save(&self.path);
+        }
+
+        Ok(())
+    }
+
+    pub fn get(&self) -> &ReposData {
+        &self.data
     }
 }

@@ -18,9 +18,10 @@ use thiserror::Error;
 
 use super::path::ConfigPath;
 use super::FileError;
+use crate::config::Permission;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct SettingsData {
+pub struct SettingsData {
     #[serde(default = "defaults::cache_dir")]
     pub cache_dir: ConfigPath,
     #[serde(default = "defaults::tmp_dir")]
@@ -64,15 +65,19 @@ impl SettingsData {
 pub struct Settings {
     path: PathBuf,
     data: SettingsData,
-    is_read_only: bool,
+    permission: Permission,
 }
 
 impl Settings {
-    fn new(path: PathBuf, data: SettingsData, is_read_only: bool) -> Result<Settings, FileError> {
+    fn new(
+        path: PathBuf,
+        data: SettingsData,
+        permission: Permission,
+    ) -> Result<Settings, FileError> {
         let settings = Settings {
             path,
             data,
-            is_read_only,
+            permission,
         };
 
         let package_cache_dir = settings.package_cache_dir();
@@ -90,23 +95,26 @@ impl Settings {
         Ok(settings)
     }
 
-    pub fn load<P: AsRef<Path>>(path: P, is_read_only: bool) -> Result<Settings, FileError> {
+    pub fn load<P: AsRef<Path>>(path: P, permission: Permission) -> Result<Settings, FileError> {
         let data = SettingsData::load(path.as_ref())?;
-        Self::new(path.as_ref().to_path_buf(), data, is_read_only)
+        Self::new(path.as_ref().to_path_buf(), data, permission)
     }
 
     pub fn create<P: AsRef<Path>>(path: P) -> Result<Settings, FileError> {
         let data = SettingsData::create(path.as_ref())?;
-        Self::new(path.as_ref().to_path_buf(), data, false)
+        Self::new(path.as_ref().to_path_buf(), data, Permission::ReadWrite)
     }
 
     fn reload(&mut self) -> Result<(), FileError> {
+        if self.permission == Permission::ReadOnly {
+            return Err(FileError::ReadOnly);
+        }
         self.data = SettingsData::load(&self.path)?;
         Ok(())
     }
 
     fn save(&self) -> Result<(), FileError> {
-        if self.is_read_only {
+        if self.permission == Permission::ReadOnly {
             return Err(FileError::ReadOnly);
         }
         self.data.save(&self.path)

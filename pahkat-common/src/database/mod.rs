@@ -6,7 +6,7 @@ use diesel::sqlite::SqliteConnection;
 use failure::Error;
 use uuid::Uuid;
 
-use pahkat_types::Package;
+// use pahkat_types::Package;
 
 pub mod models;
 pub mod schema;

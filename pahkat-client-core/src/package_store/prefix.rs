@@ -31,59 +31,77 @@ pub struct PrefixPackageStore {
     config: Arc<RwLock<Config>>,
 }
 
-#[derive(Debug, Clone, thiserror::Error)]
-pub enum Error {}
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("Provided path was not a valid prefix destination")]
+    InvalidPrefixPath(#[source] std::io::Error),
+
+    #[error("Create directory failed")]
+    CreateDirFailed(#[source] std::io::Error),
+
+    #[error("Error creating or loading config")]
+    Config(#[from] crate::config::Error),
+
+    #[error("Error connecting to database")]
+    DatabaseConnection(#[from] r2d2::Error),
+
+    #[error("Error processing SQL query")]
+    Database(#[from] rusqlite::Error),
+}
 
 impl PrefixPackageStore {
     pub fn create<P: AsRef<Path>>(prefix_path: P) -> Result<PrefixPackageStore, Error> {
-        // let prefix_path: &Path = prefix_path.as_ref();
+        let prefix_path = prefix_path
+            .as_ref()
+            .canonicalize()
+            .map_err(Error::InvalidPrefixPath)?;
 
-        // create_dir_all(prefix_path)?;
-        // create_dir_all(prefix_path.join("pkg"))?;
+        create_dir_all(&prefix_path).map_err(Error::CreateDirFailed)?;
+        create_dir_all(&prefix_path.join("pkg")).map_err(Error::CreateDirFailed)?;
 
-        // let config = StoreConfig::new(prefix_path);
-        // config.save()?;
+        let config = Config::load(&prefix_path, crate::config::Permission::ReadWrite)?;
 
-        // let db_file_path = PrefixPackageStore::package_db_path(&config);
-        // let manager = SqliteConnectionManager::file(&db_file_path);
-        // let pool = Self::make_pool(manager)?;
-        // let conn = pool.get()?;
-        // conn.execute_batch(SQL_INIT)?;
+        let db_file_path = PrefixPackageStore::package_db_path(&config);
+        let manager = SqliteConnectionManager::file(&db_file_path);
+        let pool = Self::make_pool(manager)?;
+        let conn = pool.get()?;
+        conn.execute_batch(SQL_INIT)?;
 
-        // let store = PrefixPackageStore {
-        //     pool,
-        //     prefix: prefix_path.to_owned(),
-        //     repos: Arc::new(RwLock::new(HashMap::new())),
-        //     config: Arc::new(RwLock::new(config)),
-        // };
+        let store = PrefixPackageStore {
+            pool,
+            prefix: prefix_path,
+            repos: Arc::new(RwLock::new(HashMap::new())),
+            config: Arc::new(RwLock::new(config)),
+        };
 
-        // store.refresh_repos();
+        store.refresh_repos();
 
-        // Ok(store)
-        todo!()
+        Ok(store)
     }
 
     pub fn open<P: AsRef<Path>>(prefix_path: P) -> Result<PrefixPackageStore, Error> {
-        // let prefix_path = prefix_path.as_ref().canonicalize()?;
-        // log::debug!("{:?}", &prefix_path);
-        // let config = StoreConfig::load(&prefix_path.join("config.json"), true)?;
+        let prefix_path = prefix_path
+            .as_ref()
+            .canonicalize()
+            .map_err(Error::InvalidPrefixPath)?;
+        log::debug!("{:?}", &prefix_path);
+        let config = Config::load(&prefix_path, crate::config::Permission::ReadWrite)?;
 
-        // let db_file_path = PrefixPackageStore::package_db_path(&config);
-        // log::debug!("{:?}", &db_file_path);
-        // let manager = SqliteConnectionManager::file(&db_file_path);
-        // let pool = Self::make_pool(manager)?;
+        let db_file_path = PrefixPackageStore::package_db_path(&config);
+        log::debug!("{:?}", &db_file_path);
+        let manager = SqliteConnectionManager::file(&db_file_path);
+        let pool = Self::make_pool(manager)?;
 
-        // let store = PrefixPackageStore {
-        //     pool,
-        //     prefix: prefix_path,
-        //     repos: Arc::new(RwLock::new(HashMap::new())),
-        //     config: Arc::new(RwLock::new(config)),
-        // };
+        let store = PrefixPackageStore {
+            pool,
+            prefix: prefix_path,
+            repos: Arc::new(RwLock::new(HashMap::new())),
+            config: Arc::new(RwLock::new(config)),
+        };
 
-        // store.refresh_repos();
+        store.refresh_repos();
 
-        // Ok(store)
-        todo!()
+        Ok(store)
     }
 
     #[inline(always)]
@@ -304,24 +322,6 @@ impl PackageStore for PrefixPackageStore {
         crate::repo::clear_cache(&self.config)
     }
 }
-
-// #[derive(Debug, thiserror::Error)]
-// pub enum Error {
-//     #[error("No installer found for package: {id}")]
-//     NoInstaller { id: String },
-
-//     #[error("Wrong installer type")]
-//     WrongInstallerType,
-
-//     #[error("Invalid extension")]
-//     InvalidExtension,
-
-//     #[error("Create directory failed")]
-//     CreateDirFailed(#[source] std::io::Error),
-
-//     #[error("Unpack failed")]
-//     UnpackFailed(#[source] std::io::Error),
-// }
 
 #[derive(Debug)]
 struct PackageDbRecord {

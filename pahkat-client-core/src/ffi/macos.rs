@@ -30,7 +30,7 @@ pub type MacOSPackageTransaction = crate::transaction::PackageTransaction<MacOST
 
 #[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<MacOSPackageStore>")]
 pub extern "C" fn pahkat_macos_package_store_new(
-    #[marshal(cursed::PathMarshaler)] path: PathBuf,
+    #[marshal(cursed::PathBufMarshaler)] path: PathBuf,
 ) -> Result<Arc<MacOSPackageStore>, Box<dyn Error>> {
     let config = StoreConfig::new(&path);
     config.save()?;
@@ -39,7 +39,7 @@ pub extern "C" fn pahkat_macos_package_store_new(
 
 #[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<MacOSPackageStore>")]
 pub extern "C" fn pahkat_macos_package_store_load(
-    #[marshal(cursed::PathMarshaler)] path: PathBuf,
+    #[marshal(cursed::PathBufMarshaler)] path: PathBuf,
 ) -> Result<Arc<MacOSPackageStore>, Box<dyn Error>> {
     let config = match StoreConfig::load(&path, true) {
         Ok(v) => v,
@@ -70,16 +70,16 @@ pub extern "C" fn pahkat_macos_package_store_all_statuses(
         .collect()
 }
 
-#[cthulhu::invoke(return_marshaler = "cursed::PathMarshaler")]
+#[cthulhu::invoke(return_marshaler = "cursed::PathBufMarshaler")]
 pub extern "C" fn pahkat_macos_package_store_import(
     #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
     #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
-    #[marshal(cursed::PathMarshaler)] installer_path: PathBuf,
+    #[marshal(cursed::PathBufMarshaler)] installer_path: PathBuf,
 ) -> Result<PathBuf, Box<dyn Error>> {
     handle.import(&package_key, &installer_path)
 }
 
-#[cthulhu::invoke(return_marshaler = "cursed::PathMarshaler")]
+#[cthulhu::invoke(return_marshaler = "cursed::PathBufMarshaler")]
 pub extern "C" fn pahkat_macos_package_store_download(
     #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
     #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
