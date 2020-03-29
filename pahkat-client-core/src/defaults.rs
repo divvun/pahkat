@@ -59,16 +59,22 @@ pub fn uninstall_path() -> PathBuf {
         .join("uninstall")
 }
 
+macro_rules! platform {
+    ($name:expr) => {{
+        #[cfg(target_os = $name)]
+        {
+            return $name;
+        }
+    }}
+}
+
 #[inline(always)]
 pub(crate) const fn platform() -> &'static str {
-    #[cfg(windows)]
-    {
-        "windows"
-    }
-    #[cfg(target_os = "macos")]
-    {
-        "macos"
-    }
+    platform!("windows");
+    platform!("macos");
+    platform!("ios");
+    platform!("android");
+    platform!("linux");
 }
 
 macro_rules! arch {
