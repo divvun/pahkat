@@ -21,7 +21,7 @@ use super::path::ConfigPath;
 use super::FileError;
 use crate::config::Permission;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct RepoRecord {
     pub channel: Option<String>,
 }
@@ -109,6 +109,16 @@ impl Repos {
 
     pub fn set(&mut self, data: ReposData) -> Result<(), FileError> {
         self.data = data;
+
+        if self.permission == Permission::ReadWrite {
+            return self.data.save(&self.path);
+        }
+
+        Ok(())
+    }
+
+    pub fn insert(&mut self, key: Url, value: RepoRecord) -> Result<(), FileError> {
+        self.data.0.insert(key, value);
 
         if self.permission == Permission::ReadWrite {
             return self.data.save(&self.path);
