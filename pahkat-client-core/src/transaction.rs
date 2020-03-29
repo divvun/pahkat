@@ -13,7 +13,6 @@ pub mod install;
 pub mod uninstall;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
-#[serde(rename_all = "camelCase")]
 pub enum PackageStatus {
     NotInstalled,
     UpToDate,
@@ -151,7 +150,6 @@ impl fmt::Display for PackageTransactionError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub enum PackageActionType {
     Install,
     Uninstall,

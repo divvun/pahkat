@@ -23,10 +23,11 @@ use crate::config::Permission;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepoRecord {
-    pub channel: String,
+    pub channel: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(transparent)]
 pub struct ReposData(IndexMap<Url, RepoRecord>);
 
 impl ReposData {
@@ -47,6 +48,11 @@ impl ReposData {
         let file = Self::default();
         file.save(path)?;
         Ok(file)
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.0.len()
     }
 }
 
@@ -103,7 +109,7 @@ impl Repos {
 
     pub fn set(&mut self, data: ReposData) -> Result<(), FileError> {
         self.data = data;
-        
+
         if self.permission == Permission::ReadWrite {
             return self.data.save(&self.path);
         }

@@ -7,25 +7,36 @@ use typed_builder::TypedBuilder;
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
-#[serde(rename_all = "camelCase")]
 pub struct Executable {
     #[builder(default = "WindowsExecutable".into())]
+    #[serde(rename = "type")]
     _type: String,
 
     pub url: url::Url,
+    pub product_code: String,
+    pub size: u64,
+    pub installed_size: u64,
 
     /// The type of installer (msi, nsis, etc)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[builder(default)]
     pub kind: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[builder(default)]
     pub args: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[builder(default)]
     pub uninstall_args: Option<String>,
-    pub product_code: String,
-    #[serde(default)]
+
+    #[serde(default, skip_serializing_if = "crate::is_false")]
+    #[builder(default)]
     pub requires_reboot: bool,
-    #[serde(default)]
+
+    #[serde(default, skip_serializing_if = "crate::is_false")]
+    #[builder(default)]
     pub requires_uninstall_reboot: bool,
-    /// Executable download size in bytes
-    pub size: usize,
-    pub installed_size: usize,
 }
 
 impl super::AsDownloadUrl for Executable {
@@ -35,9 +46,16 @@ impl super::AsDownloadUrl for Executable {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, Eq, Hash)]
+#[serde(rename_all = "lowercase")]
 pub enum InstallTarget {
     System,
     User,
+}
+
+impl std::default::Default for InstallTarget {
+    fn default() -> Self {
+        InstallTarget::System
+    }
 }
 
 #[derive(Debug, Clone, Copy, thiserror::Error)]

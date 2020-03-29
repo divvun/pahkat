@@ -10,8 +10,7 @@ use crate::LangTagMap;
 pub use version::Version;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-#[serde(rename_all = "camelCase")]
-#[serde(tag = "_type")]
+#[serde(untagged)] // #[serde(tag = "_type")]
 pub enum Package {
     #[serde(rename = "Package")]
     Concrete(Descriptor),
@@ -96,7 +95,6 @@ impl<'a> TryFrom<&'a Package> for &'a Redirect {
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
-#[serde(rename_all = "camelCase")]
 pub struct Index {
     #[serde(default)]
     #[builder(default)]
@@ -104,12 +102,19 @@ pub struct Index {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, TypedBuilder)]
-#[serde(rename_all = "camelCase")]
-pub struct Descriptor {
-    #[builder(default = "Package".into())]
-    _type: String,
-
+#[non_exhaustive]
+pub struct DescriptorData {
     pub id: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[builder(default)]
+    pub tags: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, TypedBuilder)]
+#[non_exhaustive]
+pub struct Descriptor {
+    // Tables have to come last in TOML
+    pub package: DescriptorData,
 
     #[serde(default)]
     #[builder(default)]
@@ -117,54 +122,64 @@ pub struct Descriptor {
     #[serde(default)]
     #[builder(default)]
     pub description: LangTagMap<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[builder(default)]
-    pub tags: Vec<String>,
-    #[serde(default)]
-    #[builder(default)]
-    pub releases: Vec<Release>,
+    pub release: Vec<Release>,
 }
 
 impl PartialOrd for Descriptor {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.id.partial_cmp(&other.id)
+        self.package.id.partial_cmp(&other.package.id)
     }
 }
 
 impl Ord for Descriptor {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.id.cmp(&other.id)
+        self.package.id.cmp(&other.package.id)
     }
 }
 
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
-#[serde(rename_all = "camelCase")]
-pub struct Redirect {
-    #[builder(default = "PackageRedirect".into())]
-    _type: String,
+#[non_exhaustive]
+pub struct RedirectData {
+    pub url: Url,
+}
 
-    pub redirect: Url,
+#[derive(
+    Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
+)]
+#[non_exhaustive]
+pub struct Redirect {
+    pub redirect: RedirectData,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, TypedBuilder)]
-#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
 pub struct Release {
     pub version: Version,
 
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[builder(default)]
     pub channel: Option<String>,
-    #[serde(default)]
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[builder(default)]
     pub authors: Vec<String>,
     /// Must be a valid SPDX string
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[builder(default)]
     pub license: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[builder(default)]
     pub license_url: Option<Url>,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[builder(default)]
-    pub targets: Vec<crate::payload::Target>,
+    pub target: Vec<crate::payload::Target>,
 }
 
 impl PartialOrd for Release {

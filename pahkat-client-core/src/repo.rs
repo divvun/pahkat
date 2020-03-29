@@ -107,7 +107,12 @@ impl<'a> From<&'a PackageKey> for ReleaseQuery<'a> {
                 .as_ref()
                 .map(|x| &**x)
                 .unwrap_or_else(|| defaults::platform()),
-            arch: key.query.arch.as_ref().map(|x| &**x).or_else(|| defaults::arch()),
+            arch: key
+                .query
+                .arch
+                .as_ref()
+                .map(|x| &**x)
+                .or_else(|| defaults::arch()),
             channels: key
                 .query
                 .channel
@@ -145,14 +150,15 @@ pub(crate) struct ReleaseQueryResponse<'a> {
 impl<'a> ReleaseQueryIter<'a> {
     #[inline(always)]
     fn next_release(&mut self) -> Option<ReleaseQueryResponse<'a>> {
-        while let Some(release) = self.descriptor.releases.get(self.next_release) {
+        while let Some(release) = self.descriptor.release.get(self.next_release) {
+            // eprintln!("release: {:?}", &release);
             // If query is empty, it means search only for the main empty channel
             if let Some(channel) = release.channel.as_ref().map(|x| x.as_str()) {
                 if !self.query.channels.contains(&channel) {
                     self.next_release += 1;
                     continue;
                 }
-            } else if self.query.channels.is_empty() {
+            } else if !self.query.channels.is_empty() {
                 self.next_release += 1;
                 continue;
             }
@@ -171,7 +177,7 @@ impl<'a> ReleaseQueryIter<'a> {
 
     #[inline(always)]
     fn next_payload(&mut self, release: &'a Release) -> Option<ReleaseQueryResponse<'a>> {
-        for ref target in release.targets.iter() {
+        for ref target in release.target.iter() {
             if target.platform != self.query.platform {
                 continue;
             }
@@ -335,15 +341,12 @@ where
     let repos = repos.read().unwrap();
 
     if let Some(repo) = repos.get(repo_url) {
-        for id in repo.packages().packages.keys() {
-            let key = PackageKey::unchecked_new(
-                repo.info().base_url.clone(),
-                id.clone(),
-                None,
-            );
+        for id in repo.packages().packages().keys() {
+            let key =
+                PackageKey::unchecked_new(repo.info().repository.url.clone(), id.to_string(), None);
             let status = store.status(&key, target);
             log::trace!("Package: {:?}, status: {:?}", &id, &status);
-            map.insert(id.clone(), status);
+            map.insert(id.to_string(), status);
         }
     } else {
         log::warn!("Did not find repo {:?} in available repos", &repo_url);
@@ -353,21 +356,120 @@ where
     map
 }
 
+fn to_descriptor<'a>(pkg: &'a pahkat_fbs::Descriptor<'a>) -> pahkat_types::package::Descriptor {
+    let descriptor = pahkat_types::package::Descriptor::builder()
+    .package(
+        pahkat_types::package::DescriptorData::builder()
+            .id(pkg.id().into())
+            .tags(
+                pkg.tags()
+                    .map(|tags| tags.iter().map(|x| x.to_string()).collect())
+                    .unwrap_or(vec![]),
+            )
+            .build(),
+    )
+    .name(
+        pkg.name()
+            .map(|x| {
+                let mut out = BTreeMap::new();
+                for (k, v) in x.iter() {
+                    out.insert(k.to_string(), v.to_string());
+                }
+                out
+            })
+            .unwrap_or_else(|| Default::default()),
+    )
+    .description(
+        pkg.description()
+            .map(|x| {
+                let mut out = BTreeMap::new();
+                for (k, v) in x.iter() {
+                    out.insert(k.to_string(), v.to_string());
+                }
+                out
+            })
+            .unwrap_or_else(|| Default::default()),
+    )
+    .release(
+        pkg.release()
+            .unwrap()
+            .iter()
+            .map(|x| {
+                pahkat_types::package::Release::builder()
+                    .version(
+                        pahkat_types::package::version::Version::new(x.version()).unwrap(),
+                    )
+                    .channel(x.channel().map(|x| x.to_string()))
+                    .target(x.target().unwrap().iter().map(|t| {
+                        pahkat_types::payload::Target::builder()
+                            .platform(t.platform().to_string())
+                            .arch(t.arch().map(str::to_string))
+                            .dependencies(t.dependencies()
+                                .map(|x| {
+                                    let mut out = BTreeMap::new();
+                                    for (k, v) in x.iter() {
+                                        out.insert(k.to_string(), v.to_string());
+                                    }
+                                    out
+                                })
+                                .unwrap_or_else(|| Default::default()))
+                            .payload(match t.payload().unwrap() {
+                                pahkat_fbs::Payload::WindowsExecutable(x) => {
+                                    pahkat_types::payload::Payload::WindowsExecutable(pahkat_types::payload::windows::Executable::builder()
+                                        .url(x.url().parse::<url::Url>().unwrap())
+                                        .product_code(x.product_code().to_string())
+                                        .kind(match x.kind() {
+                                            pahkat_fbs::WindowsExecutableKind::NONE => None,
+                                            x => Some(pahkat_fbs::enum_name_windows_executable_kind(x).to_lowercase().to_string())
+                                        })
+                                        .size(x.size_())
+                                        .installed_size(x.installed_size())
+                                        .build())
+                                }
+                                pahkat_fbs::Payload::MacOSPackage(x) => {
+                                    pahkat_types::payload::Payload::MacOSPackage(pahkat_types::payload::macos::Package::builder()
+                                        .url(x.url().parse::<url::Url>().unwrap())
+                                        .pkg_id(x.pkg_id().to_string())
+                                        .size(x.size_())
+                                        .installed_size(x.installed_size())
+                                        .build())
+                                }
+                                pahkat_fbs::Payload::TarballPackage(x) => {
+                                    pahkat_types::payload::Payload::TarballPackage(pahkat_types::payload::tarball::Package::builder()
+                                        .url(x.url().parse::<url::Url>().unwrap())
+                                        .size(x.size_())
+                                        .installed_size(x.installed_size())
+                                        .build())
+                                }
+                            })
+                            .build()
+                    }).collect())
+                    .build()
+            })
+            .collect(),
+    )
+    .build();
+    descriptor
+}
+
 pub(crate) fn find_package_by_key<'p>(
     package_key: &PackageKey,
     repos: &'p HashMap<Url, LoadedRepository>,
 ) -> Option<Package> {
     log::trace!("Resolving package...");
     log::trace!("My pkg id: {}", &package_key.id);
+
     repos.get(&package_key.repository_url).and_then(|r| {
         log::trace!("Got repo: {:?}", r);
         // TODO: need to check that any release supports the requested channel
-        let pkg = match r.packages().packages.get(&package_key.id) {
+        let pkgs = r.packages();
+        let pkg = match pkgs.packages().get(&package_key.id) {
             Some(x) => Some(x.to_owned()),
             None => None,
-        };
+        }?;
         log::trace!("Found pkg: {:?}", &pkg);
-        pkg
+
+        Some(Package::Concrete(to_descriptor(&pkg)))
     })
 }
 
@@ -388,13 +490,13 @@ where
     };
 
     repos.iter().find_map(|(key, repo)| {
-        repo.packages().packages.get(package_id).map(|x| {
+        repo.packages().packages().get(package_id).map(|x| {
             let key = PackageKey::unchecked_new(
-                repo.info().base_url.clone(),
+                repo.info().repository.url.clone(),
                 package_id.to_string(),
                 None,
             );
-            (key, x.to_owned())
+            (key, Package::Concrete(to_descriptor(&x)))
         })
     })
 }
@@ -461,8 +563,8 @@ where
     //     };
     // }
 
-    // Ok(())
-    todo!()
+    Ok(())
+    // todo!()
 }
 
 pub(crate) fn find_package_dependencies<T>(
@@ -534,7 +636,7 @@ fn recurse_repo(url: &Url, repos: &mut HashMap<Url, LoadedRepository>, cache_dir
 
     match LoadedRepository::from_cache_or_url(url, cache_dir) {
         Ok(repo) => {
-            for url in repo.info().linked_repositories.iter() {
+            for url in repo.info().repository.linked_repositories.iter() {
                 recurse_repo(url, repos, cache_dir);
             }
 

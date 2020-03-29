@@ -51,14 +51,14 @@ impl ConfigPath {
 
     pub fn join<S: AsRef<str>>(&self, item: S) -> ConfigPath {
         let mut url = self.as_url().to_owned();
-        log::debug!("{:?}", url);
+        log::trace!("{:?}", url);
         url.path_segments_mut().unwrap().push(item.as_ref());
-        log::debug!("{:?}", url);
+        log::trace!("{:?}", url);
         ConfigPath::from_url(url).unwrap()
     }
 
     fn container_to_file(&self) -> Option<Url> {
-        log::debug!("container_to_file: {:?}", self);
+        log::trace!("container_to_file: {:?}", self);
         let url = match self {
             ConfigPath::File(v) => return Some(v.to_owned()),
             ConfigPath::Container(v) => v,
@@ -75,19 +75,19 @@ impl ConfigPath {
 
         let url = Url::from_file_path(container_path);
 
-        log::debug!("url: {:?}", &url);
+        log::trace!("url: {:?}", &url);
 
         url.ok()
     }
 
     pub fn to_path_buf(&self) -> Option<PathBuf> {
-        log::debug!("to_path_buf");
+        log::trace!("to_path_buf");
         let url = match self {
             ConfigPath::File(ref v) => v.to_owned(),
             ConfigPath::Container(_v) => self.container_to_file()?,
         };
 
-        log::debug!("Path: {:?}", &url);
+        log::trace!("Path: {:?}", &url);
 
         url.to_file_path().ok()
     }

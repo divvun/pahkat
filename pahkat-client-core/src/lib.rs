@@ -1,5 +1,8 @@
 pub extern crate pahkat_types as types;
 
+#[macro_use]
+extern crate rental;
+
 #[cfg(feature = "ffi")]
 pub mod ffi;
 
@@ -13,7 +16,7 @@ mod config;
 mod download;
 mod ext;
 
-pub use self::config::Config;
+pub use self::config::{Config, Permission};
 pub use self::download::Download;
 pub use self::package_store::PackageStore;
 pub use self::repo::{LoadedRepository, PackageKey};

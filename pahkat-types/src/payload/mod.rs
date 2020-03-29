@@ -8,7 +8,7 @@ use std::convert::TryFrom;
 use typed_builder::TypedBuilder;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-#[serde(tag = "_type")]
+#[serde(untagged)] // #[serde(tag = "_type")]
 #[non_exhaustive]
 pub enum Payload {
     WindowsExecutable(windows::Executable),
@@ -19,11 +19,13 @@ pub enum Payload {
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
-#[serde(rename_all = "camelCase")]
 pub struct Target {
     pub platform: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[builder(default)]
     pub arch: Option<String>,
-    #[serde(default = "DependencyMap::new")]
+    #[serde(default)]
+    #[builder(default)]
     pub dependencies: DependencyMap,
     pub payload: Payload,
 }

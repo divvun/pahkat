@@ -9,26 +9,26 @@ use url::Url;
 
 use pahkat_types::{
     package::Index as PackagesIndex,
-    repo::{Agent, Index, Repository},
+    repo::{Agent, Index, Repository, RepositoryData},
     LangTagMap,
 };
 
 #[non_exhaustive]
 #[derive(Debug, Clone, TypedBuilder)]
-pub struct InitRequest<'a> {
+pub struct Request<'a> {
     pub path: Cow<'a, Path>,
-    pub base_url: Cow<'a, Url>,
+    pub url: Cow<'a, Url>,
     pub name: Cow<'a, str>,
     pub description: Cow<'a, str>,
 }
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Default, TypedBuilder)]
-pub struct PartialInitRequest<'a> {
+pub struct PartialRequest<'a> {
     #[builder(default)]
     pub path: Option<&'a Path>,
     #[builder(default)]
-    pub base_url: Option<&'a Url>,
+    pub url: Option<&'a Url>,
     #[builder(default)]
     pub name: Option<&'a str>,
     #[builder(default)]
@@ -47,9 +47,9 @@ pub enum RequestError {
     InvalidUrl(#[from] url::ParseError),
 }
 
-impl<'a> crate::Request for InitRequest<'a> {
+impl<'a> crate::Request for Request<'a> {
     type Error = RequestError;
-    type Partial = PartialInitRequest<'a>;
+    type Partial = PartialRequest<'a>;
 
     fn new_from_user_input(partial: Self::Partial) -> Result<Self, Self::Error> {
         use dialoguer::Input;
@@ -69,14 +69,15 @@ impl<'a> crate::Request for InitRequest<'a> {
                 .map_err(RequestError::PathError)?,
         };
 
-        let base_url = match partial.base_url {
+        let url = match partial.url {
             Some(url) => Cow::Borrowed(url),
             None => {
-                let base_url = Input::<String>::new()
+                let url = Input::<String>::new()
                     .with_prompt("Base URL")
+                    .with_initial_text("https://")
                     .interact()
                     .map_err(|_| RequestError::InvalidInput)?;
-                Cow::Owned(Url::parse(&base_url)?)
+                Cow::Owned(Url::parse(&url)?)
             }
         };
 
@@ -100,9 +101,9 @@ impl<'a> crate::Request for InitRequest<'a> {
             ),
         };
 
-        Ok(InitRequest {
+        Ok(Request {
             path,
-            base_url,
+            url,
             name,
             description,
         })
@@ -110,11 +111,11 @@ impl<'a> crate::Request for InitRequest<'a> {
 }
 
 pub fn create_agent() -> Agent {
-    Agent {
-        name: "pahkat".into(),
-        version: env!("CARGO_PKG_VERSION").into(),
-        url: Some(Url::parse("https://github.com/divvun/pahkat/").unwrap()),
-    }
+    Agent::builder()
+        .name("pahkat".to_string())
+        .version(env!("CARGO_PKG_VERSION").into())
+        .url(Some(Url::parse("https://github.com/divvun/pahkat/").unwrap()))
+        .build()
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -134,7 +135,7 @@ fn write_index<T: Serialize>(path: &Path, index: &T) -> Result<(), Error> {
     fs::write(&path, data).map_err(|e| Error::WriteToml(path.to_path_buf(), e))
 }
 
-pub fn init<'a>(request: InitRequest<'a>) -> Result<(), Error> {
+pub fn init<'a>(request: Request<'a>) -> Result<(), Error> {
     // Create all the directories
     create_dir_all(&request.path)
         .map_err(|e| Error::DirCreateFailed(request.path.to_path_buf(), e))?;
@@ -148,8 +149,11 @@ pub fn init<'a>(request: InitRequest<'a>) -> Result<(), Error> {
     let mut description = LangTagMap::new();
     description.insert("en".into(), request.description.to_string());
 
+    let data = RepositoryData::builder()
+        .url(request.url.into_owned())
+        .build();
     let index = Index::builder()
-        .base_url(request.base_url.into_owned())
+        .repository(data)
         .agent(create_agent())
         .name(name)
         .description(description)

@@ -8,21 +8,24 @@ use typed_builder::TypedBuilder;
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
-#[serde(rename_all = "camelCase")]
 pub struct Package {
     #[builder(default = "MacOSPackage".into())]
+    #[serde(rename = "type")]
     _type: String,
 
     pub url: url::Url,
     pub pkg_id: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    #[builder(default)]
     pub targets: BTreeSet<InstallTarget>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "crate::is_false")]
+    #[builder(default)]
     pub requires_reboot: bool,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "crate::is_false")]
+    #[builder(default)]
     pub requires_uninstall_reboot: bool,
-    pub size: usize,
-    pub installed_size: usize,
+    pub size: u64,
+    pub installed_size: u64,
 }
 
 impl super::AsDownloadUrl for Package {
@@ -32,6 +35,7 @@ impl super::AsDownloadUrl for Package {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, Hash, Eq)]
+#[serde(rename_all = "lowercase")]
 pub enum InstallTarget {
     System,
     User,

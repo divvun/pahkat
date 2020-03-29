@@ -185,7 +185,7 @@ impl PackageStore for PrefixPackageStore {
         let mut tar_file = tar::Archive::new(reader);
         let mut files = vec![];
 
-        let pkg_path = self.package_dir(&package.id);
+        let pkg_path = self.package_dir(&package.package.id);
         create_dir_all(&pkg_path).unwrap(); // map_err(InstallError::CreateDirFailed)?;
 
         for entry in tar_file.entries().unwrap() {

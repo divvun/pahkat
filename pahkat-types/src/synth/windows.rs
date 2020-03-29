@@ -4,8 +4,8 @@ use typed_builder::TypedBuilder;
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
-#[serde(rename_all = "camelCase")]
 pub struct RegistryKey {
+    #[serde(rename = "type")]
     #[builder(default = "WindowsRegistryKey".into())]
     _type: String,
 

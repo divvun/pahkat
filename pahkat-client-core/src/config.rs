@@ -21,7 +21,7 @@ use once_cell::sync::{Lazy, OnceCell};
 use thiserror::Error;
 
 pub use path::ConfigPath;
-pub use repos::{Repos, ReposData, RepoRecord};
+pub use repos::{RepoRecord, Repos, ReposData};
 pub use settings::{Settings, SettingsData};
 
 #[derive(Debug, Error)]

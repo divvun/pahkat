@@ -1,3 +1,4 @@
+pub mod package;
 pub mod repo;
 
 pub trait Request {
@@ -7,4 +8,10 @@ pub trait Request {
     fn new_from_user_input(partial: Self::Partial) -> Result<Self, Self::Error>
     where
         Self: Sized;
+}
+
+pub fn make_lang_tag_map(value: String) -> pahkat_types::LangTagMap<String> {
+    let mut map = pahkat_types::LangTagMap::new();
+    map.insert("en".into(), value);
+    map
 }

@@ -9,12 +9,20 @@ use crate::{DependencyMap, LangTagMap};
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
-#[serde(rename_all = "camelCase")]
-pub struct Descriptor {
-    #[builder(default = "SyntheticPackage".into())]
-    _type: String,
-
+#[non_exhaustive]
+pub struct SyntheticData {
     pub id: String,
+    #[serde(default)]
+    #[builder(default)]
+    pub tags: Vec<String>,
+}
+
+#[derive(
+    Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
+)]
+#[non_exhaustive]
+pub struct Descriptor {
+    pub synthetic: SyntheticData,
     #[serde(default)]
     #[builder(default)]
     pub name: LangTagMap<String>,
@@ -23,16 +31,13 @@ pub struct Descriptor {
     pub description: LangTagMap<String>,
     #[serde(default)]
     #[builder(default)]
-    pub tags: Vec<String>,
-    #[serde(default)]
-    #[builder(default)]
     pub releases: Vec<Release>,
 }
 
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
-#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
 pub struct Target {
     pub platform: String,
     #[builder(default)]
@@ -47,7 +52,7 @@ pub struct Target {
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
-#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
 pub struct Release {
     pub version: String,
     pub channel: String,
@@ -56,7 +61,8 @@ pub struct Release {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[serde(tag = "_type")]
+#[serde(untagged)]
+#[non_exhaustive]
 pub enum Verifier {
     WindowsRegistryKey(windows::RegistryKey),
     MacOSPackageRef(macos::PackageRef),

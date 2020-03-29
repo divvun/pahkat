@@ -14,7 +14,7 @@ use crate::package_store::PackageStore;
 use crate::transaction::{
     PackageAction, PackageStatus, PackageStatusError, PackageTransactionError,
 };
-use crate::{PackageKey, PrefixPackageStore, Config};
+use crate::{Config, PackageKey, PrefixPackageStore};
 
 use super::{JsonMarshaler, PackageKeyMarshaler};
 
@@ -82,7 +82,8 @@ pub extern "C" fn pahkat_prefix_package_store_download(
         .download(
             &package_key,
             Box::new(move |cur, max| progress(package_key_str.as_ptr(), cur, max)),
-        ).box_err()
+        )
+        .box_err()
 }
 
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
@@ -145,7 +146,6 @@ pub extern "C" fn pahkat_prefix_transaction_new(
 
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_prefix_transaction_actions(
-    #[marshal(cursed::BoxRefMarshaler::<PrefixPackageTransaction>)]
     handle: &PrefixPackageTransaction,
 ) -> Vec<PrefixPackageAction> {
     handle.actions().to_vec()
@@ -153,7 +153,6 @@ pub extern "C" fn pahkat_prefix_transaction_actions(
 
 #[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
 pub extern "C" fn pahkat_prefix_transaction_process(
-    #[marshal(cursed::BoxRefMarshaler::<PrefixPackageTransaction>)]
     handle: &PrefixPackageTransaction,
     tag: u32,
     progress_callback: extern "C" fn(u32, cursed::Slice<u8>, u32) -> u8,

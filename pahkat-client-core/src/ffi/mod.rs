@@ -15,15 +15,17 @@ use std::sync::{Arc, RwLock};
 
 use cursed::{FromForeign, InputType, ReturnType, ToForeign};
 use once_cell::sync::Lazy;
-use pahkat_types::payload::{macos::InstallTarget as MacOSInstallTarget, windows::InstallTarget as WindowsInstallTarget};
+use pahkat_types::payload::{
+    macos::InstallTarget as MacOSInstallTarget, windows::InstallTarget as WindowsInstallTarget,
+};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use url::Url;
 
-use crate::transaction::{PackageStatus, PackageStatusError};
-use crate::{PackageKey, Config};
 use crate::config::ConfigPath;
 use crate::repo::PayloadError;
+use crate::transaction::{PackageStatus, PackageStatusError};
+use crate::{Config, PackageKey};
 
 pub struct TargetMarshaler;
 
@@ -65,7 +67,6 @@ impl FromForeign<cursed::Slice<u8>, MacOSInstallTarget> for TargetMarshaler {
     }
 }
 
-
 impl ToForeign<WindowsInstallTarget, cursed::Slice<u8>> for TargetMarshaler {
     type Error = std::convert::Infallible;
 
@@ -91,7 +92,6 @@ impl FromForeign<cursed::Slice<u8>, WindowsInstallTarget> for TargetMarshaler {
         })
     }
 }
-
 
 #[inline(always)]
 fn level_u8_to_str(level: u8) -> Option<&'static str> {
@@ -306,14 +306,20 @@ pub extern "C" fn pahkat_config_settings_config_dir(
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::UrlMarshaler")]
-pub extern "C" fn pahkat_config_settings_cache_base_url(
+pub extern "C" fn pahkat_config_settings_cache_url(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
 ) -> Url {
-    handle.read().unwrap().settings().cache_base_dir().as_url().to_owned()
+    handle
+        .read()
+        .unwrap()
+        .settings()
+        .cache_base_dir()
+        .as_url()
+        .to_owned()
 }
 
 // #[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
-// pub extern "C" fn pahkat_config_set_cache_base_url(
+// pub extern "C" fn pahkat_config_set_cache_url(
 //     #[marshal(cursed::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
 //     #[marshal(cursed::UrlMarshaler)] url: Url,
 // ) -> Result<(), Box<dyn Error>> {
@@ -323,7 +329,9 @@ pub extern "C" fn pahkat_config_settings_cache_base_url(
 
 #[cfg(target_os = "android")]
 #[cthulhu::invoke]
-pub extern "C" fn pahkat_android_init(#[marshal(cursed::PathBufMarshaler)] container_path: PathBuf) {
+pub extern "C" fn pahkat_android_init(
+    #[marshal(cursed::PathBufMarshaler)] container_path: PathBuf,
+) {
     let _ = crate::config::CONTAINER_PATH.set(container_path).ok();
 
     std::panic::set_hook(Box::new(|info| {
@@ -358,7 +366,7 @@ pub(crate) fn status_to_i8(result: Result<PackageStatus, PackageStatusError>) ->
             PackageStatusError::Payload(e) => match e {
                 PayloadError::NoPackage | PayloadError::NoConcretePackage => -1,
                 PayloadError::NoPayloadFound => -2,
-                PayloadError::CriteriaUnmet(_) => -5, 
+                PayloadError::CriteriaUnmet(_) => -5,
             },
             PackageStatusError::WrongPayloadType => -3,
             PackageStatusError::ParsingVersion => -4,

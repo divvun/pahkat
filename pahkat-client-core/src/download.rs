@@ -101,6 +101,7 @@ impl DownloadManager {
         let tmp_dest_path = cache_dir.join(filename);
         let mut req = self.client.get(url.as_str());
 
+        #[cfg(not(windows))]
         let mut fdlock = {
             let fd = fs::OpenOptions::new()
                 .append(true)
@@ -111,12 +112,19 @@ impl DownloadManager {
         };
 
         // Lock temporary destination file for writing
+        #[cfg(not(windows))]
         log::debug!("Locking {}", tmp_dest_path.display());
 
         #[cfg(not(windows))]
         let mut file = fdlock.lock().map_err(|_| DownloadError::LockFailure)?;
+        // #[cfg(windows)]
+        // let mut file = fdlock.try_lock().map_err(|_| DownloadError::LockFailure)?;
         #[cfg(windows)]
-        let mut file = fdlock.try_lock().map_err(|_| DownloadError::LockFailure)?;
+        let mut file = Box::new(fs::OpenOptions::new()
+            .append(true)
+            .open(&tmp_dest_path)
+            .or_else(|_| fs::File::create(&tmp_dest_path))
+            .map_err(|e| DownloadError::IoError(e))?);
 
         log::debug!("Got lock on {}", tmp_dest_path.display());
         let meta = file.metadata().map_err(|e| DownloadError::IoError(e))?;
@@ -176,7 +184,8 @@ impl DownloadManager {
 
         // If it's done, move the file!
         let _ = fs::create_dir_all(dest_path);
-        fs::rename(tmp_dest_path, &dest_file_path).map_err(DownloadError::IoError)?;
+        fs::copy(&tmp_dest_path, &dest_file_path).map_err(DownloadError::IoError)?;
+        fs::remove_file(&tmp_dest_path).map_err(DownloadError::IoError)?;
 
         Ok(dest_file_path)
     }

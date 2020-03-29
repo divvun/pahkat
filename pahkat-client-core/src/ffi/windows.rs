@@ -8,7 +8,7 @@ use cursed::{FromForeign, ToForeign};
 use super::{JsonMarshaler, PackageKeyMarshaler};
 use crate::package_store::PackageStore;
 use crate::transaction::{PackageStatus, PackageStatusError};
-use crate::{PackageKey, Config, WindowsPackageStore};
+use crate::{Config, PackageKey, WindowsPackageStore};
 
 use super::BoxError;
 
@@ -143,16 +143,18 @@ pub extern "C" fn pahkat_windows_transaction_new(
 
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_windows_transaction_actions(
-    #[marshal(cursed::BoxRefMarshaler::<WindowsPackageTransaction>)]
-    handle: &Box<WindowsPackageTransaction>,
+    #[marshal(cursed::BoxRefMarshaler::<WindowsPackageTransaction>)] handle: &Box<
+        WindowsPackageTransaction,
+    >,
 ) -> Vec<WindowsPackageAction> {
     handle.actions().to_vec()
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
 pub extern "C" fn pahkat_windows_transaction_process(
-    #[marshal(cursed::BoxRefMarshaler::<WindowsPackageTransaction>)]
-    handle: &Box<WindowsPackageTransaction>,
+    #[marshal(cursed::BoxRefMarshaler::<WindowsPackageTransaction>)] handle: &Box<
+        WindowsPackageTransaction,
+    >,
     tag: u32,
     progress_callback: extern "C" fn(u32, *const libc::c_char, u32) -> u8,
 ) -> Result<(), Box<dyn Error>> {

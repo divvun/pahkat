@@ -19,36 +19,39 @@ fn last_modified_cache(repo_cache_dir: &Path) -> SystemTime {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum RepoDownloadError {
-    ReqwestError(reqwest::Error),
-    JsonError(serde_json::Error),
-    IoError(std::io::Error),
-}
+    #[error("Error while processing HTTP request")]
+    ReqwestError(#[from] reqwest::Error),
 
-impl std::fmt::Display for RepoDownloadError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match *self {
-            RepoDownloadError::ReqwestError(ref e) => e.fmt(f),
-            RepoDownloadError::JsonError(ref e) => e.fmt(f),
-            RepoDownloadError::IoError(ref e) => e.fmt(f),
-        }
-    }
+    #[error("Error parsing TOML index")]
+    TomlError(#[from] toml::de::Error),
+
+    #[error("I/O error")]
+    IoError(#[from] std::io::Error),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
 pub struct LoadedRepositoryMeta {
     pub channel: Option<String>,
     pub hash_id: String,
     // TODO: last update
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
+// rental::rental! {
+//     mod rent {
+//         #[rental(debug)]
+//         pub struct RentedPackages {
+//             head: Box<[u8]>,
+//             iref: pahkat_fbs::Packages<'head>
+//         }
+//     }
+// }
+
+#[derive(Debug)]
 pub struct LoadedRepository {
-    info: pahkat_types::repo::index::Index,
-    packages: pahkat_types::package::Index,
+    info: pahkat_types::repo::Index,
+    packages: Box<[u8]>, //rent::RentedPackages,
     // strings: pahkat_types::strings::
     meta: LoadedRepositoryMeta,
 }
@@ -58,15 +61,79 @@ impl LoadedRepository {
         url: &Url,
         cache_dir: &Path,
     ) -> Result<LoadedRepository, RepoDownloadError> {
-        todo!()
+        Self::from_url(url)
     }
 
-    pub fn info(&self) -> &pahkat_types::repo::index::Index {
+    fn from_url(url: &Url) -> Result<LoadedRepository, RepoDownloadError> {
+        let client = reqwest::blocking::Client::new();
+
+        let info = client.get(&format!("{}/index.toml", url)).send()?.text()?;
+        let info: pahkat_types::repo::Index = toml::from_str(&info)?;
+
+        let packages = client
+            .get(&format!("{}/packages/index.bin", url))
+            .send()?
+            .bytes()?
+            .to_vec()
+            .into_boxed_slice();
+        // let packages = rent::RentedPackages::new(packages, |p| pahkat_fbs::get_root_as_packages(&packages));
+
+        // let hash_id = Repository::path_hash(url, &channel);
+
+        // let meta_res = client
+        //     .get(&format!("{}/index.json", url))
+        //     .send()
+        //     .map_err(|e| RepoDownloadError::ReqwestError(e))?;
+        // let meta_text = meta_res
+        //     .text()
+        //     .map_err(|e| RepoDownloadError::ReqwestError(e))?;
+        // let meta: RepositoryMeta =
+        //     serde_json::from_str(&meta_text).map_err(|e| RepoDownloadError::JsonError(e))?;
+
+        // let index_json_path = if meta.default_channel == channel {
+        //     "index.json".into()
+        // } else {
+        //     format!("index.{}.json", &channel)
+        // };
+
+        // let pkg_res = client
+        //     .get(&format!("{}/packages/{}", url, index_json_path))
+        //     .send()
+        //     .map_err(|e| RepoDownloadError::ReqwestError(e))?;
+        // let pkg_text = pkg_res
+        //     .text()
+        //     .map_err(|e| RepoDownloadError::ReqwestError(e))?;
+        // let packages: Packages =
+        //     serde_json::from_str(&pkg_text).map_err(|e| RepoDownloadError::JsonError(e))?;
+
+        // let virt_res = client
+        //     .get(&format!("{}/virtuals/{}", url, index_json_path))
+        //     .send()
+        //     .map_err(|e| RepoDownloadError::ReqwestError(e))?;
+        // let virt_text = virt_res
+        //     .text()
+        //     .map_err(|e| RepoDownloadError::ReqwestError(e))?;
+        // let virtuals: Virtuals =
+        //     serde_json::from_str(&virt_text).map_err(|e| RepoDownloadError::JsonError(e))?;
+
+        let repo = LoadedRepository {
+            info,
+            packages,
+            meta: LoadedRepositoryMeta {
+                channel: None,
+                hash_id: "".into(),
+            },
+        };
+
+        Ok(repo)
+    }
+
+    pub fn info(&self) -> &pahkat_types::repo::Index {
         &self.info
     }
 
-    pub fn packages(&self) -> &pahkat_types::package::Index {
-        &self.packages
+    pub fn packages<'a>(&'a self) -> pahkat_fbs::Packages<'a> {
+        pahkat_fbs::get_root_as_packages(&self.packages)
     }
 
     pub fn meta(&self) -> &LoadedRepositoryMeta {
@@ -75,8 +142,7 @@ impl LoadedRepository {
 }
 
 // #[derive(Debug, Serialize, Deserialize, Clone)]
-// #[serde(rename_all = "camelCase")]
-// pub struct Repository {
+// // pub struct Repository {
 //     meta: RepositoryMeta,
 //     packages: Packages,
 //     virtuals: Virtuals,

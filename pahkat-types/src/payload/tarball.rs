@@ -4,14 +4,14 @@ use typed_builder::TypedBuilder;
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
-#[serde(rename_all = "camelCase")]
 pub struct Package {
     #[builder(default = "TarballPackage".into())]
+    #[serde(rename = "type")]
     _type: String,
 
     pub url: url::Url,
-    pub size: usize,
-    pub installed_size: usize,
+    pub size: u64,
+    pub installed_size: u64,
 }
 
 impl super::AsDownloadUrl for Package {

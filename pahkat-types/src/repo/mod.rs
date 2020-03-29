@@ -1,30 +1,22 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use typed_builder::TypedBuilder;
 use url::Url;
-use std::collections::BTreeMap;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-#[serde(tag = "_type")]
+#[serde(untagged)]
+#[non_exhaustive]
 pub enum Repository {
-    #[serde(rename = "Repository")]
     Index(Index),
-    #[serde(rename = "RepositoryRedirect")]
     Redirect(Redirect),
 }
 
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
-#[serde(rename_all = "camelCase")]
-/// The base repository index. All fields may be optionally present except `base_url` and `agent`.
-///
-/// This struct represents the `index.toml` file at the base of a Pahkat repository.
-pub struct Index {
-    #[serde(rename = "_type")]
-    #[builder(default = "Repository".into())]
-    _type: String,
-
-    pub base_url: Url,
+#[non_exhaustive]
+pub struct RepositoryData {
+    pub url: Url,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     #[builder(default)]
@@ -45,23 +37,33 @@ pub struct Index {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[builder(default)]
     pub accepted_redirections: Vec<Url>,
-
-    // Tables need to be at the end of the struct
-    pub agent: Agent,
-
-    #[serde(default)]
-    #[builder(default)]
-    pub name: BTreeMap<String, String>,
-    
-    #[serde(default)]
-    #[builder(default)]
-    pub description: BTreeMap<String, String>,
 }
 
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
-#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+/// The base repository index. All fields may be optionally present except `url` and `agent`.
+///
+/// This struct represents the `index.toml` file at the base of a Pahkat repository.
+pub struct Index {
+    pub repository: RepositoryData,
+
+    #[serde(default)]
+    #[builder(default)]
+    pub name: BTreeMap<String, String>,
+
+    #[serde(default)]
+    #[builder(default)]
+    pub description: BTreeMap<String, String>,
+
+    pub agent: Agent,
+}
+
+#[derive(
+    Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
+)]
+#[non_exhaustive]
 pub struct Agent {
     pub name: String,
     pub version: String,
@@ -81,10 +83,15 @@ pub struct Localisation {
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
-#[serde(rename_all = "camelCase")]
-pub struct Redirect {
-    #[builder(default = "RepositoryRedirect".into())]
-    _type: String,
+#[non_exhaustive]
+pub struct RedirectData {
+    pub url: url::Url,
+}
 
-    pub redirect: url::Url,
+#[derive(
+    Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
+)]
+#[non_exhaustive]
+pub struct Redirect {
+    pub redirect: RedirectData,
 }

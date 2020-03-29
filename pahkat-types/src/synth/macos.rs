@@ -3,7 +3,6 @@ use typed_builder::TypedBuilder;
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
-#[serde(rename_all = "camelCase")]
 pub struct PackageRef {
     #[builder(default = "MacOSPackageRef".into())]
     _type: String,
@@ -18,7 +17,6 @@ pub struct PackageRef {
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
-#[serde(rename_all = "camelCase")]
 pub struct PathRef {
     #[builder(default = "MacOSPathRef".into())]
     _type: String,
