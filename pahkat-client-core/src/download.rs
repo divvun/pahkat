@@ -80,22 +80,33 @@ impl DownloadManager {
 
         // Check destination path exists
         if dest_path.exists() && dest_file_path.exists() {
-            self.handle_callback(0, 0, progress.as_ref())?;
+            match dest_path.metadata() {
+                Ok(v) if v.len() > 0 => {
+                    self.handle_callback(0, 0, progress.as_ref())?;
 
-            log::debug!("Download already exists at {:?}; using.", &dest_file_path);
+                    log::debug!("Download already exists at {:?}; using.", &dest_file_path);
 
-            return Ok(dest_file_path);
+                    return Ok(dest_file_path);
+                },
+                _ => {}
+            }
         }
 
         // Create temp dirs if they don't yet exist
         if !self.path.exists() {
-            fs::create_dir_all(&self.path).map_err(|e| DownloadError::IoError(e))?;
+            fs::create_dir_all(&self.path).map_err(|e| {
+                log::error!("{:?}", &e);
+                DownloadError::IoError(e)
+            })?;
         }
 
         // Create download dir for this file
         let cache_dir = self.path.join_sha256(url.as_str().as_bytes());
         if !cache_dir.exists() {
-            fs::create_dir_all(&cache_dir).map_err(|e| DownloadError::IoError(e))?;
+            fs::create_dir_all(&cache_dir).map_err(|e| {
+                log::error!("{:?}", &e);
+                DownloadError::IoError(e)
+            })?;
         }
 
         let tmp_dest_path = cache_dir.join(filename);
@@ -107,7 +118,10 @@ impl DownloadManager {
                 .append(true)
                 .open(&tmp_dest_path)
                 .or_else(|_| fs::File::create(&tmp_dest_path))
-                .map_err(|e| DownloadError::IoError(e))?;
+                .map_err(|e| {
+                    log::error!("{:?}", &e);
+                    DownloadError::IoError(e)
+                })?;
             FdLock::new(fd)
         };
 
@@ -124,10 +138,16 @@ impl DownloadManager {
             .append(true)
             .open(&tmp_dest_path)
             .or_else(|_| fs::File::create(&tmp_dest_path))
-            .map_err(|e| DownloadError::IoError(e))?);
+            .map_err(|e| {
+                log::error!("create file error: {:?}", &e);
+                DownloadError::IoError(e)
+            })?);
 
         log::debug!("Got lock on {}", tmp_dest_path.display());
-        let meta = file.metadata().map_err(|e| DownloadError::IoError(e))?;
+        let meta = file.metadata().map_err(|e| {
+            log::error!("metadata error: {:?}", &e);
+            DownloadError::IoError(e)
+        })?;
 
         let mut downloaded_bytes = meta.len();
         log::debug!("Downloaded bytes: {}", downloaded_bytes);
@@ -142,8 +162,8 @@ impl DownloadManager {
         let mut res = self
             .client
             .execute(req)
-            .await
-            .map_err(DownloadError::ReqwestError)?;
+            .await?
+            .error_for_status()?;
 
         // Get content length and send if exists
         let content_len = res
@@ -158,7 +178,10 @@ impl DownloadManager {
         log::debug!("Is partial: {}", is_partial);
 
         let total_bytes = if !is_partial {
-            file.set_len(0).map_err(|e| DownloadError::IoError(e))?;
+            file.set_len(0).map_err(|e| {
+                log::error!("error setting length of file: {:?}", &e);
+                DownloadError::IoError(e)
+            })?;
             content_len
         } else if content_len > 0 {
             content_len + downloaded_bytes
@@ -175,7 +198,10 @@ impl DownloadManager {
             // Do the download
             while let Some(chunk) = res.chunk().await.map_err(DownloadError::ReqwestError)? {
                 downloaded_bytes += chunk.len() as u64;
-                file.write(&*chunk).map_err(DownloadError::IoError)?;
+                file.write(&*chunk).map_err(|e| {
+                    log::error!("error writing output: {:?}", &e);
+                    DownloadError::IoError(e)
+                })?;
                 self.handle_callback(downloaded_bytes, total_bytes, progress.as_ref())?;
             }
         }

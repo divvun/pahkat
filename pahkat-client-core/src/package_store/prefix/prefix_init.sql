@@ -13,7 +13,7 @@ CREATE TABLE packages (
     installed_on    TEXT NOT NULL,
     updated_on      TEXT NOT NULL,
     is_dependent    BOOLEAN NOT NULL DEFAULT 0,
-    is_pegged       BOOLEAN NOT NULL DEFAULT 0,
+    is_pegged       BOOLEAN NOT NULL DEFAULT 0
 );
 
 CREATE INDEX idx_packages_url ON packages (url);

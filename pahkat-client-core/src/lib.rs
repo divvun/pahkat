@@ -1,8 +1,5 @@
 pub extern crate pahkat_types as types;
 
-#[macro_use]
-extern crate rental;
-
 #[cfg(feature = "ffi")]
 pub mod ffi;
 

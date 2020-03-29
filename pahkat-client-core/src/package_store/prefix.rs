@@ -51,12 +51,11 @@ pub enum Error {
 
 impl PrefixPackageStore {
     pub fn create<P: AsRef<Path>>(prefix_path: P) -> Result<PrefixPackageStore, Error> {
+        create_dir_all(&prefix_path).map_err(Error::CreateDirFailed)?;
         let prefix_path = prefix_path
             .as_ref()
             .canonicalize()
             .map_err(Error::InvalidPrefixPath)?;
-
-        create_dir_all(&prefix_path).map_err(Error::CreateDirFailed)?;
         create_dir_all(&prefix_path.join("pkg")).map_err(Error::CreateDirFailed)?;
 
         let config = Config::load(&prefix_path, crate::config::Permission::ReadWrite)?;
@@ -160,7 +159,9 @@ impl PackageStore for PrefixPackageStore {
         key: &PackageKey,
         target: &Self::Target,
     ) -> Result<PackageStatus, InstallError> {
-        let query = crate::repo::ReleaseQuery::from(key).and_payloads(vec!["TarballPackage"]);
+        let mut query = crate::repo::ReleaseQuery::from(key).and_payloads(vec!["TarballPackage"]);
+        // query.platform = "ios";
+        // log::debug!("query: {:?}", &query);
 
         let repos = self.repos.read().unwrap();
 
@@ -188,6 +189,8 @@ impl PackageStore for PrefixPackageStore {
         let pkg_path = self.package_dir(&package.package.id);
         create_dir_all(&pkg_path).unwrap(); // map_err(InstallError::CreateDirFailed)?;
 
+        log::debug!("Prefix: {:?}", &self.prefix);
+
         for entry in tar_file.entries().unwrap() {
             let mut entry = entry.unwrap();
             let unpack_res;
@@ -197,7 +200,7 @@ impl PackageStore for PrefixPackageStore {
 
             if unpack_res {
                 let entry_path = entry.header().path().unwrap();
-                let entry_path = entry_path.strip_prefix(&self.prefix).unwrap();
+                log::debug!("entry path: {:?}", &entry_path);
                 let entry_path = entry_path.to_str().unwrap().to_string();
                 files.push(entry_path);
             } else {
@@ -279,7 +282,10 @@ impl PackageStore for PrefixPackageStore {
             Some(v) => v,
         };
 
-        let query = crate::repo::ReleaseQuery::from(key).and_payloads(vec!["TarballPackage"]);
+        let mut query = crate::repo::ReleaseQuery::from(key).and_payloads(vec!["TarballPackage"]);
+        query.platform = "ios";
+        log::debug!("query: {:?}", &query);
+
         let repos = self.repos.read().unwrap();
 
         let (target, release, package) = crate::repo::resolve_payload(key, query, &*repos)
@@ -377,14 +383,20 @@ impl<'a> PackageDbConnection<'a> {
     }
 
     fn replace_pkg(&mut self, pkg: &PackageDbRecord) -> rusqlite::Result<()> {
+        use chrono::prelude::*;
+        let utc: DateTime<Utc> = Utc::now();
+        let utc = format!("{:?}", utc);
+        
         let tx = self.0.transaction().unwrap();
 
         tx.execute_named(
-            "REPLACE INTO packages(id, url, version) VALUES (:id, :url, :version)",
+            "REPLACE INTO packages(id, url, version, installed_on, updated_on) VALUES (:id, :url, :version, :installed_on, :updated_on)",
             &[
                 (":id", &pkg.id),
                 (":url", &pkg.url),
                 (":version", &pkg.version),
+                (":installed_on", &utc),
+                (":updated_on", &utc),
             ],
         )
         .unwrap();

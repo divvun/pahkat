@@ -21,21 +21,6 @@ env_logger = { version = "0.7.1", optional = true }
 cthulhu = { git = "https://github.com/cthulhu-rs/cthulhu", branch = "feature/bytes-plus-len", optional = true }
 cursed = { git = "https://github.com/cthulhu-rs/cthulhu", branch = "feature/bytes-plus-len", optional = true }
 
-# MacOS-specific
-[target.'cfg(target_os="macos")'.dependencies]
-plist = { version = "0.5.3" }
-
-# Windows-specific
-[target.'cfg(target_os="windows")'.dependencies]
-winapi = { version = "0.3", features = ["shellapi"] }
-winreg = { git = "https://github.com/bbqsrc/winreg-rs", branch = "master" }
-
-# Android-specific
-[target.'cfg(target_os="android")'.dependencies]
-backtrace = "0.3.45"
-ctor = "0.1.13"
-android_log = { git = "https://github.com/bbqsrc/android_log-rs" }
-
 # The rest
 pahkat-types = { path = "../pahkat-types" }
 pahkat-fbs = { path = '../pahkat-fbs' }
@@ -63,6 +48,21 @@ once_cell = "1.3.1"
 toml = "0.5.6"
 thiserror = "1.0.11"
 indexmap = { version = "1.3.2", features = ["serde-1"] }
+
+# MacOS-specific
+[target.'cfg(target_os="macos")'.dependencies]
+plist = { version = "0.5.3" }
+
+# Windows-specific
+[target.'cfg(target_os="windows")'.dependencies]
+winapi = { version = "0.3", features = ["shellapi"] }
+winreg = { git = "https://github.com/bbqsrc/winreg-rs", branch = "master" }
+
+# Android-specific
+[target.'cfg(target_os="android")'.dependencies]
+backtrace = "0.3.45"
+ctor = "0.1.13"
+android_log = { git = "https://github.com/bbqsrc/android_log-rs" }
 
 [features]
 ffi = ["env_logger", "cthulhu", "cursed"]

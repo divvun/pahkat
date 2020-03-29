@@ -71,26 +71,39 @@ pub(crate) const fn platform() -> &'static str {
     }
 }
 
+macro_rules! arch {
+    ($name:expr) => {{
+        #[cfg(target_arch = $name)]
+        {
+            return Some($name);
+        }
+    }}
+}
+
 #[inline(always)]
 pub(crate) const fn arch() -> Option<&'static str> {
-    #[cfg(target_arch = "x86_64")]
-    {
-        Some("x86_64")
-    }
-    #[cfg(target_arch = "x86")]
-    {
-        Some("x86")
-    }
+    arch!("x86_64");
+    arch!("x86");
+    arch!("arm");
+    arch!("aarch64");
+    arch!("mips");
+    arch!("mips64");
+    arch!("powerpc");
+    arch!("powerpc64");
 }
 
 #[inline(always)]
 pub(crate) fn payloads() -> &'static [&'static str] {
-    #[cfg(windows)]
+    #[cfg(feature = "windows")]
     {
         &["WindowsExecutable"]
     }
-    #[cfg(target_os = "macos")]
+    #[cfg(feature = "macos")]
     {
         &["MacOSPackage"]
+    }
+    #[cfg(feature = "prefix")]
+    {
+        &["TarballPackage"]
     }
 }

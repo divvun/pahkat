@@ -115,15 +115,15 @@ pub extern "C" fn pahkat_prefix_package_store_force_refresh_repos(
     handle.force_refresh_repos();
 }
 
-#[cthulhu::invoke(return_marshaler = "cursed::StringMarshaler")]
-pub extern "C" fn pahkat_prefix_package_store_repo_indexes(
-    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
-) -> Result<String, Box<dyn Error>> {
-    let rwlock = handle.repos();
-    let guard = rwlock.read().unwrap();
-    let indexes = guard.values().collect::<Vec<&_>>();
-    serde_json::to_string(&indexes).map_err(|e| Box::new(e) as _)
-}
+// #[cthulhu::invoke(return_marshaler = "cursed::StringMarshaler")]
+// pub extern "C" fn pahkat_prefix_package_store_repo_indexes(
+//     #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
+// ) -> Result<String, Box<dyn Error>> {
+//     let rwlock = handle.repos();
+//     let guard = rwlock.read().unwrap();
+//     let indexes = guard.values().collect::<Vec<&_>>();
+//     serde_json::to_string(&indexes).map_err(|e| Box::new(e) as _)
+// }
 
 #[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<RwLock<Config>>")]
 pub extern "C" fn pahkat_prefix_package_config(
@@ -134,8 +134,11 @@ pub extern "C" fn pahkat_prefix_package_config(
 
 #[cthulhu::invoke(return_marshaler = "cursed::BoxMarshaler::<PrefixPackageTransaction>")]
 pub extern "C" fn pahkat_prefix_transaction_new(
-    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
-    #[marshal(cursed::StrMarshaler)] actions: &str,
+    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)]
+    handle: Arc<PrefixPackageStore>,
+    
+    #[marshal(cursed::StrMarshaler)] 
+    actions: &str,
 ) -> Result<Box<PrefixPackageTransaction>, Box<dyn Error>> {
     eprintln!("{:?}", &actions);
     let actions: Vec<PrefixPackageAction> = serde_json::from_str(actions)?;
@@ -146,6 +149,7 @@ pub extern "C" fn pahkat_prefix_transaction_new(
 
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_prefix_transaction_actions(
+    #[marshal(cursed::BoxRefMarshaler::<PrefixPackageTransaction>)] 
     handle: &PrefixPackageTransaction,
 ) -> Vec<PrefixPackageAction> {
     handle.actions().to_vec()
@@ -153,6 +157,7 @@ pub extern "C" fn pahkat_prefix_transaction_actions(
 
 #[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
 pub extern "C" fn pahkat_prefix_transaction_process(
+    #[marshal(cursed::BoxRefMarshaler::<PrefixPackageTransaction>)] 
     handle: &PrefixPackageTransaction,
     tag: u32,
     progress_callback: extern "C" fn(u32, cursed::Slice<u8>, u32) -> u8,
