@@ -457,7 +457,10 @@ pub(crate) fn find_package_by_key<'p>(
     repos: &'p HashMap<Url, LoadedRepository>,
 ) -> Option<Package> {
     log::trace!("Resolving package...");
-    log::trace!("My pkg id: {}", &package_key.id);
+    log::trace!("My pkg id: {}", &package_key);
+    log::trace!("Repo url: {}", &package_key.repository_url);
+
+    log::trace!("Repos: {:?}", &repos);
 
     repos.get(&package_key.repository_url).and_then(|r| {
         log::trace!("Got repo: {:?}", r);
