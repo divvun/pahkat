@@ -86,6 +86,27 @@ pub extern "C" fn pahkat_prefix_package_store_download(
         .box_err()
 }
 
+#[cthulhu::invoke(return_marshaler = "cursed::UrlMarshaler")]
+pub extern "C" fn pahkat_prefix_package_store_download_url(
+    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
+    #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
+) -> Result<url::Url, Box<Error>> {
+    use pahkat_types::AsDownloadUrl;
+    use crate::repo::*;
+
+    let query = crate::repo::ReleaseQuery::from(&package_key);
+    let repos = handle.repos();
+    let repos = repos.read().unwrap();
+
+    let (target, _, _) = match resolve_payload(&package_key, query, &repos) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::download::DownloadError::Payload(e)).box_err(),
+    };
+
+    let url = target.payload.as_download_url();
+    Ok(url.clone())
+}
+
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_prefix_package_store_find_package_by_key(
     #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
