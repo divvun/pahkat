@@ -152,6 +152,7 @@ pub extern "C" fn pahkat_enable_logging(level: u8) {
     derp.init().unwrap();
 }
 
+pub struct JsonRefMarshaler<'a>(&'a std::marker::PhantomData<()>);
 pub struct JsonMarshaler;
 
 impl InputType for JsonMarshaler {
@@ -166,6 +167,10 @@ impl ReturnType for JsonMarshaler {
     }
 }
 
+impl<'a> InputType for JsonRefMarshaler<'a> {
+    type Foreign = <cursed::StrMarshaler<'a> as InputType>::Foreign;
+}
+
 impl<T> ToForeign<T, cursed::Slice<u8>> for JsonMarshaler
 where
     T: Serialize,
@@ -178,14 +183,14 @@ where
     }
 }
 
-impl<T> FromForeign<cursed::Slice<u8>, T> for JsonMarshaler
+impl<'a, T> FromForeign<cursed::Slice<u8>, T> for JsonRefMarshaler<'a>
 where
     T: DeserializeOwned,
 {
     type Error = Box<dyn Error>;
 
     unsafe fn from_foreign(ptr: cursed::Slice<u8>) -> Result<T, Self::Error> {
-        let json_str = cursed::StringMarshaler::from_foreign(ptr)?;
+        let json_str = <cursed::StrMarshaler<'a> as FromForeign<cursed::Slice<u8>, &'a str>>::from_foreign(ptr)?;
         log::debug!("JSON: {}, type: {}", &json_str, std::any::type_name::<T>());
 
         let v: Result<T, _> = serde_json::from_str(&json_str);
@@ -197,13 +202,13 @@ where
     }
 }
 
-pub struct PackageKeyMarshaler;
+pub struct PackageKeyMarshaler<'a>(&'a std::marker::PhantomData<()>);
 
-impl InputType for PackageKeyMarshaler {
-    type Foreign = <cursed::StringMarshaler as InputType>::Foreign;
+impl<'a> InputType for PackageKeyMarshaler<'a> {
+    type Foreign = <cursed::StrMarshaler<'a> as InputType>::Foreign;
 }
 
-impl ReturnType for PackageKeyMarshaler {
+impl<'a> ReturnType for PackageKeyMarshaler<'a> {
     type Foreign = <cursed::StringMarshaler as ReturnType>::Foreign;
 
     fn foreign_default() -> Self::Foreign {
@@ -211,7 +216,7 @@ impl ReturnType for PackageKeyMarshaler {
     }
 }
 
-impl<'a> ToForeign<&'a PackageKey, cursed::Slice<u8>> for PackageKeyMarshaler {
+impl<'a> ToForeign<&'a PackageKey, cursed::Slice<u8>> for PackageKeyMarshaler<'a> {
     type Error = std::convert::Infallible;
 
     fn to_foreign(key: &'a PackageKey) -> Result<cursed::Slice<u8>, Self::Error> {
@@ -219,12 +224,12 @@ impl<'a> ToForeign<&'a PackageKey, cursed::Slice<u8>> for PackageKeyMarshaler {
     }
 }
 
-impl FromForeign<cursed::Slice<u8>, PackageKey> for PackageKeyMarshaler {
+impl<'a> FromForeign<cursed::Slice<u8>, PackageKey> for PackageKeyMarshaler<'a> {
     type Error = Box<dyn Error>;
 
     unsafe fn from_foreign(string: cursed::Slice<u8>) -> Result<PackageKey, Self::Error> {
-        let s = cursed::StringMarshaler::from_foreign(string)?;
-        PackageKey::try_from(&*s).box_err()
+        let s = <cursed::StrMarshaler<'a> as FromForeign<cursed::Slice<u8>, &'a str>>::from_foreign(string)?;
+        PackageKey::try_from(s).box_err()
     }
 }
 
@@ -293,7 +298,7 @@ pub extern "C" fn pahkat_config_repos_get(
 #[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
 pub extern "C" fn pahkat_config_repos_set(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
-    #[marshal(JsonMarshaler)] repos: crate::config::ReposData,
+    #[marshal(JsonRefMarshaler)] repos: crate::config::ReposData,
 ) -> Result<(), Box<dyn Error>> {
     handle.write().unwrap().repos_mut().set(repos).box_err()
 }
