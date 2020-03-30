@@ -260,11 +260,15 @@ pub(crate) fn import<'a>(
     installer_path: &Path,
 ) -> Result<std::path::PathBuf, crate::package_store::ImportError> {
     use pahkat_types::payload::AsDownloadUrl;
+    log::debug!("IMPORTING");
 
     let (target, _, _) = resolve_payload(package_key, query, &*repos)?;
     let config = config.read().unwrap();
 
-    let output_path = download_dir(&config, target.payload.as_download_url());
+    let output_path = download_file_path(&config, target.payload.as_download_url());
+    log::debug!("DIR: {:?}", &installer_path);
+    log::debug!("DIR: {:?}", &output_path);
+    std::fs::create_dir_all(&output_path.parent().unwrap())?;
     std::fs::copy(installer_path, &output_path)?;
     Ok(output_path)
 }
@@ -463,14 +467,14 @@ pub(crate) fn find_package_by_key<'p>(
     log::trace!("Repos: {:?}", &repos);
 
     repos.get(&package_key.repository_url).and_then(|r| {
-        log::trace!("Got repo: {:?}", r);
+        log::trace!("Got repo");
         // TODO: need to check that any release supports the requested channel
         let pkgs = r.packages();
         let pkg = match pkgs.packages().get(&package_key.id) {
             Some(x) => Some(x.to_owned()),
             None => None,
         }?;
-        log::trace!("Found pkg: {:?}", &pkg);
+        log::trace!("Found pkg");
 
         Some(Package::Concrete(to_descriptor(&pkg)))
     })

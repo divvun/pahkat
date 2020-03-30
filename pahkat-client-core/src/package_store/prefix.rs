@@ -139,6 +139,7 @@ impl PackageStore for PrefixPackageStore {
     }
 
     fn import(&self, key: &PackageKey, installer_path: &Path) -> Result<PathBuf, ImportError> {
+        log::debug!("IMPORTING");
         let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
         crate::repo::import(&self.config, key, query, &*repos, installer_path)
