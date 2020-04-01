@@ -76,7 +76,7 @@ impl PackageStore for MacOSPackageStore {
         let repos = self.repos.read().unwrap();
 
         let (target, release) =
-            crate::repo::resolve_payload(key, query, &*repos).map_err(InstallError::Payload)?;
+            crate::repo::resolve_payload(key, &query, &*repos).map_err(InstallError::Payload)?;
         let installer = match target.payload {
             pahkat_types::payload::Payload::MacOSPackage(v) => v,
             _ => return Err(InstallError::WrongPayloadType),
@@ -107,7 +107,7 @@ impl PackageStore for MacOSPackageStore {
         let repos = self.repos.read().unwrap();
 
         let (target, release) =
-            crate::repo::resolve_payload(key, query, &*repos).map_err(UninstallError::Payload)?;
+            crate::repo::resolve_payload(key, &query, &*repos).map_err(UninstallError::Payload)?;
         let installer = match target.payload {
             pahkat_types::payload::Payload::MacOSPackage(v) => v,
             _ => return Err(UninstallError::WrongPayloadType),
@@ -124,7 +124,7 @@ impl PackageStore for MacOSPackageStore {
     fn import(&self, key: &PackageKey, installer_path: &Path) -> Result<PathBuf, ImportError> {
         let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
-        crate::repo::import(&self.config, key, query, &*repos, installer_path)
+        crate::repo::import(&self.config, key, &query, &*repos, installer_path)
     }
 
     fn download(
@@ -134,7 +134,7 @@ impl PackageStore for MacOSPackageStore {
     ) -> Result<PathBuf, crate::download::DownloadError> {
         let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
-        crate::repo::download(&self.config, key, query, &*repos, progress)
+        crate::repo::download(&self.config, key, &query, &*repos, progress)
     }
 
     fn status(
@@ -145,7 +145,7 @@ impl PackageStore for MacOSPackageStore {
         let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
 
-        let (target, release) = crate::repo::resolve_payload(key, query, &*repos)
+        let (target, release) = crate::repo::resolve_payload(key, &query, &*repos)
             .map_err(PackageStatusError::Payload)?;
         let installer = match target.payload {
             pahkat_types::payload::Payload::MacOSPackage(v) => v,

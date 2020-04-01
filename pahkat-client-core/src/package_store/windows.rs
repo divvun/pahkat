@@ -66,7 +66,7 @@ impl PackageStore for WindowsPackageStore {
     ) -> Result<PathBuf, crate::download::DownloadError> {
         let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
-        crate::repo::download(&self.config, key, query, &*repos, progress)
+        crate::repo::download(&self.config, key, &query, &*repos, progress)
     }
 
     fn install(
@@ -78,7 +78,7 @@ impl PackageStore for WindowsPackageStore {
         let repos = self.repos.read().unwrap();
 
         let (target, release, descriptor) =
-            crate::repo::resolve_payload(key, query, &*repos).map_err(InstallError::Payload)?;
+            crate::repo::resolve_payload(key, &query, &*repos).map_err(InstallError::Payload)?;
         let installer = match target.payload {
             pahkat_types::payload::Payload::WindowsExecutable(v) => v,
             _ => return Err(InstallError::WrongPayloadType),
@@ -160,7 +160,7 @@ impl PackageStore for WindowsPackageStore {
         let repos = self.repos.read().unwrap();
 
         let (target, release, descriptor) =
-            crate::repo::resolve_payload(key, query, &*repos).map_err(UninstallError::Payload)?;
+            crate::repo::resolve_payload(key, &query, &*repos).map_err(UninstallError::Payload)?;
         let installer = match target.payload {
             pahkat_types::payload::Payload::WindowsExecutable(v) => v,
             _ => return Err(UninstallError::WrongPayloadType),
@@ -239,7 +239,7 @@ impl PackageStore for WindowsPackageStore {
         let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
 
-        let (target, release, descriptor) = crate::repo::resolve_payload(key, query, &*repos)
+        let (target, release, descriptor) = crate::repo::resolve_payload(key, &query, &*repos)
             .map_err(PackageStatusError::Payload)?;
         let installer = match target.payload {
             pahkat_types::payload::Payload::WindowsExecutable(v) => v,

@@ -87,7 +87,7 @@ impl DownloadManager {
                     log::debug!("Download already exists at {:?}; using.", &dest_file_path);
 
                     return Ok(dest_file_path);
-                },
+                }
                 _ => {}
             }
         }
@@ -134,14 +134,16 @@ impl DownloadManager {
         // #[cfg(windows)]
         // let mut file = fdlock.try_lock().map_err(|_| DownloadError::LockFailure)?;
         #[cfg(windows)]
-        let mut file = Box::new(fs::OpenOptions::new()
-            .append(true)
-            .open(&tmp_dest_path)
-            .or_else(|_| fs::File::create(&tmp_dest_path))
-            .map_err(|e| {
-                log::error!("create file error: {:?}", &e);
-                DownloadError::IoError(e)
-            })?);
+        let mut file = Box::new(
+            fs::OpenOptions::new()
+                .append(true)
+                .open(&tmp_dest_path)
+                .or_else(|_| fs::File::create(&tmp_dest_path))
+                .map_err(|e| {
+                    log::error!("create file error: {:?}", &e);
+                    DownloadError::IoError(e)
+                })?,
+        );
 
         log::debug!("Got lock on {}", tmp_dest_path.display());
         let meta = file.metadata().map_err(|e| {
@@ -159,11 +161,7 @@ impl DownloadManager {
         let req = req.build().map_err(DownloadError::ReqwestError)?;
 
         // Get URL headers
-        let mut res = self
-            .client
-            .execute(req)
-            .await?
-            .error_for_status()?;
+        let mut res = self.client.execute(req).await?.error_for_status()?;
 
         // Get content length and send if exists
         let content_len = res

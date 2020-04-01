@@ -65,7 +65,7 @@ macro_rules! platform {
         {
             return $name;
         }
-    }}
+    }};
 }
 
 #[inline(always)]
@@ -83,7 +83,7 @@ macro_rules! arch {
         {
             return Some($name);
         }
-    }}
+    }};
 }
 
 #[inline(always)]

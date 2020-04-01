@@ -98,7 +98,7 @@ pub extern "C" fn pahkat_prefix_package_store_download_url(
     let repos = handle.repos();
     let repos = repos.read().unwrap();
 
-    let (target, _, _) = match resolve_payload(&package_key, query, &repos) {
+    let (target, _, _) = match resolve_payload(&package_key, &query, &repos) {
         Ok(v) => v,
         Err(e) => return Err(crate::download::DownloadError::Payload(e)).box_err(),
     };
@@ -155,11 +155,9 @@ pub extern "C" fn pahkat_prefix_package_config(
 
 #[cthulhu::invoke(return_marshaler = "cursed::BoxMarshaler::<PrefixPackageTransaction>")]
 pub extern "C" fn pahkat_prefix_transaction_new(
-    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)]
-    handle: Arc<PrefixPackageStore>,
-    
-    #[marshal(cursed::StrMarshaler)] 
-    actions: &str,
+    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
+
+    #[marshal(cursed::StrMarshaler)] actions: &str,
 ) -> Result<Box<PrefixPackageTransaction>, Box<dyn Error>> {
     eprintln!("{:?}", &actions);
     let actions: Vec<PrefixPackageAction> = serde_json::from_str(actions)?;

@@ -142,7 +142,7 @@ impl PackageStore for PrefixPackageStore {
         log::debug!("IMPORTING");
         let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
-        crate::repo::import(&self.config, key, query, &*repos, installer_path)
+        crate::repo::import(&self.config, key, &query, &*repos, installer_path)
     }
 
     fn download(
@@ -152,7 +152,7 @@ impl PackageStore for PrefixPackageStore {
     ) -> Result<PathBuf, crate::download::DownloadError> {
         let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
-        crate::repo::download(&self.config, key, query, &*repos, progress)
+        crate::repo::download(&self.config, key, &query, &*repos, progress)
     }
 
     fn install(
@@ -161,13 +161,10 @@ impl PackageStore for PrefixPackageStore {
         target: &Self::Target,
     ) -> Result<PackageStatus, InstallError> {
         let mut query = crate::repo::ReleaseQuery::from(key).and_payloads(vec!["TarballPackage"]);
-        // query.platform = "ios";
-        // log::debug!("query: {:?}", &query);
-
         let repos = self.repos.read().unwrap();
 
         let (target, release, package) =
-            crate::repo::resolve_payload(key, query, &*repos).map_err(InstallError::Payload)?;
+            crate::repo::resolve_payload(key, &query, &*repos).map_err(InstallError::Payload)?;
         let installer = match target.payload {
             pahkat_types::payload::Payload::TarballPackage(v) => v,
             _ => return Err(InstallError::WrongPayloadType),
@@ -215,7 +212,7 @@ impl PackageStore for PrefixPackageStore {
         {
             let record = PackageDbRecord {
                 id: 0,
-                url: key.to_string(),
+                url: key.clone().without_query_params().to_string(),
                 version: release.version.to_string(),
                 files,
                 dependencies,
@@ -289,7 +286,7 @@ impl PackageStore for PrefixPackageStore {
 
         let repos = self.repos.read().unwrap();
 
-        let (target, release, package) = crate::repo::resolve_payload(key, query, &*repos)
+        let (target, release, package) = crate::repo::resolve_payload(key, &query, &*repos)
             .map_err(PackageStatusError::Payload)?;
         let _installer = match target.payload {
             pahkat_types::payload::Payload::TarballPackage(v) => v,
@@ -387,13 +384,17 @@ impl<'a> PackageDbConnection<'a> {
         use chrono::prelude::*;
         let utc: DateTime<Utc> = Utc::now();
         let utc = format!("{:?}", utc);
-        
+
         let tx = self.0.transaction().unwrap();
 
         tx.execute_named(
-            "REPLACE INTO packages(id, url, version, installed_on, updated_on) VALUES (:id, :url, :version, :installed_on, :updated_on)",
+            "INSERT INTO packages(url, version, installed_on, updated_on)
+            VALUES (:url, :version, :installed_on, :updated_on)
+            ON CONFLICT(url) DO UPDATE SET
+                version=excluded.version,
+                updated_on=excluded.updated_on",
             &[
-                (":id", &pkg.id),
+                // (":id", &pkg.id),
                 (":url", &pkg.url),
                 (":version", &pkg.version),
                 (":installed_on", &utc),
@@ -401,16 +402,15 @@ impl<'a> PackageDbConnection<'a> {
             ],
         )
         .unwrap();
+        let id = tx.last_insert_rowid();
+        log::trace!("Row id: {}", id);
         tx.execute(
             "DELETE FROM packages_dependencies WHERE package_id = ?",
-            &[&pkg.id],
+            &[id],
         )
         .unwrap();
-        tx.execute(
-            "DELETE FROM packages_files WHERE package_id = ?",
-            &[&pkg.id],
-        )
-        .unwrap();
+        tx.execute("DELETE FROM packages_files WHERE package_id = ?", &[id])
+            .unwrap();
 
         {
             let mut dep_stmt = tx
@@ -419,7 +419,7 @@ impl<'a> PackageDbConnection<'a> {
                 )
                 .unwrap();
             for dep_url in &pkg.dependencies {
-                dep_stmt.execute_named(&[(":id", &pkg.id), (":dep_url", &*dep_url)])?;
+                dep_stmt.execute_named(&[(":id", &id), (":dep_url", &*dep_url)])?;
             }
 
             let mut file_stmt = tx
@@ -427,7 +427,7 @@ impl<'a> PackageDbConnection<'a> {
 
             for file_path in &pkg.files {
                 file_stmt
-                    .execute_named(&[(":id", &pkg.id), (":path", &file_path.as_str())])
+                    .execute_named(&[(":id", &id), (":path", &file_path.as_str())])
                     .unwrap();
             }
         }
@@ -458,7 +458,7 @@ impl PackageDbRecord {
         key: &PackageKey,
     ) -> Option<PackageDbRecord> {
         let conn = PackageDbConnection(conn);
-        let url = key.to_string();
+        let url = key.clone().without_query_params().to_string();
 
         let version = match conn.version(&url) {
             Some(v) => v,
@@ -478,10 +478,12 @@ impl PackageDbRecord {
     }
 
     pub fn save(&self, conn: &mut rusqlite::Connection) -> rusqlite::Result<()> {
+        log::trace!("Saving package record: {:?}", &self);
         PackageDbConnection(conn).replace_pkg(self)
     }
 
     pub fn delete(self, conn: &mut rusqlite::Connection) -> rusqlite::Result<()> {
+        log::trace!("Deleting package record: {:?}", &self);
         PackageDbConnection(conn).remove_pkg(&self)
     }
 }

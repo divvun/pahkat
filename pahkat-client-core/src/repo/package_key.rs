@@ -82,6 +82,12 @@ impl<'a> From<&'a PackageKey> for Url {
             }
         }
 
+        if let Some(q) = url.query() {
+            if q.trim() == "" {
+                url.set_query(None);
+            }
+        }
+
         url
     }
 }

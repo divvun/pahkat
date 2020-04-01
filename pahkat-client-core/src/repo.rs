@@ -231,7 +231,7 @@ impl<'a> ReleaseQuery<'a> {
 
 pub(crate) fn resolve_payload<'a>(
     package_key: &PackageKey,
-    query: ReleaseQuery<'a>,
+    query: &ReleaseQuery<'a>,
     repos: &'a HashMap<Url, LoadedRepository>,
 ) -> Result<
     (
@@ -241,7 +241,9 @@ pub(crate) fn resolve_payload<'a>(
     ),
     PayloadError,
 > {
+    log::trace!("Resolving payload");
     let package = find_package_by_key(package_key, repos).ok_or(PayloadError::NoPackage)?;
+    log::trace!("Package found");
     let descriptor: &pahkat_types::package::Descriptor = &package
         .try_into()
         .map_err(|_| PayloadError::NoConcretePackage)?;
@@ -255,14 +257,14 @@ pub(crate) fn resolve_payload<'a>(
 pub(crate) fn import<'a>(
     config: &Arc<RwLock<Config>>,
     package_key: &PackageKey,
-    query: ReleaseQuery<'a>,
+    query: &ReleaseQuery<'a>,
     repos: &HashMap<Url, LoadedRepository>,
     installer_path: &Path,
 ) -> Result<std::path::PathBuf, crate::package_store::ImportError> {
     use pahkat_types::payload::AsDownloadUrl;
     log::debug!("IMPORTING");
 
-    let (target, _, _) = resolve_payload(package_key, query, &*repos)?;
+    let (target, _, _) = resolve_payload(package_key, &query, &*repos)?;
     let config = config.read().unwrap();
 
     let output_path = download_file_path(&config, target.payload.as_download_url());
@@ -276,15 +278,26 @@ pub(crate) fn import<'a>(
 pub(crate) fn download<'a>(
     config: &Arc<RwLock<Config>>,
     package_key: &PackageKey,
-    query: ReleaseQuery<'a>,
+    query: &ReleaseQuery<'a>,
     repos: &HashMap<Url, LoadedRepository>,
     progress: Box<dyn Fn(u64, u64) -> bool + Send + 'static>,
 ) -> Result<std::path::PathBuf, crate::download::DownloadError> {
+    log::trace!("Downloading {} {:?}", package_key, &query);
     use pahkat_types::AsDownloadUrl;
 
-    let (target, _, _) = match resolve_payload(package_key, query, repos) {
+    let (target, _, _) = match resolve_payload(package_key, &query, repos) {
         Ok(v) => v,
-        Err(e) => return Err(crate::download::DownloadError::Payload(e)),
+        Err(e) => {
+            return {
+                log::error!(
+                    "Failed to resolve: {} {:?} {:?}",
+                    &package_key,
+                    &query,
+                    &repos
+                );
+                Err(crate::download::DownloadError::Payload(e))
+            }
+        }
     };
 
     let url = target.payload.as_download_url();
@@ -461,10 +474,9 @@ pub(crate) fn find_package_by_key<'p>(
     repos: &'p HashMap<Url, LoadedRepository>,
 ) -> Option<Package> {
     log::trace!("Resolving package...");
-    log::trace!("My pkg id: {}", &package_key);
+    log::trace!("My pkg id: {}", &package_key.id);
     log::trace!("Repo url: {}", &package_key.repository_url);
-
-    log::trace!("Repos: {:?}", &repos);
+    log::trace!("Repos: {:?}", repos.keys());
 
     repos.get(&package_key.repository_url).and_then(|r| {
         log::trace!("Got repo");
