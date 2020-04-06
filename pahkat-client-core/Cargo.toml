@@ -6,7 +6,7 @@ edition = "2018"
 license = "Apache-2.0 OR MIT"
 
 [lib]
-crate-type = ["staticlib", "dylib", "rlib"]
+crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dependencies]
 # Prefix feature
