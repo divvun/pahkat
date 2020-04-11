@@ -1,6 +1,10 @@
 pub mod package;
 pub mod repo;
 
+pub(crate) mod fbs {
+    butte_build::include_fbs!("index");
+}
+
 pub trait Request {
     type Error;
     type Partial;

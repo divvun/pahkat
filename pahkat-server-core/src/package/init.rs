@@ -38,7 +38,6 @@ pub struct PartialRequest<'a> {
     pub tags: Option<&'a [String]>,
 }
 
-
 #[derive(Debug, thiserror::Error)]
 pub enum RequestError {
     #[error("Provided path was invalid")]
@@ -68,19 +67,19 @@ fn open_repo(path: &Path) -> Option<pahkat_types::repo::Repository> {
 
 fn find_repo(path: &Path) -> Result<&Path, FindRepoError> {
     let mut path = path;
-    
+
     if path.ends_with("index.toml") {
         path = path.parent().unwrap();
     }
 
     if let Some(_) = open_repo(path) {
-        return Ok(path)
+        return Ok(path);
     }
 
     while let Some(parent) = path.parent() {
         path = parent;
         if let Some(_) = open_repo(path) {
-            return Ok(path)
+            return Ok(path);
         }
     }
 
@@ -110,7 +109,7 @@ impl<'a> crate::Request for Request<'a> {
         };
 
         let _ = find_repo(&repo_path)?;
-        
+
         let id = match partial.id {
             Some(id) => Cow::Borrowed(id),
             None => Cow::Owned(
@@ -177,7 +176,7 @@ pub enum Error {
 
     #[error("Failed to serialize TOML for `{0}`")]
     SerializeToml(PathBuf, #[source] toml::ser::Error),
-    
+
     #[error("Could not find repository at provided path")]
     NoRepo(#[from] FindRepoError),
 }
@@ -185,7 +184,9 @@ pub enum Error {
 pub fn init<'a>(request: Request<'a>) -> Result<(), Error> {
     println!("{:?}", request);
 
-    let pkg_dir = find_repo(&request.repo_path)?.join("packages").join(&*request.id);
+    let pkg_dir = find_repo(&request.repo_path)?
+        .join("packages")
+        .join(&*request.id);
 
     // Create the basic index.toml file
     let data = pahkat_types::package::DescriptorData::builder()

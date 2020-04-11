@@ -2,27 +2,15 @@ mod path;
 mod repos;
 mod settings;
 
-use hashbrown::HashMap;
-use std::fmt;
-use std::fs::{self, create_dir_all, File};
-use std::io::{self, Write};
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock};
-use url::Url;
-
-use serde::de::{self, Deserializer, Visitor};
-use serde::ser::Serializer;
-use serde::{Deserialize, Serialize};
-
-use crate::defaults;
-use crate::{LoadedRepository, PackageKey};
-
-use once_cell::sync::{Lazy, OnceCell};
-use thiserror::Error;
-
 pub use path::ConfigPath;
 pub use repos::{RepoRecord, Repos, ReposData};
 pub use settings::{Settings, SettingsData};
+
+use std::path::Path;
+
+use thiserror::Error;
+
+use crate::defaults;
 
 #[derive(Debug, Error)]
 pub enum Error {

@@ -27,6 +27,13 @@ impl FromStr for SemanticVersion {
     }
 }
 
+impl SemanticVersion {
+    #[inline]
+    pub fn to_string(&self) -> String {
+        self.0.to_string()
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, PartialOrd, Ord, Eq, Hash)]
 #[repr(transparent)]
 pub struct TimestampVersion(DateTime<Utc>);
@@ -44,6 +51,14 @@ impl FromStr for TimestampVersion {
         .map(TimestampVersion)
     }
 }
+
+impl TimestampVersion {
+    #[inline]
+    pub fn to_string(&self) -> String {
+        self.0.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+    }
+}
+
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash, Eq)]
 #[serde(untagged)]

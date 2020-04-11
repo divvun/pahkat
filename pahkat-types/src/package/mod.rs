@@ -20,6 +20,17 @@ pub enum Package {
     Redirect(Redirect),
 }
 
+impl Package {
+    #[inline]
+    pub fn id(&self) -> &str {
+        match self {
+            Package::Concrete(d) => &d.package.id,
+            Package::Synthetic(d) => &d.synthetic.id,
+            Package::Redirect(d) => &d.redirect.id,
+        }
+    }
+}
+
 impl TryFrom<Package> for Descriptor {
     type Error = Package;
 
@@ -144,6 +155,7 @@ impl Ord for Descriptor {
 )]
 #[non_exhaustive]
 pub struct RedirectData {
+    pub id: String,
     pub url: Url,
 }
 

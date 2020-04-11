@@ -15,9 +15,10 @@ use serde::Deserialize;
 use url::Url;
 
 use super::{PackageStore, SharedRepos, SharedStoreConfig};
-use crate::download::DownloadManager;
 use crate::package_store::ImportError;
 use crate::{cmp, Config, PackageKey};
+use crate::transaction::{PackageStatus, PackageStatusError};
+use crate::transaction::{install::InstallError, install::ProcessError, uninstall::UninstallError};
 
 #[cfg(target_os = "macos")]
 #[inline(always)]
@@ -25,9 +26,6 @@ pub fn global_uninstall_path() -> PathBuf {
     PathBuf::from("/Library/Application Support/Pahkat/uninstall")
 }
 
-use crate::transaction::{PackageStatus, PackageStatusError};
-
-use crate::transaction::{install::InstallError, install::ProcessError, uninstall::UninstallError};
 
 fn from_str<'de, T, D>(deserializer: D) -> Result<T, D::Error>
 where
@@ -75,7 +73,7 @@ impl PackageStore for MacOSPackageStore {
         let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
 
-        let (target, release) =
+        let (target, release, _) =
             crate::repo::resolve_payload(key, &query, &*repos).map_err(InstallError::Payload)?;
         let installer = match target.payload {
             pahkat_types::payload::Payload::MacOSPackage(v) => v,
@@ -94,7 +92,7 @@ impl PackageStore for MacOSPackageStore {
             .map_err(InstallError::InstallerFailure)?;
 
         Ok(self
-            .status_impl(&release, &installer, key, install_target)
+            .status_impl(&release, &installer, install_target)
             .unwrap())
     }
 
@@ -106,7 +104,7 @@ impl PackageStore for MacOSPackageStore {
         let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
 
-        let (target, release) =
+        let (target, release, _) =
             crate::repo::resolve_payload(key, &query, &*repos).map_err(UninstallError::Payload)?;
         let installer = match target.payload {
             pahkat_types::payload::Payload::MacOSPackage(v) => v,
@@ -117,7 +115,7 @@ impl PackageStore for MacOSPackageStore {
             .map_err(UninstallError::UninstallerFailure)?;
 
         Ok(self
-            .status_impl(&release, &installer, key, install_target)
+            .status_impl(&release, &installer, install_target)
             .unwrap())
     }
 
@@ -145,14 +143,14 @@ impl PackageStore for MacOSPackageStore {
         let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
 
-        let (target, release) = crate::repo::resolve_payload(key, &query, &*repos)
+        let (target, release, _) = crate::repo::resolve_payload(key, &query, &*repos)
             .map_err(PackageStatusError::Payload)?;
         let installer = match target.payload {
             pahkat_types::payload::Payload::MacOSPackage(v) => v,
             _ => return Err(PackageStatusError::WrongPayloadType),
         };
 
-        self.status_impl(&release, &installer, key, install_target)
+        self.status_impl(&release, &installer, install_target)
     }
 
     fn all_statuses(
@@ -182,13 +180,13 @@ impl PackageStore for MacOSPackageStore {
     }
 }
 
-impl std::default::Default for MacOSPackageStore {
-    fn default() -> Self {
-        // let config = StoreConfig::load_or_default(true);
-        // MacOSPackageStore::new(config)
-        todo!()
-    }
-}
+// impl std::default::Default for MacOSPackageStore {
+//     fn default() -> Self {
+//         // let config = StoreConfig::load_or_default(true);
+//         // MacOSPackageStore::new(config)
+//         todo!()
+//     }
+// }
 
 impl MacOSPackageStore {
     pub fn new(config: Arc<RwLock<Config>>) -> MacOSPackageStore {
@@ -206,7 +204,6 @@ impl MacOSPackageStore {
         &self,
         release: &pahkat_types::package::Release,
         installer: &macos::Package,
-        id: &PackageKey,
         target: &InstallTarget,
     ) -> Result<PackageStatus, PackageStatusError> {
         let pkg_info = match get_package_info(&installer.pkg_id, target) {
@@ -223,7 +220,6 @@ impl MacOSPackageStore {
             }
         };
 
-        let config = self.config.read().unwrap();
         let status = self::cmp::cmp(&pkg_info.pkg_version, &release.version);
 
         status

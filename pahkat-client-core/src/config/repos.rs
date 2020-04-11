@@ -1,25 +1,13 @@
-use hashbrown::HashMap;
-use indexmap::IndexMap;
-use std::fmt;
-use std::fs::{self, create_dir_all, File};
-use std::io::{self, Write};
+use std::fs::File;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock};
+
+use indexmap::IndexMap;
+use serde::{Deserialize, Serialize};
 use url::Url;
 
-use serde::de::{self, Deserializer, Visitor};
-use serde::ser::Serializer;
-use serde::{Deserialize, Serialize};
-
-use crate::defaults;
-use crate::{LoadedRepository, PackageKey};
-
-use once_cell::sync::{Lazy, OnceCell};
-use thiserror::Error;
-
-use super::path::ConfigPath;
-use super::FileError;
 use crate::config::Permission;
+use super::FileError;
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct RepoRecord {

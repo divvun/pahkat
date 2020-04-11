@@ -114,7 +114,9 @@ pub fn create_agent() -> Agent {
     Agent::builder()
         .name("pahkat".to_string())
         .version(env!("CARGO_PKG_VERSION").into())
-        .url(Some(Url::parse("https://github.com/divvun/pahkat/").unwrap()))
+        .url(Some(
+            Url::parse("https://github.com/divvun/pahkat/").unwrap(),
+        ))
         .build()
 }
 

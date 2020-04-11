@@ -8,6 +8,7 @@ pub mod package_store;
 pub mod repo;
 pub mod transaction;
 
+mod fbs;
 mod cmp;
 mod config;
 mod download;
@@ -44,3 +45,5 @@ static BASIC_RUNTIME: Lazy<Mutex<tokio::runtime::Runtime>> = Lazy::new(|| {
 fn block_on<F: std::future::Future>(future: F) -> F::Output {
     BASIC_RUNTIME.lock().unwrap().block_on(future)
 }
+
+pub(crate) use fbs::generated::pahkat as pahkat_fbs;

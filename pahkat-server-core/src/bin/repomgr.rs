@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use url::Url;
 
-use pahkat_server_core::{repo, package, Request};
+use pahkat_server_core::{package, repo, Request};
 
 #[derive(Debug, StructOpt)]
 #[structopt()]
@@ -39,9 +39,23 @@ impl RepoInitCommand {
 }
 
 #[derive(Debug, StructOpt)]
+struct RepoIndexCommand {
+    #[structopt(parse(from_os_str))]
+    repo_path: Option<PathBuf>,
+}
+
+impl RepoIndexCommand {
+    fn to_partial<'a>(&'a self) -> repo::indexing::PartialRequest<'a> {
+        repo::indexing::PartialRequest::builder()
+            .path(self.repo_path.as_ref().map(|x| &**x))
+            .build()
+    }
+}
+
+#[derive(Debug, StructOpt)]
 struct PackageInitCommand {
     id: Option<String>,
-    
+
     #[structopt(short, long)]
     name: Option<String>,
 
@@ -64,13 +78,13 @@ impl PackageInitCommand {
             .tags(Some(&self.tags))
             .repo_path(self.repo_path.as_ref().map(|x| &**x))
             .build()
-
-        }
+    }
 }
 
 #[derive(Debug, StructOpt)]
 enum RepoCommand {
     Init(RepoInitCommand),
+    Index(RepoIndexCommand),
 }
 
 #[derive(Debug, StructOpt)]
@@ -94,13 +108,17 @@ fn main() -> anyhow::Result<()> {
                 let req = repo::init::Request::new_from_user_input(init.to_partial())?;
                 repo::init::init(req)?;
             }
+            RepoCommand::Index(index) => {
+                let req = repo::indexing::Request::new_from_user_input(index.to_partial())?;
+                repo::indexing::index(req)?;
+            }
         },
         Command::Package(package) => match package {
             PackageCommand::Init(init) => {
                 let req = package::init::Request::new_from_user_input(init.to_partial())?;
                 package::init::init(req)?;
             }
-        }
+        },
     }
 
     Ok(())

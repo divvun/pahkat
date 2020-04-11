@@ -1,27 +1,27 @@
-use hashbrown::HashMap;
-use serde::{Deserialize, Serialize};
-use sha2::digest::Digest;
-use sha2::Sha256;
-use std::path::Path;
-use std::sync::{Arc, RwLock};
-use url::Url;
-
 mod package_key;
 mod repository;
 
 pub use package_key::PackageKey;
 pub use repository::{LoadedRepository, RepoDownloadError};
 
-use crate::config::Config;
-use crate::package_store::PackageStore;
-use crate::transaction::PackageDependencyError;
+use std::path::Path;
+use std::sync::{Arc, RwLock};
+use std::collections::BTreeMap;
+use std::convert::{TryFrom, TryInto};
 
-use pahkat_types::package::{self, Package};
+use url::Url;
+use hashbrown::HashMap;
+use sha2::digest::Digest;
+use sha2::Sha256;
 use thiserror::Error;
 
+use pahkat_types::package::{Package, Release, Version};
+use pahkat_types::payload::Target;
+use crate::config::Config;
 use crate::defaults;
-use crate::transaction::{PackageStatus, PackageStatusError};
-use std::collections::BTreeMap;
+use crate::fbs::PackagesExt;
+use crate::package_store::PackageStore;
+use crate::transaction::{PackageStatus, PackageStatusError, PackageDependencyError};
 
 #[derive(Debug, Clone, Error)]
 pub enum PayloadError {
@@ -35,8 +35,6 @@ pub enum PayloadError {
     CriteriaUnmet(String),
 }
 
-use pahkat_types::package::Version;
-use std::convert::TryInto;
 
 #[derive(Debug, Clone)]
 pub struct ReleaseQuery<'a> {
@@ -135,11 +133,6 @@ pub(crate) struct ReleaseQueryIter<'a> {
     descriptor: &'a pahkat_types::package::Descriptor,
     next_release: usize,
 }
-
-use pahkat_types::{
-    package::Release,
-    payload::{Payload, Target},
-};
 
 #[derive(Debug, Clone)]
 pub(crate) struct ReleaseQueryResponse<'a> {
@@ -358,7 +351,16 @@ where
     let repos = repos.read().unwrap();
 
     if let Some(repo) = repos.get(repo_url) {
-        for id in repo.packages().packages().keys() {
+        let packages = repo.packages();
+        let packages = match packages.packages() {
+            Some(v) => v,
+            None => {
+                log::error!("No packages map in fbs for {:?}!", &repo_url);
+                return map;
+            }
+        };
+
+        for id in packages.keys() {
             let key =
                 PackageKey::unchecked_new(repo.info().repository.url.clone(), id.to_string(), None);
             let status = store.status(&key, target);
@@ -373,102 +375,6 @@ where
     map
 }
 
-fn to_descriptor<'a>(pkg: &'a pahkat_fbs::Descriptor<'a>) -> pahkat_types::package::Descriptor {
-    let descriptor = pahkat_types::package::Descriptor::builder()
-    .package(
-        pahkat_types::package::DescriptorData::builder()
-            .id(pkg.id().into())
-            .tags(
-                pkg.tags()
-                    .map(|tags| tags.iter().map(|x| x.to_string()).collect())
-                    .unwrap_or(vec![]),
-            )
-            .build(),
-    )
-    .name(
-        pkg.name()
-            .map(|x| {
-                let mut out = BTreeMap::new();
-                for (k, v) in x.iter() {
-                    out.insert(k.to_string(), v.to_string());
-                }
-                out
-            })
-            .unwrap_or_else(|| Default::default()),
-    )
-    .description(
-        pkg.description()
-            .map(|x| {
-                let mut out = BTreeMap::new();
-                for (k, v) in x.iter() {
-                    out.insert(k.to_string(), v.to_string());
-                }
-                out
-            })
-            .unwrap_or_else(|| Default::default()),
-    )
-    .release(
-        pkg.release()
-            .unwrap()
-            .iter()
-            .map(|x| {
-                pahkat_types::package::Release::builder()
-                    .version(
-                        pahkat_types::package::version::Version::new(x.version()).unwrap(),
-                    )
-                    .channel(x.channel().map(|x| x.to_string()))
-                    .target(x.target().unwrap().iter().map(|t| {
-                        pahkat_types::payload::Target::builder()
-                            .platform(t.platform().to_string())
-                            .arch(t.arch().map(str::to_string))
-                            .dependencies(t.dependencies()
-                                .map(|x| {
-                                    let mut out = BTreeMap::new();
-                                    for (k, v) in x.iter() {
-                                        out.insert(k.to_string(), v.to_string());
-                                    }
-                                    out
-                                })
-                                .unwrap_or_else(|| Default::default()))
-                            .payload(match t.payload().unwrap() {
-                                pahkat_fbs::Payload::WindowsExecutable(x) => {
-                                    pahkat_types::payload::Payload::WindowsExecutable(pahkat_types::payload::windows::Executable::builder()
-                                        .url(x.url().parse::<url::Url>().unwrap())
-                                        .product_code(x.product_code().to_string())
-                                        .kind(match x.kind() {
-                                            pahkat_fbs::WindowsExecutableKind::NONE => None,
-                                            x => Some(pahkat_fbs::enum_name_windows_executable_kind(x).to_lowercase().to_string())
-                                        })
-                                        .size(x.size_())
-                                        .installed_size(x.installed_size())
-                                        .build())
-                                }
-                                pahkat_fbs::Payload::MacOSPackage(x) => {
-                                    pahkat_types::payload::Payload::MacOSPackage(pahkat_types::payload::macos::Package::builder()
-                                        .url(x.url().parse::<url::Url>().unwrap())
-                                        .pkg_id(x.pkg_id().to_string())
-                                        .size(x.size_())
-                                        .installed_size(x.installed_size())
-                                        .build())
-                                }
-                                pahkat_fbs::Payload::TarballPackage(x) => {
-                                    pahkat_types::payload::Payload::TarballPackage(pahkat_types::payload::tarball::Package::builder()
-                                        .url(x.url().parse::<url::Url>().unwrap())
-                                        .size(x.size_())
-                                        .installed_size(x.installed_size())
-                                        .build())
-                                }
-                            })
-                            .build()
-                    }).collect())
-                    .build()
-            })
-            .collect(),
-    )
-    .build();
-    descriptor
-}
-
 pub(crate) fn find_package_by_key<'p>(
     package_key: &PackageKey,
     repos: &'p HashMap<Url, LoadedRepository>,
@@ -481,18 +387,24 @@ pub(crate) fn find_package_by_key<'p>(
     repos.get(&package_key.repository_url).and_then(|r| {
         log::trace!("Got repo");
         // TODO: need to check that any release supports the requested channel
-        let pkgs = r.packages();
-        let pkg = match pkgs.packages().get(&package_key.id) {
-            Some(x) => Some(x.to_owned()),
-            None => None,
-        }?;
+        let packages = r.packages();
+        let packages = match packages.packages() {
+            Some(v) => v,
+            None => {
+                log::error!("No packages map in fbs for {:?}!", &package_key.repository_url);
+                return None;
+            }
+        };
+
+        let pkg = match packages.get(&package_key.id) {
+            Some(x) => x,
+            None => return None,
+        };
         log::trace!("Found pkg");
 
-        Some(Package::Concrete(to_descriptor(&pkg)))
+        (&pkg).try_into().map(Package::Concrete).ok()
     })
 }
-
-use std::convert::TryFrom;
 
 pub(crate) fn find_package_by_id<P, T>(
     store: &P,
@@ -509,14 +421,24 @@ where
     };
 
     repos.iter().find_map(|(key, repo)| {
-        repo.packages().packages().get(package_id).map(|x| {
+        let packages = repo.packages();
+        let packages = match packages.packages() {
+            Some(v) => v,
+            None => {
+                log::error!("No packages map in fbs for {:?}!", &key);
+                return None;
+            }
+        };
+
+        packages.get(package_id).map(|x| {
             let key = PackageKey::unchecked_new(
                 repo.info().repository.url.clone(),
                 package_id.to_string(),
                 None,
             );
-            (key, Package::Concrete(to_descriptor(&x)))
-        })
+
+            (&x).try_into().map(|p| (key, Package::Concrete(p))).ok()
+        })?
     })
 }
 

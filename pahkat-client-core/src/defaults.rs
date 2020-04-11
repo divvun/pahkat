@@ -1,6 +1,5 @@
 use crate::config::ConfigPath;
 use directories::BaseDirs;
-use once_cell::sync::OnceCell;
 use std::path::PathBuf;
 use url::Url;
 
@@ -69,6 +68,7 @@ macro_rules! platform {
 }
 
 #[inline(always)]
+#[allow(unreachable_code)]
 pub(crate) const fn platform() -> &'static str {
     platform!("windows");
     platform!("macos");
@@ -87,6 +87,7 @@ macro_rules! arch {
 }
 
 #[inline(always)]
+#[allow(unreachable_code)]
 pub(crate) const fn arch() -> Option<&'static str> {
     arch!("x86_64");
     arch!("x86");
@@ -100,16 +101,19 @@ pub(crate) const fn arch() -> Option<&'static str> {
 
 #[inline(always)]
 pub(crate) fn payloads() -> &'static [&'static str] {
-    #[cfg(feature = "windows")]
+    #[cfg(all(feature = "windows", not(feature = "macos"), not(feature = "prefix")))]
     {
         &["WindowsExecutable"]
     }
-    #[cfg(feature = "macos")]
+    #[cfg(all(not(feature = "windows"), feature = "macos", not(feature = "prefix")))]
     {
         &["MacOSPackage"]
     }
-    #[cfg(feature = "prefix")]
+    #[cfg(all(not(feature = "windows"), not(feature = "macos"), feature = "prefix"))]
     {
         &["TarballPackage"]
     }
+
+    #[cfg(all(not(feature = "windows"), not(feature = "macos"), not(feature = "prefix")))]
+    compile_error!("One of the above features must be enabled");
 }

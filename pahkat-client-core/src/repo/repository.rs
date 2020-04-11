@@ -1,23 +1,19 @@
-// use pahkat_types::{
-//     Package, PackageMap, Packages, Repository as RepositoryMeta, VirtualMap, Virtuals,
-// };
-use serde::{Deserialize, Serialize};
-use sha2::digest::Digest;
-use sha2::Sha256;
-use std::fs::{self, File};
 use std::path::Path;
-use std::time::SystemTime;
+
+use serde::{Deserialize, Serialize};
 use url::Url;
 
-fn last_modified_cache(repo_cache_dir: &Path) -> SystemTime {
-    match std::fs::metadata(repo_cache_dir.join("cache.json")) {
-        Ok(v) => match v.modified() {
-            Ok(v) => v,
-            Err(_) => std::time::SystemTime::UNIX_EPOCH,
-        },
-        Err(_) => std::time::SystemTime::UNIX_EPOCH,
-    }
-}
+use crate::pahkat_fbs;
+
+// fn last_modified_cache(repo_cache_dir: &Path) -> SystemTime {
+//     match std::fs::metadata(repo_cache_dir.join("cache.json")) {
+//         Ok(v) => match v.modified() {
+//             Ok(v) => v,
+//             Err(_) => std::time::SystemTime::UNIX_EPOCH,
+//         },
+//         Err(_) => std::time::SystemTime::UNIX_EPOCH,
+//     }
+// }
 
 #[derive(Debug, thiserror::Error)]
 pub enum RepoDownloadError {
@@ -132,8 +128,8 @@ impl LoadedRepository {
         &self.info
     }
 
-    pub fn packages<'a>(&'a self) -> pahkat_fbs::Packages<'a> {
-        pahkat_fbs::get_root_as_packages(&self.packages)
+    pub fn packages<'a>(&'a self) -> pahkat_fbs::Packages<&'a [u8]> {
+        pahkat_fbs::Packages::get_root(&*self.packages).expect("packages must always exist")
     }
 
     pub fn meta(&self) -> &LoadedRepositoryMeta {

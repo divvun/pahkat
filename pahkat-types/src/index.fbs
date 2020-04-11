@@ -1,12 +1,12 @@
 namespace pahkat;
 
 // union Version {
-//     Unknown:string,
+//     Opaque:string,
 //     Semantic:string,
 //     Timestamp:string
 // }
 
-enum WindowsExecutableFlags: uint8 (bit_flags) {
+enum WindowsExecutableFlag: uint8 { // (bit_flags) {
     TargetSystem = 0,
     TargetUser = 1,
     RequiresReboot = 6,
@@ -25,13 +25,15 @@ table WindowsExecutable {
     product_code: string (required);
     size: uint64;
     installed_size: uint64;
-    flags: WindowsExecutableFlags = TargetSystem;
+    // WORKAROUND LACK OF ENUM BITFLAGS IN RUST
+    //flags: WindowsExecutableFlag = TargetSystem;
+    flags: uint8;
     kind: WindowsExecutableKind;
     args: string;
     uninstall_args: string;
 }
 
-enum MacOSPackageFlags: uint8 (bit_flags) {
+enum MacOSPackageFlag: uint8 { // (bit_flags) {
     TargetSystem = 0,
     TargetUser = 1,
     RequiresReboot = 6,
@@ -43,7 +45,9 @@ table MacOSPackage {
     pkg_id: string (required);
     size: uint64;
     installed_size: uint64;
-    flags: MacOSPackageFlags = TargetSystem;
+    // WORKAROUND LACK OF ENUM BITFLAGS IN RUST
+    // flags: MacOSPackageFlag = TargetSystem;
+    flags: uint8;
 }
 
 table TarballPackage {
@@ -107,7 +111,7 @@ table Packages {
     // FIXME: workaround for unions of vecs
     packages_values_types: [uint8];
     packages_values: [Descriptor];
-    // packages_values: [Package];
+    //packages_values: [Package];
 }
 
 root_type Packages;

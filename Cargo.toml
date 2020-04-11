@@ -1,6 +1,5 @@
 [workspace]
 members = [
-    "pahkat-fbs",
     "pahkat-types",
     "pahkat-common",
     "pahkat-server",

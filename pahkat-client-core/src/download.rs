@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::{self, BufWriter, Write};
+use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::thread::JoinHandle;
 
@@ -23,11 +23,11 @@ pub trait Download {
 pub(crate) struct DownloadManager {
     client: reqwest::Client,
     path: PathBuf,
-    max_concurrent_downloads: u8,
+    // max_concurrent_downloads: u8,
 }
 
 impl DownloadManager {
-    pub fn new(path: PathBuf, max_concurrent_downloads: u8) -> DownloadManager {
+    pub fn new(path: PathBuf, _max_concurrent_downloads: u8) -> DownloadManager {
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(60))
             .build()
@@ -36,7 +36,7 @@ impl DownloadManager {
         DownloadManager {
             client,
             path,
-            max_concurrent_downloads,
+            // max_concurrent_downloads,
         }
     }
 
@@ -234,6 +234,4 @@ pub enum DownloadError {
 
     #[error("Error downloading file")]
     ReqwestError(#[from] reqwest::Error),
-    // PersistError(tempfile::PersistError),
-    // HttpStatusFailure(u16),
 }
