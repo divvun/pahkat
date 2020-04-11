@@ -281,7 +281,6 @@ mod tests {
         let windivvun = std::fs::read_to_string(windivvun).unwrap();
         let windivvun: Descriptor = toml::from_str(&windivvun).unwrap();
 
-        
         println!(
             "{}",
             serde_json::to_string_pretty(&[&speller_sme, &windivvun]).unwrap()

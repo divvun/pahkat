@@ -1,6 +1,6 @@
 use std::convert::TryFrom;
 
-pub(in super) mod generated {
+pub(super) mod generated {
     #![allow(dead_code)]
     butte_build::include_fbs!("index");
 }
@@ -50,10 +50,13 @@ impl<B: AsRef<[u8]>> TargetExt for pahkat_fbs::Target<B> {
     }
 }
 
-fn build_target<B: AsRef<[u8]>>(t: &pahkat_fbs::Target<B>) -> Result<pahkat_types::payload::Target, butte::Error> {
+fn build_target<B: AsRef<[u8]>>(
+    t: &pahkat_fbs::Target<B>,
+) -> Result<pahkat_types::payload::Target, butte::Error> {
     let platform = t.platform()?.to_string();
     let arch = t.arch()?.map(str::to_string);
-    let dependencies = t.dependencies()
+    let dependencies = t
+        .dependencies()
         .map(|x| {
             let mut out = std::collections::BTreeMap::new();
             for (k, v) in x.iter() {
@@ -64,32 +67,38 @@ fn build_target<B: AsRef<[u8]>>(t: &pahkat_fbs::Target<B>) -> Result<pahkat_type
         .unwrap_or_else(|| Default::default());
     let payload = match t.payload()? {
         pahkat_fbs::Payload::WindowsExecutable(x) => {
-            pahkat_types::payload::Payload::WindowsExecutable(pahkat_types::payload::windows::Executable::builder()
-                .url(x.url()?.parse::<url::Url>().unwrap())
-                .product_code(x.product_code()?.to_string())
-                .kind(match x.kind()?.unwrap() {
-                    pahkat_fbs::WindowsExecutableKind::NONE => None,
-                    x => Some(pahkat_fbs::enum_name_windows_executable_kind(x).to_lowercase().to_string())
-                })
-                .size(x.size()?.unwrap())
-                .installed_size(x.installed_size()?.unwrap())
-                .build())
+            pahkat_types::payload::Payload::WindowsExecutable(
+                pahkat_types::payload::windows::Executable::builder()
+                    .url(x.url()?.parse::<url::Url>().unwrap())
+                    .product_code(x.product_code()?.to_string())
+                    .kind(match x.kind()?.unwrap() {
+                        pahkat_fbs::WindowsExecutableKind::NONE => None,
+                        x => Some(
+                            pahkat_fbs::enum_name_windows_executable_kind(x)
+                                .to_lowercase()
+                                .to_string(),
+                        ),
+                    })
+                    .size(x.size()?.unwrap())
+                    .installed_size(x.installed_size()?.unwrap())
+                    .build(),
+            )
         }
-        pahkat_fbs::Payload::MacOSPackage(x) => {
-            pahkat_types::payload::Payload::MacOSPackage(pahkat_types::payload::macos::Package::builder()
+        pahkat_fbs::Payload::MacOSPackage(x) => pahkat_types::payload::Payload::MacOSPackage(
+            pahkat_types::payload::macos::Package::builder()
                 .url(x.url()?.parse::<url::Url>().unwrap())
                 .pkg_id(x.pkg_id()?.to_string())
                 .size(x.size()?.unwrap())
                 .installed_size(x.installed_size()?.unwrap())
-                .build())
-        }
-        pahkat_fbs::Payload::TarballPackage(x) => {
-            pahkat_types::payload::Payload::TarballPackage(pahkat_types::payload::tarball::Package::builder()
+                .build(),
+        ),
+        pahkat_fbs::Payload::TarballPackage(x) => pahkat_types::payload::Payload::TarballPackage(
+            pahkat_types::payload::tarball::Package::builder()
                 .url(x.url()?.parse::<url::Url>().unwrap())
                 .size(x.size()?.unwrap())
                 .installed_size(x.installed_size()?.unwrap())
-                .build())
-        }
+                .build(),
+        ),
     };
 
     Ok(pahkat_types::payload::Target::builder()
@@ -107,60 +116,63 @@ impl<'a> TryFrom<&'a pahkat_fbs::Descriptor<&'a [u8]>> for pahkat_types::package
         use std::collections::BTreeMap;
 
         let descriptor = pahkat_types::package::Descriptor::builder()
-        .package(
-            pahkat_types::package::DescriptorData::builder()
-                .id(pkg.id()?.into())
-                .tags(pkg.tags()?
-                    .map(|tags| tags.iter().map(|x| x.unwrap_or("").to_string()).collect())
-                    .unwrap_or(vec![]),
-                )
-                .build(),
-        )
-        .name(
-            pkg.name()
-                .map(|x| {
-                    let mut out = BTreeMap::new();
-                    for (k, v) in x.iter() {
-                        out.insert(k.to_string(), v.to_string());
-                    }
-                    out
-                })
-                .unwrap_or_else(|| Default::default()),
-        )
-        .description(
-            pkg.description()
-                .map(|x| {
-                    let mut out = BTreeMap::new();
-                    for (k, v) in x.iter() {
-                        out.insert(k.to_string(), v.to_string());
-                    }
-                    out
-                })
-                .unwrap_or_else(|| Default::default()),
-        )
-        .release(
-            pkg.release()?
-                .unwrap()
-                .iter()
-                .filter_map(Result::ok)
-                .map(|x| {
-                    let release = pahkat_types::package::Release::builder()
-                        .version(
-                            pahkat_types::package::version::Version::new(x.version()?).unwrap(),
-                        )
-                        .channel(x.channel()?.map(|x| x.to_string()))
-                        .target(x.target()?
-                            .unwrap()
-                            .iter()
-                            .filter_map(Result::ok)
-                            .map(|t| build_target(&t))
-                            .collect::<Result<Vec<_>, _>>()?)
-                        .build();
-                    Ok(release)
-                })
-                .collect::<Result<Vec<_>, _>>()?,
-        )
-        .build();
+            .package(
+                pahkat_types::package::DescriptorData::builder()
+                    .id(pkg.id()?.into())
+                    .tags(
+                        pkg.tags()?
+                            .map(|tags| tags.iter().map(|x| x.unwrap_or("").to_string()).collect())
+                            .unwrap_or(vec![]),
+                    )
+                    .build(),
+            )
+            .name(
+                pkg.name()
+                    .map(|x| {
+                        let mut out = BTreeMap::new();
+                        for (k, v) in x.iter() {
+                            out.insert(k.to_string(), v.to_string());
+                        }
+                        out
+                    })
+                    .unwrap_or_else(|| Default::default()),
+            )
+            .description(
+                pkg.description()
+                    .map(|x| {
+                        let mut out = BTreeMap::new();
+                        for (k, v) in x.iter() {
+                            out.insert(k.to_string(), v.to_string());
+                        }
+                        out
+                    })
+                    .unwrap_or_else(|| Default::default()),
+            )
+            .release(
+                pkg.release()?
+                    .unwrap()
+                    .iter()
+                    .filter_map(Result::ok)
+                    .map(|x| {
+                        let release = pahkat_types::package::Release::builder()
+                            .version(
+                                pahkat_types::package::version::Version::new(x.version()?).unwrap(),
+                            )
+                            .channel(x.channel()?.map(|x| x.to_string()))
+                            .target(
+                                x.target()?
+                                    .unwrap()
+                                    .iter()
+                                    .filter_map(Result::ok)
+                                    .map(|t| build_target(&t))
+                                    .collect::<Result<Vec<_>, _>>()?,
+                            )
+                            .build();
+                        Ok(release)
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+            )
+            .build();
 
         Ok(descriptor)
     }
@@ -211,7 +223,11 @@ where
         keys: butte::Vector<'a, butte::ForwardsUOffset<K>>,
         values: butte::Vector<'a, butte::ForwardsUOffset<V>>,
     ) -> Map<'a, K, V> {
-        Map { keys, values, len: keys.len().unwrap_or(0) }
+        Map {
+            keys,
+            values,
+            len: keys.len().unwrap_or(0),
+        }
     }
 
     #[inline]
@@ -223,7 +239,10 @@ where
             <butte::ForwardsUOffset<V> as butte::Follow<'a>>::Inner,
         ),
     > {
-        self.keys.iter().filter_map(Result::ok).zip(self.values.iter().filter_map(Result::ok))
+        self.keys
+            .iter()
+            .filter_map(Result::ok)
+            .zip(self.values.iter().filter_map(Result::ok))
     }
 
     #[inline]
@@ -241,8 +260,7 @@ where
     #[inline]
     pub fn keys(
         &self,
-    ) -> impl Iterator<Item = <butte::ForwardsUOffset<K> as butte::Follow<'a>>::Inner>
-    {
+    ) -> impl Iterator<Item = <butte::ForwardsUOffset<K> as butte::Follow<'a>>::Inner> {
         self.keys.iter().filter_map(Result::ok)
     }
 

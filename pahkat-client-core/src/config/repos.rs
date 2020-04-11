@@ -6,8 +6,8 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use crate::config::Permission;
 use super::FileError;
+use crate::config::Permission;
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct RepoRecord {

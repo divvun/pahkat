@@ -1,4 +1,4 @@
-#![recursion_limit="2048"]
+#![recursion_limit = "2048"]
 
 pub extern crate pahkat_types as types;
 
@@ -10,17 +10,17 @@ pub mod package_store;
 pub mod repo;
 pub mod transaction;
 
-mod fbs;
 mod cmp;
 mod config;
 mod download;
 mod ext;
+mod fbs;
 
 pub use self::config::{Config, Permission};
 pub use self::download::Download;
 pub use self::package_store::PackageStore;
 pub use self::repo::{LoadedRepository, PackageKey};
-pub use self::transaction::{PackageTransaction, PackageAction, PackageActionType};
+pub use self::transaction::{PackageAction, PackageActionType, PackageTransaction};
 
 #[cfg(all(target_os = "macos", feature = "macos"))]
 pub use package_store::macos::MacOSPackageStore;

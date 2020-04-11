@@ -83,7 +83,7 @@ impl Config {
             }
             Err(e) => return Err(Error::ReposFile(e)),
         };
-        
+
         let config = Config { repos, settings };
 
         Ok(config)

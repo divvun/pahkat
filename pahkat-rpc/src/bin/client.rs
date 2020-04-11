@@ -30,31 +30,20 @@ impl From<PackageAction<()>> for pb::PackageAction {
     }
 }
 
+#[cthulhu::invoke]
+pub extern "C" fn pahkat_rpc_new() {}
 
 #[cthulhu::invoke]
-pub extern "C" fn pahkat_rpc_new() {
-
-}
+pub extern "C" fn pahkat_rpc_notifications(handle: TODO) {}
 
 #[cthulhu::invoke]
-pub extern "C" fn pahkat_rpc_notifications(handle: TODO) {
-
-}
+pub extern "C" fn pahkat_rpc_repo_indexes(handle: TODO) {}
 
 #[cthulhu::invoke]
-pub extern "C" fn pahkat_rpc_repo_indexes(handle: TODO) {
-
-}
+pub extern "C" fn pahkat_rpc_status(handle: TODO) {}
 
 #[cthulhu::invoke]
-pub extern "C" fn pahkat_rpc_status(handle: TODO) {
-
-}
-
-#[cthulhu::invoke]
-pub extern "C" fn pahkat_rpc_process_transaction(handle: TODO) {
-
-}
+pub extern "C" fn pahkat_rpc_process_transaction(handle: TODO) {}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

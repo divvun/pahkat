@@ -16,16 +16,15 @@ use url::Url;
 
 use super::{PackageStore, SharedRepos, SharedStoreConfig};
 use crate::package_store::{ImportError, InstallTarget};
-use crate::{cmp, Config, PackageKey};
-use crate::transaction::{PackageStatus, PackageStatusError};
 use crate::transaction::{install::InstallError, install::ProcessError, uninstall::UninstallError};
+use crate::transaction::{PackageStatus, PackageStatusError};
+use crate::{cmp, Config, PackageKey};
 
 #[cfg(target_os = "macos")]
 #[inline(always)]
 pub fn global_uninstall_path() -> PathBuf {
     PathBuf::from("/Library/Application Support/Pahkat/uninstall")
 }
-
 
 fn from_str<'de, T, D>(deserializer: D) -> Result<T, D::Error>
 where
@@ -86,8 +85,7 @@ impl PackageStore for MacOSPackageStore {
             return Err(InstallError::PackageNotInCache);
         }
 
-        install_macos_package(&pkg_path, install_target)
-            .map_err(InstallError::InstallerFailure)?;
+        install_macos_package(&pkg_path, install_target).map_err(InstallError::InstallerFailure)?;
 
         Ok(self
             .status_impl(&release, &installer, install_target)
@@ -136,7 +134,14 @@ impl PackageStore for MacOSPackageStore {
     fn download_async(
         &self,
         key: &PackageKey,
-    ) -> std::pin::Pin<Box<dyn futures::stream::Stream<Item = crate::package_store::DownloadEvent> + Send + Sync + 'static>> {
+    ) -> std::pin::Pin<
+        Box<
+            dyn futures::stream::Stream<Item = crate::package_store::DownloadEvent>
+                + Send
+                + Sync
+                + 'static,
+        >,
+    > {
         let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
         crate::repo::download_async(&self.config, key, &query, &*repos)

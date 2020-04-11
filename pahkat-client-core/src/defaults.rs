@@ -78,14 +78,12 @@ pub(crate) const fn platform() -> &'static str {
 }
 
 macro_rules! arch {
-    ($name:expr) => {
+    ($name:expr) => {{
+        #[cfg(target_arch = $name)]
         {
-            #[cfg(target_arch = $name)]
-            {
-                return Some($name);
-            }
+            return Some($name);
         }
-    };
+    }};
 }
 
 #[inline(always)]
@@ -116,6 +114,10 @@ pub(crate) fn payloads() -> &'static [&'static str] {
         &["TarballPackage"]
     }
 
-    #[cfg(all(not(feature = "windows"), not(feature = "macos"), not(feature = "prefix")))]
+    #[cfg(all(
+        not(feature = "windows"),
+        not(feature = "macos"),
+        not(feature = "prefix")
+    ))]
     compile_error!("One of the above features must be enabled");
 }

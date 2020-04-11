@@ -7,8 +7,8 @@ use fd_lock::FdLock;
 use reqwest::header;
 use url::Url;
 
-use crate::package_store::DownloadEvent;
 use crate::ext::PathExt;
+use crate::package_store::DownloadEvent;
 
 pub trait Download {
     fn download<F>(
@@ -34,7 +34,7 @@ pub(crate) struct DownloadManager {
 impl DownloadManager {
     pub fn new(path: PathBuf, max_concurrent_downloads: u8) -> DownloadManager {
         let client = Self::client();
-            
+
         DownloadManager {
             client,
             path,
@@ -77,8 +77,10 @@ impl DownloadManager {
         dest_path: P,
         // progress: Option<F>,
     ) -> Result<
-        std::pin::Pin<Box<dyn futures::stream::Stream<Item = DownloadEvent> + Send + Sync + 'static>>,
-        DownloadError
+        std::pin::Pin<
+            Box<dyn futures::stream::Stream<Item = DownloadEvent> + Send + Sync + 'static>,
+        >,
+        DownloadError,
     > {
         let filename = match url.path_segments().and_then(|x| x.last()) {
             Some(v) => v,
@@ -150,8 +152,10 @@ impl DownloadManager {
         // Get URL headers
         let (tx, rx) = tokio::sync::oneshot::channel();
         tokio::spawn(async move {
-            let response = Self::client().execute(req)
-                .await.and_then(|x| x.error_for_status());
+            let response = Self::client()
+                .execute(req)
+                .await
+                .and_then(|x| x.error_for_status());
             tx.send(response).unwrap();
         });
         let mut res = rx.await.unwrap()?;
@@ -214,11 +218,11 @@ impl DownloadManager {
                         break;
                     }
                 }
-                
+
             }
 
             log::debug!("Moving {:?} to {:?}", &tmp_dest_path, &dest_path);
-    
+
             // If it's done, move the file!
             let _ = fs::create_dir_all(dest_path);
             match fs::copy(&tmp_dest_path, &dest_file_path) {

@@ -4,10 +4,10 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::defaults;
-use crate::config::Permission;
 use super::path::ConfigPath;
 use super::FileError;
+use crate::config::Permission;
+use crate::defaults;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SettingsData {

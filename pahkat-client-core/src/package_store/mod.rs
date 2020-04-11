@@ -17,8 +17,8 @@ use url::Url;
 use crate::config::Config;
 use crate::transaction::{install::InstallError, uninstall::UninstallError};
 use pahkat_types::package::Package;
-use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 
 pub type SharedStoreConfig = Arc<RwLock<Config>>;
 pub type SharedRepos = Arc<RwLock<HashMap<Url, LoadedRepository>>>;

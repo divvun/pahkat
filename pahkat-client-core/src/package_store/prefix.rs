@@ -11,6 +11,7 @@ use r2d2_sqlite::SqliteConnectionManager;
 use url::Url;
 use xz2::read::XzDecoder;
 
+use super::InstallTarget;
 use crate::transaction::{
     install::InstallError, uninstall::UninstallError, PackageDependencyError,
 };
@@ -19,7 +20,6 @@ use crate::{
     repo::LoadedRepository, transaction::PackageStatus, transaction::PackageStatusError, Config,
     PackageKey, PackageStore,
 };
-use super::InstallTarget;
 
 // type Result<T> = std::result::Result<T, Error>;
 
@@ -55,9 +55,9 @@ impl PrefixPackageStore {
         match Self::open(prefix_path.as_ref()) {
             Ok(v) => return Ok(v),
             Err(e) => match e {
-                Error::InvalidPrefixPath(_) => {},
-                e => return Err(e)
-            }
+                Error::InvalidPrefixPath(_) => {}
+                e => return Err(e),
+            },
         };
 
         Self::create(prefix_path)
@@ -183,7 +183,14 @@ impl PackageStore for PrefixPackageStore {
     fn download_async(
         &self,
         key: &PackageKey,
-    ) ->  std::pin::Pin<Box<dyn futures::stream::Stream<Item = crate::package_store::DownloadEvent> + Send + Sync + 'static>> {
+    ) -> std::pin::Pin<
+        Box<
+            dyn futures::stream::Stream<Item = crate::package_store::DownloadEvent>
+                + Send
+                + Sync
+                + 'static,
+        >,
+    > {
         let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
         crate::repo::download_async(&self.config, key, &query, &*repos)
@@ -307,7 +314,11 @@ impl PackageStore for PrefixPackageStore {
         Ok(PackageStatus::NotInstalled)
     }
 
-    fn status(&self, key: &PackageKey, _target: InstallTarget) -> Result<PackageStatus, PackageStatusError> {
+    fn status(
+        &self,
+        key: &PackageKey,
+        _target: InstallTarget,
+    ) -> Result<PackageStatus, PackageStatusError> {
         let mut conn = self.pool.get().unwrap();
         let record = match PackageDbRecord::find_by_id(&mut conn, &key) {
             None => return Ok(PackageStatus::NotInstalled),

@@ -4,24 +4,24 @@ mod repository;
 pub use package_key::PackageKey;
 pub use repository::{LoadedRepository, RepoDownloadError};
 
-use std::path::Path;
-use std::sync::{Arc, RwLock};
 use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
+use std::path::Path;
+use std::sync::{Arc, RwLock};
 
-use url::Url;
 use hashbrown::HashMap;
 use sha2::digest::Digest;
 use sha2::Sha256;
 use thiserror::Error;
+use url::Url;
 
-use pahkat_types::package::{Package, Release, Version};
-use pahkat_types::payload::Target;
 use crate::config::Config;
 use crate::defaults;
 use crate::fbs::PackagesExt;
 use crate::package_store::PackageStore;
-use crate::transaction::{PackageStatus, PackageStatusError, PackageDependencyError};
+use crate::transaction::{PackageDependencyError, PackageStatus, PackageStatusError};
+use pahkat_types::package::{Package, Release, Version};
+use pahkat_types::payload::Target;
 
 #[derive(Debug, Clone, Error)]
 pub enum PayloadError {
@@ -34,7 +34,6 @@ pub enum PayloadError {
     #[error("Some criteria is not met for the current payload")]
     CriteriaUnmet(String),
 }
-
 
 #[derive(Debug, Clone)]
 pub struct ReleaseQuery<'a> {
@@ -308,14 +307,14 @@ pub(crate) fn download<'a>(
     let output_path = crate::repo::download_dir(&*config, url);
     crate::block_on(async move {
         let mut dl = dm.download(url, output_path).await?;
-        
+
         while let Some(event) = dl.next().await {
             match event {
                 DownloadEvent::Error(e) => return Err(e),
                 DownloadEvent::Complete(p) => return Ok(p),
                 DownloadEvent::Progress((cur, total)) => {
                     if !(progress)(cur, total) {
-                        break
+                        break;
                     }
                 }
             }
@@ -330,7 +329,14 @@ pub(crate) fn download_async<'a>(
     package_key: &PackageKey,
     query: &ReleaseQuery<'a>,
     repos: &HashMap<Url, LoadedRepository>,
-) -> std::pin::Pin<Box<dyn futures::stream::Stream<Item = crate::package_store::DownloadEvent> + Send + Sync + 'static>> {
+) -> std::pin::Pin<
+    Box<
+        dyn futures::stream::Stream<Item = crate::package_store::DownloadEvent>
+            + Send
+            + Sync
+            + 'static,
+    >,
+> {
     log::trace!("Downloading {} {:?}", package_key, &query);
     use pahkat_types::AsDownloadUrl;
 
@@ -458,7 +464,10 @@ pub(crate) fn find_package_by_key<'p>(
         let packages = match packages.packages() {
             Some(v) => v,
             None => {
-                log::error!("No packages map in fbs for {:?}!", &package_key.repository_url);
+                log::error!(
+                    "No packages map in fbs for {:?}!",
+                    &package_key.repository_url
+                );
                 return None;
             }
         };

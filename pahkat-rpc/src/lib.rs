@@ -94,7 +94,9 @@ impl pb::pahkat_server::Pahkat for Rpc {
         let package_id = PackageKey::try_from(&*request.package_id)
             .map_err(|e| Status::failed_precondition(format!("{}", e)))?;
 
-        let result = pahkat_client::transaction::status_to_i8(self.store.status(&package_id, Default::default()));
+        let result = pahkat_client::transaction::status_to_i8(
+            self.store.status(&package_id, Default::default()),
+        );
         Ok(Response::new(pb::StatusResponse {
             value: result.try_into().unwrap(),
         }))

@@ -59,7 +59,6 @@ impl TimestampVersion {
     }
 }
 
-
 #[derive(Debug, Serialize, Deserialize, Clone, Hash, Eq)]
 #[serde(untagged)]
 #[non_exhaustive]
