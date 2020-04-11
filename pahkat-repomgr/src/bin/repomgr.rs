@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use url::Url;
 
-use pahkat_server_core::{package, repo, Request};
+use pahkat_repomgr::{package, repo, Request};
 
 #[derive(Debug, StructOpt)]
 #[structopt()]
