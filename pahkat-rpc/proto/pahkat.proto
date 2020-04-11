@@ -22,141 +22,70 @@ message NotificationsRequest {
 
 
 message StatusRequest {
-
+    string package_id = 1;
+    uint32 target = 2;
 }
 
 message StatusResponse {
-
+    sint32 value = 1;
 }
 
 message RepositoryIndexesRequest {}
 
 message RepositoryIndexesResponse {
-    repeated Repository repositories = 1;
+    repeated bytes repositories = 1;
 }
 
-message Repository {
-    RepositoryIndex index = 1;
-    PackagesIndex packages = 2;
+message PackageAction {
+    string id = 1;
+    uint32 action = 2;
+    uint32 target = 3;
 }
 
-message RepositoryAgent {
-    string name = 1;
-    string version = 2;
-    string url = 3;
+message TransactionRequest {
+    repeated PackageAction actions = 1;
 }
 
-message PackagesIndex {
-    repeated PackagesIndexValue packages = 1;
-}
+message TransactionResponse {
+    message DownloadProgress {
+        string package_id = 1;
+        uint64 current = 2;
+        uint64 total = 3;
+    }
+    message DownloadError {
+        string package_id = 1;
+        string error = 2;
+    }
+    message DownloadComplete {
+        string package_id = 1;
+    }
+    message InstallProgress {
+        string package_id = 1;
+        uint64 current = 2;
+        uint64 total = 3;
+        string message = 4;
+    }
+    message InstallStarted {
+        string package_id = 1;
+    }
+    message InstallError {
+        string package_id = 1;
+        string error = 2;
+    }
+    message TransactionStarted {}
+    message TransactionComplete {}
 
-message PackagesIndexValue {
     oneof value {
-        Package package = 1;
-        SyntheticPackage syntheticPackage = 2;
+        TransactionStarted transaction_started = 2;
+        TransactionComplete transaction_complete = 3;
+        DownloadProgress download_progress = 10;
+        DownloadError download_error = 11;
+        DownloadComplete download_complete = 12;
+        InstallProgress install_progress = 13;
+        InstallStarted install_started = 14;
+        InstallError install_error = 15;
     }
 }
-
-message SyntheticPackage {
-    string id = 1;
-    map<string, string> name = 2;
-    map<string, string> description = 3;
-    repeated string tags = 4;
-    repeated SyntheticVersion versions = 5;
-}
-
-message SyntheticVersion {
-    string version = 1;
-    string channel = 2;
-    repeated SyntheticTarget targets = 3;
-}
-
-message SyntheticTarget {
-    string platform = 1;
-    string arch = 2;
-    map<string, string> dependencies = 3;
-    // Verifier verifier = 4;
-}
-
-// message Verifier {
-//     oneof value {
-//     }
-// }
-
-message Package {
-    string id = 1;
-    map<string, string> name = 2;
-    map<string, string> description = 3;
-    repeated string tags = 4;
-    repeated Version versions = 5;
-}
-
-message Version {
-    string version = 1;
-    string channel = 2;
-    repeated string authors = 3;
-    string license = 4;
-    string licenseUrl = 5;
-    repeated Target targets = 6;
-}
-
-message Target {
-    string platform = 1;
-    string arch = 2;
-    map<string, string> dependencies = 3;
-    Payload payload = 4;
-}
-
-message Payload {
-    oneof value {
-        WindowsExecutable windowsExecutable = 1;
-        MacOSPackage macOsPackage = 2;
-        TarballPackage tarballPackage = 3;
-    }
-}
-
-message WindowsExecutable {
-    string url = 1;
-    string kind = 2;
-    string uninstallArgs = 3;
-    string productCode = 4;
-    bool requiresReboot = 5;
-    bool requiresUninstallReboot = 6;
-    uint64 size = 7;
-    uint64 installedSize = 8;
-}
-
-message MacOSPackage {
-    string url = 1;
-    string pkgId = 2;
-    repeated string targets = 3;
-    bool requiresReboot = 4;
-    bool requiresUninstallReboot = 5;
-    uint64 size = 6;
-    uint64 installedSize = 7;
-}
-
-message TarballPackage {
-    string url = 1;
-    uint64 size = 2;
-    uint64 installedSize = 3;
-}
-
-message RepositoryIndex {
-    string baseUrl = 1;
-    RepositoryAgent agent = 2;
-    string landingUrl = 3;
-    map<string, string> name = 4;
-    map<string, string> description = 5;
-    repeated string channels = 6;
-    string defaultChannel = 7;
-    repeated string linkedRepositories = 8;
-    repeated string acceptedRedirections = 9;
-}
-
-message TransactionRequest {}
-
-message TransactionResponse {}
 
 message RefreshRequest {}
 
@@ -168,14 +97,14 @@ message ClearCacheResponse {}
 
 service Pahkat {
     rpc Notifications(NotificationsRequest) returns (stream NotificationResponse) {}
-    rpc SelfUpdate(SelfUpdateRequest) returns (stream SelfUpdateResponse) {}
+    // rpc SelfUpdate(SelfUpdateRequest) returns (stream SelfUpdateResponse) {}
 
     // Store
     rpc Status(StatusRequest) returns (StatusResponse) {}
-    rpc RepositoryIndexes(RepositoryIndexesRequest) returns (RepositoryIndexesResponse) {}
+    // rpc RepositoryIndexes(RepositoryIndexesRequest) returns (RepositoryIndexesResponse) {}
     rpc ProcessTransaction(TransactionRequest) returns (stream TransactionResponse) {}
-    rpc Refresh(RefreshRequest) returns (RefreshResponse) {}
-    rpc ClearCache(ClearCacheRequest) returns (ClearCacheResponse) {}
+    // rpc Refresh(RefreshRequest) returns (RefreshResponse) {}
+    // rpc ClearCache(ClearCacheRequest) returns (ClearCacheResponse) {}
     
     // Config
     // CRUD for repositories

@@ -19,6 +19,7 @@ use crate::{
     repo::LoadedRepository, transaction::PackageStatus, transaction::PackageStatusError, Config,
     PackageKey, PackageStore,
 };
+use super::InstallTarget;
 
 // type Result<T> = std::result::Result<T, Error>;
 
@@ -50,6 +51,18 @@ pub enum Error {
 }
 
 impl PrefixPackageStore {
+    pub fn open_or_create<P: AsRef<Path>>(prefix_path: P) -> Result<PrefixPackageStore, Error> {
+        match Self::open(prefix_path.as_ref()) {
+            Ok(v) => return Ok(v),
+            Err(e) => match e {
+                Error::InvalidPrefixPath(_) => {},
+                e => return Err(e)
+            }
+        };
+
+        Self::create(prefix_path)
+    }
+
     pub fn create<P: AsRef<Path>>(prefix_path: P) -> Result<PrefixPackageStore, Error> {
         create_dir_all(&prefix_path).map_err(Error::CreateDirFailed)?;
         let prefix_path = prefix_path
@@ -121,15 +134,28 @@ impl PrefixPackageStore {
     fn package_dir(&self, package_id: &str) -> PathBuf {
         self.prefix.join("pkg").join(package_id)
     }
-
-    pub(crate) fn into_arc(self) -> Arc<dyn PackageStore<Target = ()>> {
-        Arc::new(self)
-    }
 }
 
+/// <script>
+/// (function() {
+/// var s = document.currentScript
+/// window.addEventListener('DOMContentLoaded', function(evt) {
+/// var docblock = s.parentNode
+/// docblock.classList.remove("hidden-by-usual-hider")
+/// docblock.nextSibling.classList.remove("fns-now-collapsed")
+/// var l = docblock.nextSibling.children.length
+/// for (var i = 0; i < l; ++i) {
+///   var cl = docblock.nextSibling.children[i].classList;
+///   cl.remove("collapsed")
+///   cl.remove("hidden")
+///   cl.remove("hidden-default")
+///   cl.remove("hidden-by-impl-hider")
+///   cl.add("x")
+/// }
+/// })
+/// })()
+/// </script>
 impl PackageStore for PrefixPackageStore {
-    type Target = ();
-
     fn repos(&self) -> super::SharedRepos {
         Arc::clone(&self.repos)
     }
@@ -154,11 +180,19 @@ impl PackageStore for PrefixPackageStore {
         let repos = self.repos.read().unwrap();
         crate::repo::download(&self.config, key, &query, &*repos, progress)
     }
+    fn download_async(
+        &self,
+        key: &PackageKey,
+    ) ->  std::pin::Pin<Box<dyn futures::stream::Stream<Item = crate::package_store::DownloadEvent> + Send + Sync + 'static>> {
+        let query = crate::repo::ReleaseQuery::from(key);
+        let repos = self.repos.read().unwrap();
+        crate::repo::download_async(&self.config, key, &query, &*repos)
+    }
 
     fn install(
         &self,
         key: &PackageKey,
-        target: &Self::Target,
+        target: InstallTarget,
     ) -> Result<PackageStatus, InstallError> {
         let mut query = crate::repo::ReleaseQuery::from(key).and_payloads(vec!["TarballPackage"]);
         let repos = self.repos.read().unwrap();
@@ -228,7 +262,7 @@ impl PackageStore for PrefixPackageStore {
     fn uninstall(
         &self,
         key: &PackageKey,
-        target: &Self::Target,
+        _target: InstallTarget,
     ) -> Result<PackageStatus, UninstallError> {
         let mut conn = self.pool.get().unwrap();
         let record = match PackageDbRecord::find_by_id(&mut conn, &key) {
@@ -273,7 +307,7 @@ impl PackageStore for PrefixPackageStore {
         Ok(PackageStatus::NotInstalled)
     }
 
-    fn status(&self, key: &PackageKey, _target: &()) -> Result<PackageStatus, PackageStatusError> {
+    fn status(&self, key: &PackageKey, _target: InstallTarget) -> Result<PackageStatus, PackageStatusError> {
         let mut conn = self.pool.get().unwrap();
         let record = match PackageDbRecord::find_by_id(&mut conn, &key) {
             None => return Ok(PackageStatus::NotInstalled),
@@ -303,7 +337,7 @@ impl PackageStore for PrefixPackageStore {
     fn all_statuses(
         &self,
         repo_url: &Url,
-        target: &(),
+        target: InstallTarget,
     ) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>> {
         crate::repo::all_statuses(self, repo_url, target)
     }

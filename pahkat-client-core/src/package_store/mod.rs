@@ -18,6 +18,7 @@ use crate::config::Config;
 use crate::transaction::{install::InstallError, uninstall::UninstallError};
 use pahkat_types::package::Package;
 use std::path::{Path, PathBuf};
+use serde::{Deserialize, Serialize};
 
 pub type SharedStoreConfig = Arc<RwLock<Config>>;
 pub type SharedRepos = Arc<RwLock<HashMap<Url, LoadedRepository>>>;
@@ -34,9 +35,29 @@ pub enum ImportError {
     InvalidPayloadType,
 }
 
-pub trait PackageStore: Send + Sync {
-    type Target: Send + Sync;
+pub enum ProgressEvent<P, C, E> {
+    Progress(P),
+    Complete(C),
+    Error(E),
+}
 
+pub type DownloadEvent = ProgressEvent<(u64, u64), PathBuf, crate::download::DownloadError>;
+
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum InstallTarget {
+    System,
+    User,
+}
+
+impl Default for InstallTarget {
+    fn default() -> Self {
+        InstallTarget::System
+    }
+}
+
+pub trait PackageStore: Send + Sync {
     fn repos(&self) -> SharedRepos;
     fn config(&self) -> SharedStoreConfig;
 
@@ -46,30 +67,35 @@ pub trait PackageStore: Send + Sync {
         progress: Box<dyn Fn(u64, u64) -> bool + Send + 'static>,
     ) -> Result<PathBuf, crate::download::DownloadError>;
 
+    fn download_async(
+        &self,
+        key: &PackageKey,
+    ) -> std::pin::Pin<Box<dyn futures::stream::Stream<Item = DownloadEvent> + Send + Sync + 'static>>;
+
     fn import(&self, key: &PackageKey, installer_path: &Path) -> Result<PathBuf, ImportError>;
 
     fn install(
         &self,
         key: &PackageKey,
-        target: &Self::Target,
+        target: InstallTarget,
     ) -> Result<PackageStatus, InstallError>;
 
     fn uninstall(
         &self,
         key: &PackageKey,
-        target: &Self::Target,
+        target: InstallTarget,
     ) -> Result<PackageStatus, UninstallError>;
 
     fn status(
         &self,
         key: &PackageKey,
-        target: &Self::Target,
+        target: InstallTarget,
     ) -> Result<PackageStatus, PackageStatusError>;
 
     fn all_statuses(
         &self,
         repo_url: &Url,
-        target: &Self::Target,
+        target: InstallTarget,
     ) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>>;
 
     fn find_package_by_id(&self, package_id: &str) -> Option<(PackageKey, Package)>;

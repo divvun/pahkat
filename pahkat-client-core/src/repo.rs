@@ -268,6 +268,9 @@ pub(crate) fn import<'a>(
     Ok(output_path)
 }
 
+use crate::package_store::DownloadEvent;
+use futures::stream::StreamExt;
+
 pub(crate) fn download<'a>(
     config: &Arc<RwLock<Config>>,
     package_key: &PackageKey,
@@ -303,7 +306,72 @@ pub(crate) fn download<'a>(
     );
 
     let output_path = crate::repo::download_dir(&*config, url);
-    crate::block_on(dm.download(url, output_path, Some(progress)))
+    crate::block_on(async move {
+        let mut dl = dm.download(url, output_path).await?;
+        
+        while let Some(event) = dl.next().await {
+            match event {
+                DownloadEvent::Error(e) => return Err(e),
+                DownloadEvent::Complete(p) => return Ok(p),
+                DownloadEvent::Progress((cur, total)) => {
+                    if !(progress)(cur, total) {
+                        break
+                    }
+                }
+            }
+        }
+
+        Err(crate::download::DownloadError::UserCancelled)
+    })
+}
+
+pub(crate) fn download_async<'a>(
+    config: &Arc<RwLock<Config>>,
+    package_key: &PackageKey,
+    query: &ReleaseQuery<'a>,
+    repos: &HashMap<Url, LoadedRepository>,
+) -> std::pin::Pin<Box<dyn futures::stream::Stream<Item = crate::package_store::DownloadEvent> + Send + Sync + 'static>> {
+    log::trace!("Downloading {} {:?}", package_key, &query);
+    use pahkat_types::AsDownloadUrl;
+
+    let (target, _, _) = match resolve_payload(package_key, &query, repos) {
+        Ok(v) => v,
+        Err(e) => {
+            log::error!(
+                "Failed to resolve: {} {:?} {:?}",
+                &package_key,
+                &query,
+                &repos
+            );
+            return Box::pin(async_stream::stream! {
+                yield crate::package_store::DownloadEvent::Error(crate::download::DownloadError::Payload(e));
+            });
+        }
+    };
+
+    let url = target.payload.as_download_url().to_owned();
+
+    let config = config.read().unwrap();
+    let settings = config.settings();
+    let dm = crate::download::DownloadManager::new(
+        settings.download_cache_dir().to_path_buf(),
+        settings.max_concurrent_downloads(),
+    );
+
+    let output_path = crate::repo::download_dir(&*config, &url);
+    let stream = async_stream::stream! {
+        match dm.download(&url, output_path).await {
+            Ok(mut v) => {
+                while let Some(value) = v.next().await {
+                    yield value;
+                }
+            }
+            Err(e) => {
+                yield DownloadEvent::Error(e);
+            }
+        }
+    };
+    Box::pin(stream)
 }
 
 pub(crate) fn download_dir(config: &Config, url: &url::Url) -> std::path::PathBuf {
@@ -331,14 +399,13 @@ pub(crate) fn download_file_path(config: &Config, url: &url::Url) -> std::path::
     )
 }
 
-pub(crate) fn all_statuses<'a, P, T>(
+pub(crate) fn all_statuses<'a, P>(
     store: &P,
     repo_url: &Url,
-    target: &T,
+    target: crate::package_store::InstallTarget,
 ) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>>
 where
-    P: PackageStore<Target = T>,
-    T: Send + Sync + std::fmt::Debug,
+    P: PackageStore,
 {
     log::debug!(
         "Getting all statuses for: {:?}, target: {:?}",
@@ -406,14 +473,13 @@ pub(crate) fn find_package_by_key<'p>(
     })
 }
 
-pub(crate) fn find_package_by_id<P, T>(
+pub(crate) fn find_package_by_id<P>(
     store: &P,
     package_id: &str,
     repos: &HashMap<Url, LoadedRepository>,
 ) -> Option<(PackageKey, Package)>
 where
-    P: PackageStore<Target = T>,
-    T: Send + Sync,
+    P: PackageStore,
 {
     match PackageKey::try_from(package_id) {
         Ok(k) => return store.find_package_by_key(&k).map(|pkg| (k, pkg)),
@@ -473,14 +539,11 @@ pub(crate) fn clear_cache(config: &Arc<RwLock<Config>>) {
     // todo!()
 }
 
-fn recurse_package_dependencies<T>(
-    store: &Arc<dyn PackageStore<Target = T>>,
+fn recurse_package_dependencies(
+    store: &Arc<dyn PackageStore>,
     package: &Package,
     candidates: &mut HashMap<PackageKey, Package>,
-) -> Result<(), PackageDependencyError>
-where
-    T: Send + Sync,
-{
+) -> Result<(), PackageDependencyError> {
     // for (package_key, _version) in package.dependencies.iter() {
     //     // Package key may be a short, relative package id, or a fully qualified
     //     // URL to a package in a linked repo
@@ -508,15 +571,12 @@ where
     // todo!()
 }
 
-pub(crate) fn find_package_dependencies<T>(
-    store: &Arc<dyn PackageStore<Target = T>>,
+pub(crate) fn find_package_dependencies(
+    store: &Arc<dyn PackageStore>,
     _key: &PackageKey,
     package: &Package,
-    _target: &T,
-) -> Result<Vec<(PackageKey, Package)>, PackageDependencyError>
-where
-    T: Send + Sync,
-{
+    _target: &crate::package_store::InstallTarget,
+) -> Result<Vec<(PackageKey, Package)>, PackageDependencyError> {
     let mut candidates = HashMap::new();
     recurse_package_dependencies(store, &package, &mut candidates)?;
     Ok(candidates.into_iter().map(|(k, v)| (k, v)).collect())

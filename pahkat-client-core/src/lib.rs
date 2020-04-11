@@ -1,3 +1,5 @@
+#![recursion_limit="2048"]
+
 pub extern crate pahkat_types as types;
 
 #[cfg(feature = "ffi")]
@@ -18,7 +20,7 @@ pub use self::config::{Config, Permission};
 pub use self::download::Download;
 pub use self::package_store::PackageStore;
 pub use self::repo::{LoadedRepository, PackageKey};
-pub use self::transaction::PackageAction;
+pub use self::transaction::{PackageTransaction, PackageAction, PackageActionType};
 
 #[cfg(all(target_os = "macos", feature = "macos"))]
 pub use package_store::macos::MacOSPackageStore;

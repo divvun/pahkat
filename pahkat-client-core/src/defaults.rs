@@ -78,12 +78,14 @@ pub(crate) const fn platform() -> &'static str {
 }
 
 macro_rules! arch {
-    ($name:expr) => {{
-        #[cfg(target_arch = $name)]
+    ($name:expr) => {
         {
-            return Some($name);
+            #[cfg(target_arch = $name)]
+            {
+                return Some($name);
+            }
         }
-    }};
+    };
 }
 
 #[inline(always)]

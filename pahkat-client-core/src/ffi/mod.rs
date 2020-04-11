@@ -359,26 +359,6 @@ pub extern "C" fn pahkat_str_free(ptr: *const libc::c_char) {
     }
 }
 
-#[inline(always)]
-pub(crate) fn status_to_i8(result: Result<PackageStatus, PackageStatusError>) -> i8 {
-    match result {
-        Ok(status) => match status {
-            PackageStatus::NotInstalled => 0,
-            PackageStatus::UpToDate => 1,
-            PackageStatus::RequiresUpdate => 2,
-        },
-        Err(error) => match error {
-            PackageStatusError::Payload(e) => match e {
-                PayloadError::NoPackage | PayloadError::NoConcretePackage => -1,
-                PayloadError::NoPayloadFound => -2,
-                PayloadError::CriteriaUnmet(_) => -5,
-            },
-            PackageStatusError::WrongPayloadType => -3,
-            PackageStatusError::ParsingVersion => -4,
-        },
-    }
-}
-
 trait BoxError {
     type Item;
 

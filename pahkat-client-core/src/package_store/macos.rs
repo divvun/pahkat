@@ -9,13 +9,13 @@ use std::sync::{Arc, RwLock};
 
 use hashbrown::HashMap;
 use pahkat_types::package::Package;
-use pahkat_types::payload::macos::{self, InstallTarget};
+use pahkat_types::payload::macos;
 use serde::de::{self, Deserializer};
 use serde::Deserialize;
 use url::Url;
 
 use super::{PackageStore, SharedRepos, SharedStoreConfig};
-use crate::package_store::ImportError;
+use crate::package_store::{ImportError, InstallTarget};
 use crate::{cmp, Config, PackageKey};
 use crate::transaction::{PackageStatus, PackageStatusError};
 use crate::transaction::{install::InstallError, install::ProcessError, uninstall::UninstallError};
@@ -55,8 +55,6 @@ pub struct MacOSPackageStore {
 }
 
 impl PackageStore for MacOSPackageStore {
-    type Target = InstallTarget;
-
     fn repos(&self) -> SharedRepos {
         Arc::clone(&self.repos)
     }
@@ -68,7 +66,7 @@ impl PackageStore for MacOSPackageStore {
     fn install(
         &self,
         key: &PackageKey,
-        install_target: &InstallTarget,
+        install_target: InstallTarget,
     ) -> Result<PackageStatus, InstallError> {
         let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
@@ -88,7 +86,7 @@ impl PackageStore for MacOSPackageStore {
             return Err(InstallError::PackageNotInCache);
         }
 
-        install_macos_package(&pkg_path, &install_target)
+        install_macos_package(&pkg_path, install_target)
             .map_err(InstallError::InstallerFailure)?;
 
         Ok(self
@@ -99,7 +97,7 @@ impl PackageStore for MacOSPackageStore {
     fn uninstall(
         &self,
         key: &PackageKey,
-        install_target: &InstallTarget,
+        install_target: InstallTarget,
     ) -> Result<PackageStatus, UninstallError> {
         let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
@@ -111,7 +109,7 @@ impl PackageStore for MacOSPackageStore {
             _ => return Err(UninstallError::WrongPayloadType),
         };
 
-        uninstall_macos_package(&installer.pkg_id, &install_target)
+        uninstall_macos_package(&installer.pkg_id, install_target)
             .map_err(UninstallError::UninstallerFailure)?;
 
         Ok(self
@@ -135,10 +133,19 @@ impl PackageStore for MacOSPackageStore {
         crate::repo::download(&self.config, key, &query, &*repos, progress)
     }
 
+    fn download_async(
+        &self,
+        key: &PackageKey,
+    ) -> std::pin::Pin<Box<dyn futures::stream::Stream<Item = crate::package_store::DownloadEvent> + Send + Sync + 'static>> {
+        let query = crate::repo::ReleaseQuery::from(key);
+        let repos = self.repos.read().unwrap();
+        crate::repo::download_async(&self.config, key, &query, &*repos)
+    }
+
     fn status(
         &self,
         key: &PackageKey,
-        install_target: &Self::Target,
+        install_target: InstallTarget,
     ) -> Result<PackageStatus, PackageStatusError> {
         let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
@@ -156,7 +163,7 @@ impl PackageStore for MacOSPackageStore {
     fn all_statuses(
         &self,
         repo_url: &Url,
-        target: &InstallTarget,
+        target: InstallTarget,
     ) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>> {
         crate::repo::all_statuses(self, repo_url, target)
     }
@@ -204,7 +211,7 @@ impl MacOSPackageStore {
         &self,
         release: &pahkat_types::package::Release,
         installer: &macos::Package,
-        target: &InstallTarget,
+        target: InstallTarget,
     ) -> Result<PackageStatus, PackageStatusError> {
         let pkg_info = match get_package_info(&installer.pkg_id, target) {
             Ok(v) => v,
@@ -266,7 +273,7 @@ impl MacOSPackageExportPlist {
 
 fn get_package_info(
     bundle_id: &str,
-    target: &InstallTarget,
+    target: InstallTarget,
 ) -> Result<MacOSPackageExportPlist, ProcessError> {
     use std::io::Cursor;
 
@@ -303,7 +310,7 @@ fn get_package_info(
     return Ok(plist);
 }
 
-fn install_macos_package(pkg_path: &Path, target: &InstallTarget) -> Result<(), ProcessError> {
+fn install_macos_package(pkg_path: &Path, target: InstallTarget) -> Result<(), ProcessError> {
     let target_str = match target {
         InstallTarget::User => "CurrentUserHomeDirectory",
         InstallTarget::System => "LocalSystem",
@@ -328,7 +335,7 @@ fn install_macos_package(pkg_path: &Path, target: &InstallTarget) -> Result<(), 
     Ok(())
 }
 
-fn run_script(name: &str, bundle_id: &str, target: &InstallTarget) -> Result<(), ProcessError> {
+fn run_script(name: &str, bundle_id: &str, target: InstallTarget) -> Result<(), ProcessError> {
     let path = match target {
         InstallTarget::User => crate::defaults::uninstall_path(),
         InstallTarget::System => global_uninstall_path(),
@@ -355,15 +362,15 @@ fn run_script(name: &str, bundle_id: &str, target: &InstallTarget) -> Result<(),
     Ok(())
 }
 
-fn run_pre_uninstall_script(bundle_id: &str, target: &InstallTarget) -> Result<(), ProcessError> {
+fn run_pre_uninstall_script(bundle_id: &str, target: InstallTarget) -> Result<(), ProcessError> {
     run_script("pre-uninstall", bundle_id, target)
 }
 
-fn run_post_uninstall_script(bundle_id: &str, target: &InstallTarget) -> Result<(), ProcessError> {
+fn run_post_uninstall_script(bundle_id: &str, target: InstallTarget) -> Result<(), ProcessError> {
     run_script("post-uninstall", bundle_id, target)
 }
 
-fn uninstall_macos_package(bundle_id: &str, target: &InstallTarget) -> Result<(), ProcessError> {
+fn uninstall_macos_package(bundle_id: &str, target: InstallTarget) -> Result<(), ProcessError> {
     let package_info = get_package_info(bundle_id, target)?;
 
     run_pre_uninstall_script(bundle_id, target)?;
@@ -425,7 +432,7 @@ fn uninstall_macos_package(bundle_id: &str, target: &InstallTarget) -> Result<()
     Ok(())
 }
 
-fn forget_pkg_id(bundle_id: &str, target: &InstallTarget) -> Result<(), ProcessError> {
+fn forget_pkg_id(bundle_id: &str, target: InstallTarget) -> Result<(), ProcessError> {
     let home_dir = dirs::home_dir().expect("Always find home directory");
     let mut args = vec!["--forget", bundle_id];
     if let InstallTarget::User = target {

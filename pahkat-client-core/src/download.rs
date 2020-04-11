@@ -7,6 +7,7 @@ use fd_lock::FdLock;
 use reqwest::header;
 use url::Url;
 
+use crate::package_store::DownloadEvent;
 use crate::ext::PathExt;
 
 pub trait Download {
@@ -26,13 +27,14 @@ pub(crate) struct DownloadManager {
     // max_concurrent_downloads: u8,
 }
 
-impl DownloadManager {
-    pub fn new(path: PathBuf, _max_concurrent_downloads: u8) -> DownloadManager {
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(60))
-            .build()
-            .unwrap();
+// type Stream<T> = Pin<
+//     Box<dyn futures::Stream<Item = std::result::Result<T, Status>> + Send + Sync + 'static>,
+// >;
 
+impl DownloadManager {
+    pub fn new(path: PathBuf, max_concurrent_downloads: u8) -> DownloadManager {
+        let client = Self::client();
+            
         DownloadManager {
             client,
             path,
@@ -40,53 +42,63 @@ impl DownloadManager {
         }
     }
 
-    #[inline(always)]
-    fn handle_callback<F>(
-        &self,
-        cur: u64,
-        max: u64,
-        progress: Option<&F>,
-    ) -> Result<(), DownloadError>
-    where
-        F: Fn(u64, u64) -> bool + Send + 'static,
-    {
-        if let Some(cb) = progress {
-            let should_continue = cb(cur, max);
-
-            if !should_continue {
-                return Err(DownloadError::UserCancelled);
-            }
-        }
-
-        Ok(())
+    #[inline]
+    fn client() -> reqwest::Client {
+        reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(60))
+            .build()
+            .unwrap()
     }
 
-    pub async fn download<F, P: AsRef<Path>>(
+    // #[inline(always)]
+    // fn handle_callback<F>(
+    //     &self,
+    //     cur: u64,
+    //     max: u64,
+    //     progress: Option<&F>,
+    // ) -> Result<(), DownloadError>
+    // where
+    //     F: Fn(u64, u64) -> bool + Send + 'static,
+    // {
+    //     if let Some(cb) = progress {
+    //         let should_continue = cb(cur, max);
+
+    //         if !should_continue {
+    //             return Err(DownloadError::UserCancelled);
+    //         }
+    //     }
+
+    //     Ok(())
+    // }
+
+    pub async fn download<P: AsRef<Path>>(
         &self,
         url: &Url,
         dest_path: P,
-        progress: Option<F>,
-    ) -> Result<PathBuf, DownloadError>
-    where
-        F: Fn(u64, u64) -> bool + Send + 'static,
-    {
+        // progress: Option<F>,
+    ) -> Result<
+        std::pin::Pin<Box<dyn futures::stream::Stream<Item = DownloadEvent> + Send + Sync + 'static>>,
+        DownloadError
+    > {
         let filename = match url.path_segments().and_then(|x| x.last()) {
             Some(v) => v,
             None => return Err(DownloadError::InvalidUrl),
         };
 
-        let dest_path = dest_path.as_ref();
+        let dest_path = dest_path.as_ref().to_path_buf();
         let dest_file_path = dest_path.join(filename);
 
         // Check destination path exists
         if dest_path.exists() && dest_file_path.exists() {
             match dest_path.metadata() {
                 Ok(v) if v.len() > 0 => {
-                    self.handle_callback(0, 0, progress.as_ref())?;
+                    // self.handle_callback(0, 0, progress.as_ref())?;
 
                     log::debug!("Download already exists at {:?}; using.", &dest_file_path);
 
-                    return Ok(dest_file_path);
+                    return Ok(Box::pin(async_stream::stream! {
+                        yield DownloadEvent::Complete(dest_file_path);
+                    }));
                 }
                 _ => {}
             }
@@ -110,42 +122,15 @@ impl DownloadManager {
         }
 
         let tmp_dest_path = cache_dir.join(filename);
-        let mut req = self.client.get(url.as_str());
 
-        #[cfg(not(windows))]
-        let mut fdlock = {
-            let fd = fs::OpenOptions::new()
-                .append(true)
-                .open(&tmp_dest_path)
-                .or_else(|_| fs::File::create(&tmp_dest_path))
-                .map_err(|e| {
-                    log::error!("{:?}", &e);
-                    DownloadError::IoError(e)
-                })?;
-            FdLock::new(fd)
-        };
-
-        // Lock temporary destination file for writing
-        #[cfg(not(windows))]
-        log::debug!("Locking {}", tmp_dest_path.display());
-
-        #[cfg(not(windows))]
-        let mut file = fdlock.lock().map_err(|_| DownloadError::LockFailure)?;
-        // #[cfg(windows)]
-        // let mut file = fdlock.try_lock().map_err(|_| DownloadError::LockFailure)?;
-        #[cfg(windows)]
-        let mut file = Box::new(
-            fs::OpenOptions::new()
-                .append(true)
-                .open(&tmp_dest_path)
-                .or_else(|_| fs::File::create(&tmp_dest_path))
-                .map_err(|e| {
-                    log::error!("create file error: {:?}", &e);
-                    DownloadError::IoError(e)
-                })?,
-        );
-
-        log::debug!("Got lock on {}", tmp_dest_path.display());
+        let file = fs::OpenOptions::new()
+            .append(true)
+            .open(&tmp_dest_path)
+            .or_else(|_| fs::File::create(&tmp_dest_path))
+            .map_err(|e| {
+                log::error!("{:?}", &e);
+                DownloadError::IoError(e)
+            })?;
         let meta = file.metadata().map_err(|e| {
             log::error!("metadata error: {:?}", &e);
             DownloadError::IoError(e)
@@ -154,6 +139,8 @@ impl DownloadManager {
         let mut downloaded_bytes = meta.len();
         log::debug!("Downloaded bytes: {}", downloaded_bytes);
 
+        let client = &self.client;
+        let mut req = client.get(url.as_str());
         if downloaded_bytes > 0 {
             req = req.header(header::RANGE, format!("bytes={}-", downloaded_bytes));
         }
@@ -161,7 +148,13 @@ impl DownloadManager {
         let req = req.build().map_err(DownloadError::ReqwestError)?;
 
         // Get URL headers
-        let mut res = self.client.execute(req).await?.error_for_status()?;
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        tokio::spawn(async move {
+            let response = Self::client().execute(req)
+                .await.and_then(|x| x.error_for_status());
+            tx.send(response).unwrap();
+        });
+        let mut res = rx.await.unwrap()?;
 
         // Get content length and send if exists
         let content_len = res
@@ -190,28 +183,56 @@ impl DownloadManager {
 
         log::debug!("Total bytes: {}", total_bytes);
 
-        {
-            let mut file = BufWriter::new(&mut *file);
-
-            // Do the download
-            while let Some(chunk) = res.chunk().await.map_err(DownloadError::ReqwestError)? {
-                downloaded_bytes += chunk.len() as u64;
-                file.write(&*chunk).map_err(|e| {
-                    log::error!("error writing output: {:?}", &e);
-                    DownloadError::IoError(e)
-                })?;
-                self.handle_callback(downloaded_bytes, total_bytes, progress.as_ref())?;
+        let stream = async_stream::stream! {
+            let mut file = BufWriter::new(file);
+            loop {
+                let chunk = res.chunk().await.map_err(DownloadError::ReqwestError);
+                match chunk {
+                    Ok(v) => match v {
+                        None => {
+                            break; // Complete
+                        }
+                        Some(v) => {
+                            downloaded_bytes += v.len() as u64;
+                            let result = file.write(&*v).map_err(|e| {
+                                log::error!("error writing output: {:?}", &e);
+                                DownloadError::IoError(e)
+                            });
+                            match result {
+                                Ok(_) => {
+                                    yield DownloadEvent::Progress((downloaded_bytes, total_bytes));
+                                },
+                                Err(e) => {
+                                    yield DownloadEvent::Error(e);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        yield DownloadEvent::Error(e);
+                        break;
+                    }
+                }
+                
             }
-        }
 
-        log::debug!("Moving {:?} to {:?}", &tmp_dest_path, &dest_path);
+            log::debug!("Moving {:?} to {:?}", &tmp_dest_path, &dest_path);
+    
+            // If it's done, move the file!
+            let _ = fs::create_dir_all(dest_path);
+            match fs::copy(&tmp_dest_path, &dest_file_path) {
+                Err(e) => yield DownloadEvent::Error(DownloadError::IoError(e)),
+                _ => {}
+            };
+            match fs::remove_file(&tmp_dest_path) {
+                Err(e) => yield DownloadEvent::Error(DownloadError::IoError(e)),
+                _ => {}
+            };
+            yield DownloadEvent::Complete(dest_file_path);
+        };
 
-        // If it's done, move the file!
-        let _ = fs::create_dir_all(dest_path);
-        fs::copy(&tmp_dest_path, &dest_file_path).map_err(DownloadError::IoError)?;
-        fs::remove_file(&tmp_dest_path).map_err(DownloadError::IoError)?;
-
-        Ok(dest_file_path)
+        Ok(Box::pin(stream))
     }
 }
 

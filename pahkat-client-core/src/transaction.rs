@@ -19,6 +19,27 @@ pub enum PackageStatus {
     RequiresUpdate,
 }
 
+use crate::repo::PayloadError;
+
+pub fn status_to_i8(result: Result<PackageStatus, PackageStatusError>) -> i8 {
+    match result {
+        Ok(status) => match status {
+            PackageStatus::NotInstalled => 0,
+            PackageStatus::UpToDate => 1,
+            PackageStatus::RequiresUpdate => 2,
+        },
+        Err(error) => match error {
+            PackageStatusError::Payload(e) => match e {
+                PayloadError::NoPackage | PayloadError::NoConcretePackage => -1,
+                PayloadError::NoPayloadFound => -2,
+                PayloadError::CriteriaUnmet(_) => -5,
+            },
+            PackageStatusError::WrongPayloadType => -3,
+            PackageStatusError::ParsingVersion => -4,
+        },
+    }
+}
+
 impl fmt::Display for PackageStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
@@ -33,23 +54,18 @@ impl fmt::Display for PackageStatus {
     }
 }
 
-pub trait PackageTarget: Send + Sync + Clone {}
-
-/// This is so good.
-impl PackageTarget for () {}
-impl PackageTarget for pahkat_types::payload::windows::InstallTarget {}
-impl PackageTarget for pahkat_types::payload::macos::InstallTarget {}
+use crate::package_store::InstallTarget;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PackageAction<T: PackageTarget> {
+pub struct PackageAction {
     pub id: PackageKey,
     pub action: PackageActionType,
-    pub target: T,
+    pub target: InstallTarget,
 }
 
-impl<T: fmt::Debug + PackageTarget> fmt::Display for PackageAction<T> {
+impl fmt::Display for PackageAction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct(&format!("PackageAction<{}>", std::any::type_name::<T>()))
+        f.debug_struct("PackageAction")
             .field("id", &self.id.to_string())
             .field("action", &self.action)
             .field("target", &self.target)
@@ -57,8 +73,8 @@ impl<T: fmt::Debug + PackageTarget> fmt::Display for PackageAction<T> {
     }
 }
 
-impl<T: PackageTarget> PackageAction<T> {
-    pub fn install(id: PackageKey, target: T) -> PackageAction<T> {
+impl PackageAction {
+    pub fn install(id: PackageKey, target: InstallTarget) -> PackageAction {
         PackageAction {
             id,
             action: PackageActionType::Install,
@@ -66,7 +82,7 @@ impl<T: PackageTarget> PackageAction<T> {
         }
     }
 
-    pub fn uninstall(id: PackageKey, target: T) -> PackageAction<T> {
+    pub fn uninstall(id: PackageKey, target: InstallTarget) -> PackageAction {
         PackageAction {
             id,
             action: PackageActionType::Uninstall,
@@ -173,11 +189,11 @@ impl PackageActionType {
     }
 }
 
-fn process_install_action<T: PackageTarget + 'static>(
-    store: &Arc<dyn PackageStore<Target = T>>,
+fn process_install_action(
+    store: &Arc<dyn PackageStore>,
     package: &Package,
-    action: &PackageAction<T>,
-    new_actions: &mut Vec<PackageAction<T>>,
+    action: &PackageAction,
+    new_actions: &mut Vec<PackageAction>,
 ) -> Result<(), PackageTransactionError> {
     let dependencies =
         match crate::repo::find_package_dependencies(store, &action.id, package, &action.target) {
@@ -222,17 +238,17 @@ impl std::fmt::Display for TransactionError {
     }
 }
 
-pub struct PackageTransaction<T: PackageTarget + std::fmt::Debug + 'static> {
-    store: Arc<dyn PackageStore<Target = T>>,
-    actions: Arc<Vec<PackageAction<T>>>,
+pub struct PackageTransaction {
+    store: Arc<dyn PackageStore>,
+    actions: Arc<Vec<PackageAction>>,
 }
 
-impl<T: PackageTarget + std::fmt::Debug + 'static> PackageTransaction<T> {
+impl PackageTransaction {
     pub fn new(
-        store: Arc<dyn PackageStore<Target = T>>,
-        actions: Vec<PackageAction<T>>,
-    ) -> Result<PackageTransaction<T>, PackageTransactionError> {
-        let mut new_actions: Vec<PackageAction<T>> = vec![];
+        store: Arc<dyn PackageStore>,
+        actions: Vec<PackageAction>,
+    ) -> Result<PackageTransaction, PackageTransactionError> {
+        let mut new_actions: Vec<PackageAction> = vec![];
 
         log::debug!("New transaction with actions: {:#?}", &actions);
 
@@ -286,7 +302,7 @@ impl<T: PackageTarget + std::fmt::Debug + 'static> PackageTransaction<T> {
             .into_iter()
             .try_fold(vec![], |mut out, action| {
                 let status = store
-                    .status(&action.id, &action.target as _)
+                    .status(&action.id, action.target)
                     .map_err(|err| PackageTransactionError::InvalidStatus(err))?;
 
                 let is_valid = if action.is_install() {
@@ -310,7 +326,7 @@ impl<T: PackageTarget + std::fmt::Debug + 'static> PackageTransaction<T> {
         })
     }
 
-    pub fn actions(&self) -> Arc<Vec<PackageAction<T>>> {
+    pub fn actions(&self) -> Arc<Vec<PackageAction>> {
         Arc::clone(&self.actions)
     }
 
@@ -325,7 +341,7 @@ impl<T: PackageTarget + std::fmt::Debug + 'static> PackageTransaction<T> {
         log::debug!("beginning transaction process");
         let is_valid = self.validate();
         let store = Arc::clone(&self.store);
-        let actions: Arc<Vec<PackageAction<T>>> = Arc::clone(&self.actions);
+        let actions: Arc<Vec<PackageAction>> = Arc::clone(&self.actions);
 
         std::thread::spawn(move || {
             if !is_valid {
@@ -345,7 +361,7 @@ impl<T: PackageTarget + std::fmt::Debug + 'static> PackageTransaction<T> {
                 match action.action {
                     PackageActionType::Install => {
                         is_cancelled = !progress(action.id.clone(), TransactionEvent::Installing);
-                        match store.install(&action.id, &action.target) {
+                        match store.install(&action.id, action.target) {
                             Ok(_) => {}
                             Err(e) => {
                                 log::error!("{:?}", &e);
@@ -355,7 +371,7 @@ impl<T: PackageTarget + std::fmt::Debug + 'static> PackageTransaction<T> {
                     }
                     PackageActionType::Uninstall => {
                         is_cancelled = !progress(action.id.clone(), TransactionEvent::Uninstalling);
-                        match store.uninstall(&action.id, &action.target) {
+                        match store.uninstall(&action.id, action.target) {
                             Ok(_) => {}
                             Err(e) => {
                                 log::error!("{:?}", &e);
