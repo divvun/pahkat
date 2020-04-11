@@ -99,6 +99,8 @@ enum Command {
 }
 
 fn main() -> anyhow::Result<()> {
+    env_logger::init();
+
     let args = Args::from_args();
     println!("{:?}", args);
 

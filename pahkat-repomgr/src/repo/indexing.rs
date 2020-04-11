@@ -3,6 +3,51 @@ use std::borrow::Cow;
 use std::path::Path;
 use typed_builder::TypedBuilder;
 
+pub fn index(request: Request<'_>) -> anyhow::Result<()> {
+    log::debug!("Attempting to load repo in path: {:?}", &request.path);
+    let packages_path = request.path.join("packages");
+    // Find all package descriptor TOMLs
+    let packages = std::fs::read_dir(&*packages_path)?
+        .filter_map(Result::ok)
+        .filter(|x| {
+            let v = x.file_type().ok().map(|x| x.is_dir()).unwrap_or(false);
+            log::trace!("Attempting {:?} := {:?}", &x, &v);
+            v
+        })
+        .filter_map(|x| {
+            let path = x.path().join("index.toml");
+            log::trace!("Attempting read to string: {:?}", &path);
+            let file = match std::fs::read_to_string(&path) {
+                Ok(v) => v,
+                Err(e) => {
+                    log::error!("Could not handle path: {:?}", &path);
+                    log::error!("{}", e);
+                    log::error!("Continuing.");
+                    return None;
+                }
+            };
+            let package: pahkat_types::package::Package = match toml::from_str(&file) {
+                Ok(v) => v,
+                Err(e) => {
+                    log::error!("Could not parse: {:?}", &path);
+                    log::error!("{}", e);
+                    log::error!("Continuing.");
+                    return None;
+                }
+            };
+            Some(package)
+        })
+        .collect::<Vec<pahkat_types::package::Package>>();
+
+    let mut builder = FlatBufferBuilder::new();
+    let index = build_index(&mut builder, &packages)?;
+
+    std::fs::write(packages_path.join("index.bin"), index)?;
+    log::trace!("Finished writing index.bin");
+
+    Ok(())
+}
+
 #[non_exhaustive]
 #[derive(Debug, Clone, TypedBuilder)]
 pub struct Request<'a> {
@@ -305,26 +350,6 @@ fn create_releases<'d, 'a>(
         builder.push(release);
     }
     builder.end_vector::<butte::WIPOffset<crate::fbs::pahkat::Release<&'_ [u8]>>>(len)
-}
-
-pub fn index(request: Request<'_>) -> anyhow::Result<()> {
-    // Find all package descriptor TOMLs
-    let packages = std::fs::read_dir(&*request.path.join("packages"))?
-        .filter_map(Result::ok)
-        .filter(|x| x.file_type().ok().map(|x| x.is_dir()).unwrap_or(false))
-        .map(|x| {
-            let file = std::fs::read_to_string(x.path().join("index.toml"))?;
-            let package: pahkat_types::package::Package = toml::from_str(&file)?;
-            Ok(package)
-        })
-        .collect::<Result<Vec<pahkat_types::package::Package>, anyhow::Error>>()?;
-
-    let mut builder = FlatBufferBuilder::new();
-    let index = build_index(&mut builder, &packages)?;
-
-    std::fs::write(request.path.join("index.bin"), index)?;
-
-    Ok(())
 }
 
 fn build_index<'a>(
