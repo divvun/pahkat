@@ -1,5 +1,8 @@
 #![recursion_limit = "2048"]
 
+#![deny(unused_must_use)]
+#![deny(rust_2018_idioms)]
+
 pub extern crate pahkat_types as types;
 
 #[cfg(feature = "ffi")]

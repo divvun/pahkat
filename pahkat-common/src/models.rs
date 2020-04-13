@@ -14,7 +14,7 @@ pub struct Download {
 }
 
 impl fmt::Display for Download {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "Download {{ package_id: \"{}\", package_version: \"{}\", timestamp: \"{}\" }}",

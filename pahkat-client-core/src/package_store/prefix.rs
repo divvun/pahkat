@@ -15,6 +15,7 @@ use super::InstallTarget;
 use crate::transaction::{
     install::InstallError, uninstall::UninstallError, PackageDependencyError,
 };
+use crate::repo::RepoDownloadError;
 use crate::{
     cmp, download::Download, download::DownloadManager, package_store::ImportError,
     repo::LoadedRepository, transaction::PackageStatus, transaction::PackageStatusError, Config,
@@ -51,8 +52,8 @@ pub enum Error {
 }
 
 impl PrefixPackageStore {
-    pub fn open_or_create<P: AsRef<Path>>(prefix_path: P) -> Result<PrefixPackageStore, Error> {
-        match Self::open(prefix_path.as_ref()) {
+    pub async fn open_or_create<P: AsRef<Path>>(prefix_path: P) -> Result<PrefixPackageStore, Error> {
+        match Self::open(prefix_path.as_ref()).await {
             Ok(v) => return Ok(v),
             Err(e) => match e {
                 Error::InvalidPrefixPath(_) => {}
@@ -60,10 +61,10 @@ impl PrefixPackageStore {
             },
         };
 
-        Self::create(prefix_path)
+        Self::create(prefix_path).await
     }
 
-    pub fn create<P: AsRef<Path>>(prefix_path: P) -> Result<PrefixPackageStore, Error> {
+    pub async fn create<P: AsRef<Path>>(prefix_path: P) -> Result<PrefixPackageStore, Error> {
         create_dir_all(&prefix_path).map_err(Error::CreateDirFailed)?;
         let prefix_path = prefix_path
             .as_ref()
@@ -86,12 +87,13 @@ impl PrefixPackageStore {
             config: Arc::new(RwLock::new(config)),
         };
 
-        store.refresh_repos();
+        // We ignore failures here.
+        let _ = store.refresh_repos().await;
 
         Ok(store)
     }
 
-    pub fn open<P: AsRef<Path>>(prefix_path: P) -> Result<PrefixPackageStore, Error> {
+    pub async fn open<P: AsRef<Path>>(prefix_path: P) -> Result<PrefixPackageStore, Error> {
         let prefix_path = prefix_path
             .as_ref()
             .canonicalize()
@@ -111,7 +113,8 @@ impl PrefixPackageStore {
             config: Arc::new(RwLock::new(config)),
         };
 
-        store.refresh_repos();
+        // We ignore failures here.
+        let _ = store.refresh_repos().await;
 
         Ok(store)
     }
@@ -171,15 +174,6 @@ impl PackageStore for PrefixPackageStore {
         crate::repo::import(&self.config, key, &query, &*repos, installer_path)
     }
 
-    fn download(
-        &self,
-        key: &PackageKey,
-        progress: Box<dyn Fn(u64, u64) -> bool + Send + 'static>,
-    ) -> Result<PathBuf, crate::download::DownloadError> {
-        let repos = self.repos.read().unwrap();
-        let query = crate::repo::ReleaseQuery::new(&key, &*repos);
-        crate::repo::download(&self.config, key, &query, &*repos, progress)
-    }
     fn download(
         &self,
         key: &PackageKey,
@@ -363,8 +357,14 @@ impl PackageStore for PrefixPackageStore {
         crate::repo::find_package_by_id(self, package_id, &*repos)
     }
 
-    fn refresh_repos(&self) {
-        *self.repos.write().unwrap() = crate::repo::refresh_repos(&self.config);
+    fn refresh_repos(&self) -> crate::package_store::Future<Result<(), RepoDownloadError>> {
+        let repos = self.repos();
+        let config = self.config();
+        Box::pin(async move {
+            let mut repos = repos.write().unwrap();
+            *repos = crate::repo::refresh_repos(&config).await?;
+            Ok(())
+        })
     }
 
     fn clear_cache(&self) {

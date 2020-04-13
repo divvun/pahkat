@@ -17,7 +17,7 @@ parity-tokio-ipc = "0.7"
 log = "0.4.8"
 env_logger = "0.7.1"
 crossbeam = "0.7.3"
-pahkat_client = { path = "../pahkat-client-core", default-features = false }
+pahkat-client = { path = "../pahkat-client-core", default-features = false }
 cthulhu = { git = "https://github.com/cthulhu-rs/cthulhu" }
 cursed = { git = "https://github.com/cthulhu-rs/cthulhu" }
 anyhow = "1.0.28"
@@ -27,6 +27,6 @@ stream-cancel = "0.5.2"
 tonic-build = "0.2.0"
 
 [features]
-windows = ["pahkat_client/windows"]
-prefix = ["pahkat_client/prefix"]
-macos = ["pahkat_client/macos"]
+windows = ["pahkat-client/windows"]
+prefix = ["pahkat-client/prefix"]
+macos = ["pahkat-client/macos"]

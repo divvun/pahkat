@@ -75,7 +75,7 @@ impl FromStr for InstallTarget {
 }
 
 impl std::fmt::Display for InstallTarget {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
             InstallTarget::System => f.write_str("system"),
             InstallTarget::User => f.write_str("user"),

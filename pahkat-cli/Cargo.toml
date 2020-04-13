@@ -10,7 +10,7 @@ name = "pahkat"
 path = "src/main.rs"
 
 [dependencies]
-pahkat_client = { path = "../pahkat-client-core", default-features = false }
+pahkat-client = { path = "../pahkat-client-core", default-features = false }
 structopt = { version = "0.3.13", features = ["color"] }
 directories = "2.0.2"
 anyhow = "1.0.28"
@@ -21,6 +21,6 @@ futures = { version = "0.3", default-features = false, features = ["alloc"] }
 
 [features]
 default = []
-windows = ["pahkat_client/windows"]
-prefix = ["pahkat_client/prefix"]
-macos = ["pahkat_client/macos"]
+windows = ["pahkat-client/windows"]
+prefix = ["pahkat-client/prefix"]
+macos = ["pahkat-client/macos"]

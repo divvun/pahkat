@@ -211,7 +211,7 @@ struct PackageKeyVisitor;
 impl<'de> Visitor<'de> for PackageKeyVisitor {
     type Value = PackageKey;
 
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str("an PackageKey as a URL string")
     }
 

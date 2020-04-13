@@ -59,7 +59,7 @@
 // }
 
 // impl fmt::Display for OpenIndexError {
-//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 //         match *self {
 //             OpenIndexError::FileError(ref x) => write!(f, "{}", x),
 //             OpenIndexError::JsonError(ref x) => write!(f, "{}", x),

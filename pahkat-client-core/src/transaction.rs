@@ -41,7 +41,7 @@ pub fn status_to_i8(result: Result<PackageStatus, PackageStatusError>) -> i8 {
 }
 
 impl fmt::Display for PackageStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "{}",
@@ -121,7 +121,7 @@ pub enum PackageDependencyError {
 }
 
 impl fmt::Display for PackageDependencyError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             PackageDependencyError::PackageNotFound(x) => {
                 write!(f, "Error: Package '{}' not found", x)

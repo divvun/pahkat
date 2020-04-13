@@ -3,7 +3,6 @@ use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::thread::JoinHandle;
 
-use fd_lock::FdLock;
 use reqwest::header;
 use url::Url;
 
@@ -49,27 +48,6 @@ impl DownloadManager {
             .build()
             .unwrap()
     }
-
-    // #[inline(always)]
-    // fn handle_callback<F>(
-    //     &self,
-    //     cur: u64,
-    //     max: u64,
-    //     progress: Option<&F>,
-    // ) -> Result<(), DownloadError>
-    // where
-    //     F: Fn(u64, u64) -> bool + Send + 'static,
-    // {
-    //     if let Some(cb) = progress {
-    //         let should_continue = cb(cur, max);
-
-    //         if !should_continue {
-    //             return Err(DownloadError::UserCancelled);
-    //         }
-    //     }
-
-    //     Ok(())
-    // }
 
     pub async fn download<P: AsRef<Path>>(
         &self,

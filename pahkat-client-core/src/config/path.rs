@@ -123,7 +123,7 @@ struct ConfigPathVisitor;
 impl<'de> Visitor<'de> for ConfigPathVisitor {
     type Value = ConfigPath;
 
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str("a ConfigPath as a URL string")
     }
 

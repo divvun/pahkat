@@ -242,11 +242,11 @@ fn make_unknown_cstr() -> CString {
 }
 
 impl log::Log for ExternalLogger {
-    fn enabled(&self, metadata: &log::Metadata) -> bool {
+    fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
         true
     }
 
-    fn log(&self, record: &log::Record) {
+    fn log(&self, record: &log::Record<'_>) {
         use log::Level::*;
 
         let level = match record.level() {
@@ -292,13 +292,13 @@ pub extern "C" fn pahkat_config_repos_get(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
 ) -> crate::config::ReposData {
     let config = handle.read().unwrap();
-    config.repos().get().clone()
+    config.repos().data().clone()
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
 pub extern "C" fn pahkat_config_repos_set(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
-    #[marshal(JsonRefMarshaler)] repos: crate::config::ReposData,
+    #[marshal(JsonRefMarshaler::<'_>)] repos: crate::config::ReposData,
 ) -> Result<(), Box<dyn Error>> {
     handle.write().unwrap().repos_mut().set(repos).box_err()
 }
