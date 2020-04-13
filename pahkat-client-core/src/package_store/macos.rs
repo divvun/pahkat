@@ -18,6 +18,7 @@ use super::{PackageStore, SharedRepos, SharedStoreConfig};
 use crate::package_store::{ImportError, InstallTarget};
 use crate::transaction::{install::InstallError, install::ProcessError, uninstall::UninstallError};
 use crate::transaction::{PackageStatus, PackageStatusError};
+use crate::repo::RepoDownloadError;
 use crate::{cmp, Config, PackageKey};
 
 #[cfg(target_os = "macos")]
@@ -67,10 +68,10 @@ impl PackageStore for MacOSPackageStore {
         key: &PackageKey,
         install_target: InstallTarget,
     ) -> Result<PackageStatus, InstallError> {
-        let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
+        let query = crate::repo::ReleaseQuery::new(key, &*repos);
 
-        let (target, release, _) =
+        let (target, release, descriptor) =
             crate::repo::resolve_payload(key, &query, &*repos).map_err(InstallError::Payload)?;
         let installer = match target.payload {
             pahkat_types::payload::Payload::MacOSPackage(v) => v,
@@ -88,7 +89,7 @@ impl PackageStore for MacOSPackageStore {
         install_macos_package(&pkg_path, install_target).map_err(InstallError::InstallerFailure)?;
 
         Ok(self
-            .status_impl(&release, &installer, install_target)
+            .status_impl(&descriptor, &release, install_target)
             .unwrap())
     }
 
@@ -97,10 +98,10 @@ impl PackageStore for MacOSPackageStore {
         key: &PackageKey,
         install_target: InstallTarget,
     ) -> Result<PackageStatus, UninstallError> {
-        let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
+        let query = crate::repo::ReleaseQuery::new(key, &*repos);
 
-        let (target, release, _) =
+        let (target, release, descriptor) =
             crate::repo::resolve_payload(key, &query, &*repos).map_err(UninstallError::Payload)?;
         let installer = match target.payload {
             pahkat_types::payload::Payload::MacOSPackage(v) => v,
@@ -111,27 +112,17 @@ impl PackageStore for MacOSPackageStore {
             .map_err(UninstallError::UninstallerFailure)?;
 
         Ok(self
-            .status_impl(&release, &installer, install_target)
+            .status_impl(&descriptor, &release, install_target)
             .unwrap())
     }
 
     fn import(&self, key: &PackageKey, installer_path: &Path) -> Result<PathBuf, ImportError> {
-        let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
+        let query = crate::repo::ReleaseQuery::new(key, &*repos);
         crate::repo::import(&self.config, key, &query, &*repos, installer_path)
     }
 
     fn download(
-        &self,
-        key: &PackageKey,
-        progress: Box<dyn Fn(u64, u64) -> bool + Send + 'static>,
-    ) -> Result<PathBuf, crate::download::DownloadError> {
-        let query = crate::repo::ReleaseQuery::from(key);
-        let repos = self.repos.read().unwrap();
-        crate::repo::download(&self.config, key, &query, &*repos, progress)
-    }
-
-    fn download_async(
         &self,
         key: &PackageKey,
     ) -> std::pin::Pin<
@@ -142,9 +133,9 @@ impl PackageStore for MacOSPackageStore {
                 + 'static,
         >,
     > {
-        let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
-        crate::repo::download_async(&self.config, key, &query, &*repos)
+        let query = crate::repo::ReleaseQuery::new(key, &*repos);
+        crate::repo::download(&self.config, key, &query, &*repos)
     }
 
     fn status(
@@ -152,17 +143,17 @@ impl PackageStore for MacOSPackageStore {
         key: &PackageKey,
         install_target: InstallTarget,
     ) -> Result<PackageStatus, PackageStatusError> {
-        let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
+        let query = crate::repo::ReleaseQuery::new(key, &*repos);
 
-        let (target, release, _) = crate::repo::resolve_payload(key, &query, &*repos)
+        let (target, release, descriptor) = crate::repo::resolve_payload(key, &query, &*repos)
             .map_err(PackageStatusError::Payload)?;
         let installer = match target.payload {
             pahkat_types::payload::Payload::MacOSPackage(v) => v,
             _ => return Err(PackageStatusError::WrongPayloadType),
         };
 
-        self.status_impl(&release, &installer, install_target)
+        self.status_impl(&descriptor, &release, install_target)
     }
 
     fn all_statuses(
@@ -183,8 +174,14 @@ impl PackageStore for MacOSPackageStore {
         crate::repo::find_package_by_id(self, package_id, &*repos)
     }
 
-    fn refresh_repos(&self) {
-        *self.repos.write().unwrap() = crate::repo::refresh_repos(&self.config);
+    fn refresh_repos(&self) -> crate::package_store::Future<Result<(), RepoDownloadError>> {
+        let repos = self.repos();
+        let config = self.config();
+        Box::pin(async move {
+            let mut repos = repos.write().unwrap();
+            *repos = crate::repo::refresh_repos(&config).await?;
+            Ok(())
+        })
     }
 
     fn clear_cache(&self) {
@@ -201,35 +198,58 @@ impl PackageStore for MacOSPackageStore {
 // }
 
 impl MacOSPackageStore {
-    pub fn new(config: Arc<RwLock<Config>>) -> MacOSPackageStore {
+    #[must_use]
+    pub async fn new(config: Config) -> MacOSPackageStore {
         let store = MacOSPackageStore {
             repos: Arc::new(RwLock::new(HashMap::new())),
-            config,
+            config: Arc::new(RwLock::new(config)),
         };
 
-        store.refresh_repos();
+        // We ignore errors here.
+        let _ = store.refresh_repos().await;
 
         store
     }
 
     fn status_impl(
         &self,
+        descriptor: &pahkat_types::package::Descriptor,
         release: &pahkat_types::package::Release,
-        installer: &macos::Package,
         target: InstallTarget,
     ) -> Result<PackageStatus, PackageStatusError> {
-        let pkg_info = match get_package_info(&installer.pkg_id, target) {
-            Ok(v) => v,
-            Err(e) => {
-                match e {
-                    ProcessError::NotFound => {}
-                    _ => {
-                        log::error!("{:?}", e);
-                    }
+        // Map over all targets to find pkg_ids
+        let pkg_ids: Vec<&str> = descriptor.release.iter().fold(vec![], |acc, release| {
+            release.target.iter().fold(acc, |mut acc, target| {
+                let payload = match &target.payload {
+                    pahkat_types::payload::Payload::MacOSPackage(v) => v,
+                    _ => return acc,
                 };
+                if !acc.contains(&&*payload.pkg_id) {
+                    acc.push(&*payload.pkg_id);
+                }
+                acc
+            })
+        });
 
-                return Ok(PackageStatus::NotInstalled);
+        let pkg_info = pkg_ids.iter().find_map(|pkg_id| {
+            match get_package_info(&pkg_id, target) {
+                Ok(v) => Some(v),
+                Err(e) => {
+                    match e {
+                        ProcessError::NotFound => {}
+                        _ => {
+                            log::error!("{:?}", e);
+                        }
+                    };
+
+                    None
+                }
             }
+        });
+
+        let pkg_info = match pkg_info {
+            Some(v) => v,
+            None => return Ok(PackageStatus::NotInstalled)
         };
 
         let status = self::cmp::cmp(&pkg_info.pkg_version, &release.version);

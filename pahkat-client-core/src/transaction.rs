@@ -134,20 +134,14 @@ impl fmt::Display for PackageDependencyError {
     }
 }
 
-#[derive(Debug)]
-pub enum TransactionEvent {
-    Uninstalling,
-    Installing,
-}
-
-impl TransactionEvent {
-    pub fn to_u32(&self) -> u32 {
-        match self {
-            TransactionEvent::Uninstalling => 1,
-            TransactionEvent::Installing => 2,
-        }
-    }
-}
+// impl TransactionEvent {
+//     pub fn to_u32(&self) -> u32 {
+//         match self {
+//             TransactionEvent::Uninstalling => 1,
+//             TransactionEvent::Installing => 2,
+//         }
+//     }
+// }
 
 #[derive(Debug, Clone)]
 pub enum PackageTransactionError {
@@ -243,6 +237,15 @@ pub struct PackageTransaction {
     actions: Arc<Vec<PackageAction>>,
 }
 
+#[derive(Debug)]
+pub enum TransactionEvent {
+    Installing(PackageKey),
+    Uninstalling(PackageKey),
+    Progress(PackageKey, String),
+    Error(PackageKey, TransactionError),
+    Complete,
+}
+
 impl PackageTransaction {
     pub fn new(
         store: Arc<dyn PackageStore>,
@@ -334,55 +337,143 @@ impl PackageTransaction {
         true
     }
 
-    pub fn process<F>(&self, progress: F) -> JoinHandle<Result<(), TransactionError>>
-    where
-        F: Fn(PackageKey, TransactionEvent) -> bool + 'static + Send,
-    {
+    // pub fn process<F>(&self, progress: F) -> JoinHandle<Result<(), TransactionError>>
+    // where
+    //     F: Fn(PackageKey, TransactionEvent) -> bool + 'static + Send,
+    // {
+    //     log::debug!("beginning transaction process");
+    //     let is_valid = self.validate();
+    //     let store = Arc::clone(&self.store);
+    //     let actions: Arc<Vec<PackageAction>> = Arc::clone(&self.actions);
+
+    //     std::thread::spawn(move || {
+    //         if !is_valid {
+    //             // TODO: early return
+    //             return Err(TransactionError::ValidationFailed);
+    //         }
+
+    //         let mut is_cancelled = false;
+
+    //         for action in actions.iter() {
+    //             log::debug!("processing action: {}", &action);
+
+    //             if is_cancelled {
+    //                 return Err(TransactionError::UserCancelled);
+    //             }
+
+    //             match action.action {
+    //                 PackageActionType::Install => {
+    //                     is_cancelled = !progress(action.id.clone(), TransactionEvent::Installing);
+    //                     match store.install(&action.id, action.target) {
+    //                         Ok(_) => {}
+    //                         Err(e) => {
+    //                             log::error!("{:?}", &e);
+    //                             return Err(TransactionError::Install(e));
+    //                         }
+    //                     };
+    //                 }
+    //                 PackageActionType::Uninstall => {
+    //                     is_cancelled = !progress(action.id.clone(), TransactionEvent::Uninstalling);
+    //                     match store.uninstall(&action.id, action.target) {
+    //                         Ok(_) => {}
+    //                         Err(e) => {
+    //                             log::error!("{:?}", &e);
+    //                             return Err(TransactionError::Uninstall(e));
+    //                         }
+    //                     };
+    //                 }
+    //             }
+    //         }
+
+    //         Ok(())
+    //     })
+    // }
+    pub fn process(&self) -> (stream_cancel::Trigger, crate::package_store::Stream<TransactionEvent>) {
         log::debug!("beginning transaction process");
-        let is_valid = self.validate();
+
+        let (canceler, valve) = stream_cancel::Valve::new();
+
         let store = Arc::clone(&self.store);
         let actions: Arc<Vec<PackageAction>> = Arc::clone(&self.actions);
 
-        std::thread::spawn(move || {
-            if !is_valid {
-                // TODO: early return
-                return Err(TransactionError::ValidationFailed);
-            }
-
-            let mut is_cancelled = false;
-
+        let stream = async_stream::stream! {
             for action in actions.iter() {
                 log::debug!("processing action: {}", &action);
 
-                if is_cancelled {
-                    return Err(TransactionError::UserCancelled);
-                }
-
                 match action.action {
                     PackageActionType::Install => {
-                        is_cancelled = !progress(action.id.clone(), TransactionEvent::Installing);
+                        // is_cancelled = !progress(action.id.clone(), TransactionEvent::Installing);
+                        yield TransactionEvent::Installing(action.id.clone());
+
                         match store.install(&action.id, action.target) {
                             Ok(_) => {}
                             Err(e) => {
                                 log::error!("{:?}", &e);
-                                return Err(TransactionError::Install(e));
+                                yield TransactionEvent::Error(action.id.clone(), TransactionError::Install(e));
+                                return;
                             }
                         };
                     }
                     PackageActionType::Uninstall => {
-                        is_cancelled = !progress(action.id.clone(), TransactionEvent::Uninstalling);
+                        // is_cancelled = !progress(action.id.clone(), TransactionEvent::Uninstalling);
+                        yield TransactionEvent::Uninstalling(action.id.clone());
+
                         match store.uninstall(&action.id, action.target) {
                             Ok(_) => {}
                             Err(e) => {
                                 log::error!("{:?}", &e);
-                                return Err(TransactionError::Uninstall(e));
+                                yield TransactionEvent::Error(action.id.clone(), TransactionError::Uninstall(e));
+                                return;
                             }
                         };
                     }
                 }
             }
 
-            Ok(())
-        })
+            yield TransactionEvent::Complete;
+        };
+
+        (canceler, Box::pin(valve.wrap(stream)))
+        // let is_valid = self.validate();
+
+        // std::thread::spawn(move || {
+        //     if !is_valid {
+        //         // TODO: early return
+        //         return Err(TransactionError::ValidationFailed);
+        //     }
+
+        //     let mut is_cancelled = false;
+
+
+        //         if is_cancelled {
+        //             return Err(TransactionError::UserCancelled);
+        //         }
+
+        //         match action.action {
+        //             PackageActionType::Install => {
+        //                 is_cancelled = !progress(action.id.clone(), TransactionEvent::Installing);
+        //                 match store.install(&action.id, action.target) {
+        //                     Ok(_) => {}
+        //                     Err(e) => {
+        //                         log::error!("{:?}", &e);
+        //                         return Err(TransactionError::Install(e));
+        //                     }
+        //                 };
+        //             }
+        //             PackageActionType::Uninstall => {
+        //                 is_cancelled = !progress(action.id.clone(), TransactionEvent::Uninstalling);
+        //                 match store.uninstall(&action.id, action.target) {
+        //                     Ok(_) => {}
+        //                     Err(e) => {
+        //                         log::error!("{:?}", &e);
+        //                         return Err(TransactionError::Uninstall(e));
+        //                     }
+        //                 };
+        //             }
+        //         }
+        //     }
+
+        //     Ok(())
+        // })
     }
 }

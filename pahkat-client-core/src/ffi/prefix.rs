@@ -94,9 +94,9 @@ pub extern "C" fn pahkat_prefix_package_store_download_url(
     use pahkat_types::AsDownloadUrl;
     use crate::repo::*;
 
-    let query = crate::repo::ReleaseQuery::from(&package_key);
     let repos = handle.repos();
     let repos = repos.read().unwrap();
+    let query = crate::repo::ReleaseQuery::new(key, &*repos);
 
     let (target, _, _) = match resolve_payload(&package_key, &query, &repos) {
         Ok(v) => v,

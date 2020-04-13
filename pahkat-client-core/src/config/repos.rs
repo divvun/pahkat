@@ -115,7 +115,7 @@ impl Repos {
         Ok(())
     }
 
-    pub fn get(&self) -> &ReposData {
+    pub fn data(&self) -> &ReposData {
         &self.data
     }
 }

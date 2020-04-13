@@ -8,7 +8,9 @@ use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 use std::path::Path;
 use std::sync::{Arc, RwLock};
+use std::pin::Pin;
 
+use dashmap::DashMap;
 use hashbrown::HashMap;
 use sha2::digest::Digest;
 use sha2::Sha256;
@@ -22,6 +24,7 @@ use crate::package_store::PackageStore;
 use crate::transaction::{PackageDependencyError, PackageStatus, PackageStatusError};
 use pahkat_types::package::{Package, Release, Version};
 use pahkat_types::payload::Target;
+
 
 #[derive(Debug, Clone, Error)]
 pub enum PayloadError {
@@ -95,38 +98,6 @@ fn empty_payloads() -> &'static [&'static str] {
     &[]
 }
 
-impl<'a> From<&'a PackageKey> for ReleaseQuery<'a> {
-    fn from(key: &'a PackageKey) -> Self {
-        ReleaseQuery {
-            platform: key
-                .query
-                .platform
-                .as_ref()
-                .map(|x| &**x)
-                .unwrap_or_else(|| defaults::platform()),
-            arch: key
-                .query
-                .arch
-                .as_ref()
-                .map(|x| &**x)
-                .or_else(|| defaults::arch()),
-            channels: key
-                .query
-                .channel
-                .as_ref()
-                .map(|x| vec![&**x])
-                .unwrap_or_else(|| vec![]),
-            versions: key
-                .query
-                .version
-                .as_ref()
-                .map(|v| vec![VersionQuery::Match(&*v)])
-                .unwrap_or_else(|| vec![]),
-            payloads: defaults::payloads().to_vec(),
-        }
-    }
-}
-
 pub(crate) struct ReleaseQueryIter<'a> {
     query: &'a ReleaseQuery<'a>,
     descriptor: &'a pahkat_types::package::Descriptor,
@@ -142,20 +113,27 @@ pub(crate) struct ReleaseQueryResponse<'a> {
 impl<'a> ReleaseQueryIter<'a> {
     #[inline(always)]
     fn next_release(&mut self) -> Option<ReleaseQueryResponse<'a>> {
+        log::trace!("Beginning release query iter: {:#?}", &self.query);
+
         while let Some(release) = self.descriptor.release.get(self.next_release) {
+            log::trace!("Candidate release: version:{:?}, channel:{:?}", &release.version.to_string(), &release.channel);
+
             // eprintln!("release: {:?}", &release);
             // If query is empty, it means search only for the main empty channel
             if let Some(channel) = release.channel.as_ref().map(|x| x.as_str()) {
                 if !self.query.channels.contains(&channel) {
+                    log::trace!("Skipping (not accepted channel)");
                     self.next_release += 1;
                     continue;
                 }
             } else if !self.query.channels.is_empty() {
+                log::trace!("Skipping (query channels not empty and no match)");
                 self.next_release += 1;
                 continue;
             }
 
             if let Some(payload) = self.next_payload(release) {
+                log::trace!("Payload resolved: {:?}", &payload);
                 self.next_release += 1;
                 return Some(payload);
             }
@@ -170,17 +148,22 @@ impl<'a> ReleaseQueryIter<'a> {
     #[inline(always)]
     fn next_payload(&mut self, release: &'a Release) -> Option<ReleaseQueryResponse<'a>> {
         for ref target in release.target.iter() {
+            log::trace!("Candidate target: platform:{} arch:{:?}", &target.platform, &target.arch);
+
             if target.platform != self.query.platform {
+                log::trace!("Skipping (platform does not match)");
                 continue;
             }
 
             if let Some(arch) = self.query.arch {
                 if let Some(ref target_arch) = target.arch {
                     if target_arch != arch {
+                        log::trace!("Skipping (arch does not match)");
                         continue;
                     }
                 }
             } else if target.arch.is_some() {
+                log::trace!("Skipping (no arch in query but arch in target)");
                 continue;
             }
 
@@ -219,6 +202,61 @@ impl<'a> ReleaseQuery<'a> {
             next_release: 0,
         }
     }
+
+    pub fn new(key: &'a PackageKey, repos: &'a HashMap<Url, LoadedRepository>) -> Self {
+        let channels = key
+            .query
+            .channel
+            .as_ref()
+            .map(|x| vec![&**x])
+            .unwrap_or_else(|| repos.iter().find_map(|(url, repo)| {
+                log::trace!("ReleaseQuery::new() {} {}", &key.repository_url, url);
+                if &key.repository_url == url {
+                    log::trace!("{:?}", repo.meta());
+                    let channel = repo.meta().channel.as_ref().map(|x| &**x);
+                    log::trace!("Channel? {:?}", &channel);
+                    channel
+                } else {
+                    None
+                }
+            }).map(|x| vec![x]).unwrap_or_else(|| vec![]));
+
+        ReleaseQuery {
+            platform: key
+                .query
+                .platform
+                .as_ref()
+                .map(|x| &**x)
+                .unwrap_or_else(|| defaults::platform()),
+            arch: key
+                .query
+                .arch
+                .as_ref()
+                .map(|x| &**x)
+                .or_else(|| defaults::arch()),
+            channels,
+            versions: key
+                .query
+                .version
+                .as_ref()
+                .map(|v| vec![VersionQuery::Match(&*v)])
+                .unwrap_or_else(|| vec![]),
+            payloads: defaults::payloads().to_vec(),
+        }
+    }
+}
+
+pub(crate) fn resolve_package<'a>(
+    package_key: &PackageKey,
+    repos: &'a HashMap<Url, LoadedRepository>,
+) -> Result<pahkat_types::package::Descriptor, PayloadError> {
+    log::trace!("Finding package");
+    let package = find_package_by_key(package_key, repos).ok_or(PayloadError::NoPackage)?;
+    log::trace!("Package found");
+    let descriptor: pahkat_types::package::Descriptor = package
+        .try_into()
+        .map_err(|_| PayloadError::NoConcretePackage)?;
+    Ok(descriptor)
 }
 
 pub(crate) fn resolve_payload<'a>(
@@ -234,11 +272,8 @@ pub(crate) fn resolve_payload<'a>(
     PayloadError,
 > {
     log::trace!("Resolving payload");
-    let package = find_package_by_key(package_key, repos).ok_or(PayloadError::NoPackage)?;
+    let descriptor = resolve_package(package_key, repos)?;
     log::trace!("Package found");
-    let descriptor: &pahkat_types::package::Descriptor = &package
-        .try_into()
-        .map_err(|_| PayloadError::NoConcretePackage)?;
     query
         .iter(&descriptor)
         .next()
@@ -270,61 +305,62 @@ pub(crate) fn import<'a>(
 use crate::package_store::DownloadEvent;
 use futures::stream::StreamExt;
 
+// pub(crate) fn download<'a>(
+//     config: &Arc<RwLock<Config>>,
+//     package_key: &PackageKey,
+//     query: &ReleaseQuery<'a>,
+//     repos: &HashMap<Url, LoadedRepository>,
+//     progress: Box<dyn Fn(u64, u64) -> bool + Send + 'static>,
+// ) -> Result<std::path::PathBuf, crate::download::DownloadError> {
+//     log::trace!("Downloading {} {:?}", package_key, &query);
+//     use pahkat_types::AsDownloadUrl;
+
+//     let (target, _, _) = match resolve_payload(package_key, &query, repos) {
+//         Ok(v) => v,
+//         Err(e) => {
+//             return {
+//                 log::error!(
+//                     "Failed to resolve: {} {:?} {:?}",
+//                     &package_key,
+//                     &query,
+//                     &repos
+//                 );
+//                 Err(crate::download::DownloadError::Payload(e))
+//             }
+//         }
+//     };
+
+//     let url = target.payload.as_download_url();
+
+//     let config = config.read().unwrap();
+//     let settings = config.settings();
+//     let dm = crate::download::DownloadManager::new(
+//         settings.download_cache_dir().to_path_buf(),
+//         settings.max_concurrent_downloads(),
+//     );
+
+//     let output_path = crate::repo::download_dir(&*config, url);
+//     crate::block_on(async move {
+//         let mut dl = dm.download(url, output_path).await?;
+
+//         while let Some(event) = dl.next().await {
+//             match event {
+//                 DownloadEvent::Error(e) => return Err(e),
+//                 DownloadEvent::Complete(p) => return Ok(p),
+//                 DownloadEvent::Progress((cur, total)) => {
+//                     if !(progress)(cur, total) {
+//                         break;
+//                     }
+//                 }
+//             }
+//         }
+
+//         Err(crate::download::DownloadError::UserCancelled)
+//     })
+// }
+
+#[must_use]
 pub(crate) fn download<'a>(
-    config: &Arc<RwLock<Config>>,
-    package_key: &PackageKey,
-    query: &ReleaseQuery<'a>,
-    repos: &HashMap<Url, LoadedRepository>,
-    progress: Box<dyn Fn(u64, u64) -> bool + Send + 'static>,
-) -> Result<std::path::PathBuf, crate::download::DownloadError> {
-    log::trace!("Downloading {} {:?}", package_key, &query);
-    use pahkat_types::AsDownloadUrl;
-
-    let (target, _, _) = match resolve_payload(package_key, &query, repos) {
-        Ok(v) => v,
-        Err(e) => {
-            return {
-                log::error!(
-                    "Failed to resolve: {} {:?} {:?}",
-                    &package_key,
-                    &query,
-                    &repos
-                );
-                Err(crate::download::DownloadError::Payload(e))
-            }
-        }
-    };
-
-    let url = target.payload.as_download_url();
-
-    let config = config.read().unwrap();
-    let settings = config.settings();
-    let dm = crate::download::DownloadManager::new(
-        settings.download_cache_dir().to_path_buf(),
-        settings.max_concurrent_downloads(),
-    );
-
-    let output_path = crate::repo::download_dir(&*config, url);
-    crate::block_on(async move {
-        let mut dl = dm.download(url, output_path).await?;
-
-        while let Some(event) = dl.next().await {
-            match event {
-                DownloadEvent::Error(e) => return Err(e),
-                DownloadEvent::Complete(p) => return Ok(p),
-                DownloadEvent::Progress((cur, total)) => {
-                    if !(progress)(cur, total) {
-                        break;
-                    }
-                }
-            }
-        }
-
-        Err(crate::download::DownloadError::UserCancelled)
-    })
-}
-
-pub(crate) fn download_async<'a>(
     config: &Arc<RwLock<Config>>,
     package_key: &PackageKey,
     query: &ReleaseQuery<'a>,
@@ -517,19 +553,27 @@ where
     })
 }
 
-pub(crate) fn refresh_repos(config: &Arc<RwLock<Config>>) -> HashMap<Url, LoadedRepository> {
-    let mut repos = HashMap::new();
+#[must_use]
+pub(crate) async fn refresh_repos(config: &Arc<RwLock<Config>>) -> Result<HashMap<Url, LoadedRepository>, RepoDownloadError> {
+    let repos = Arc::new(DashMap::new());
 
     log::debug!("Refreshing repos...");
 
-    let config = config.read().unwrap();
+    let config = Arc::new(config.read().unwrap().clone());
 
     for url in config.repos().keys() {
         log::trace!("{:?}", &url);
-        recurse_repo(&url, &mut repos, &config.settings().repo_cache_dir());
+        recurse_repo(url.clone(), Arc::clone(&repos), Arc::clone(&config)).await?;
     }
 
-    repos
+    let repos = Arc::try_unwrap(repos).expect("There must not be any current users of the dashmap");
+
+    let mut map = HashMap::new();
+
+    for (k, v) in repos.into_iter() {
+        map.insert(k, v);
+    }
+    Ok(map)
 }
 
 pub(crate) fn clear_cache(config: &Arc<RwLock<Config>>) {
@@ -639,22 +683,35 @@ pub(crate) fn find_package_dependencies(
     // return Ok(result);
 }
 
-fn recurse_repo(url: &Url, repos: &mut HashMap<Url, LoadedRepository>, cache_dir: &Path) {
+// use crate::repo::repository::RepoDownloadError;
+
+#[must_use]
+fn recurse_repo(
+    url: Url,
+    repos: Arc<DashMap<Url, LoadedRepository>>,
+    config: Arc<crate::config::Config>,
+) -> Pin<Box<dyn std::future::Future<Output = Result<(), RepoDownloadError>>>> {
     if repos.contains_key(&url) {
-        return;
+        return Box::pin(async { Ok(()) });
     }
 
-    match LoadedRepository::from_cache_or_url(url, cache_dir) {
-        Ok(repo) => {
-            for url in repo.info().repository.linked_repositories.iter() {
-                recurse_repo(url, repos, cache_dir);
-            }
+    let cache_dir = config.settings().repo_cache_dir();
+    let channel = config.repos().get(&url).and_then(|r| r.channel.clone());
 
-            repos.insert(url.clone(), repo);
+    Box::pin(async move {
+        match LoadedRepository::from_cache_or_url(&url, channel, &cache_dir).await {
+            Ok(repo) => {
+                for url in repo.info().repository.linked_repositories.iter() {
+                    recurse_repo(url.clone(), Arc::clone(&repos), Arc::clone(&config)).await?;
+                }
+
+                repos.insert(url.clone(), repo);
+                Ok(())
+            }
+            Err(e) => {
+                log::error!("{:?}", e);
+                Err(e)
+            }
         }
-        // TODO: actual error handling omg
-        Err(e) => {
-            log::error!("{:?}", e);
-        }
-    };
+    })
 }

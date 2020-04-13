@@ -52,23 +52,26 @@ message TransactionResponse {
         uint64 current = 2;
         uint64 total = 3;
     }
-    message DownloadError {
-        string package_id = 1;
-        string error = 2;
-    }
+    
     message DownloadComplete {
         string package_id = 1;
     }
-    message InstallProgress {
+
+    message InstallStarted {
+        string package_id = 1;
+    }
+    
+    message UninstallStarted {
+        string package_id = 1;
+    }
+    
+    message TransactionProgress {
         string package_id = 1;
         uint64 current = 2;
         uint64 total = 3;
         string message = 4;
     }
-    message InstallStarted {
-        string package_id = 1;
-    }
-    message InstallError {
+    message TransactionError {
         string package_id = 1;
         string error = 2;
     }
@@ -76,14 +79,17 @@ message TransactionResponse {
     message TransactionComplete {}
 
     oneof value {
-        TransactionStarted transaction_started = 2;
+        TransactionStarted transaction_started = 1;
+        TransactionProgress transaction_progress = 2;
         TransactionComplete transaction_complete = 3;
+        TransactionError transaction_error = 4;
+
         DownloadProgress download_progress = 10;
-        DownloadError download_error = 11;
+        TransactionError download_error = 11;
         DownloadComplete download_complete = 12;
-        InstallProgress install_progress = 13;
+
         InstallStarted install_started = 14;
-        InstallError install_error = 15;
+        UninstallStarted uninstall_started = 16;
     }
 }
 

@@ -86,6 +86,8 @@ impl Config {
 
         let config = Config { repos, settings };
 
+        log::trace!("Config loaded: {:#?}", &config);
+
         Ok(config)
     }
 

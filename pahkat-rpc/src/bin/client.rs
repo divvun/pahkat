@@ -20,30 +20,30 @@ mod pb {
     tonic::include_proto!("/pahkat");
 }
 
-impl From<PackageAction<()>> for pb::PackageAction {
-    fn from(action: PackageAction<()>) -> pb::PackageAction {
+impl From<PackageAction> for pb::PackageAction {
+    fn from(action: PackageAction) -> pb::PackageAction {
         pb::PackageAction {
             id: action.id.to_string(),
             action: action.action.to_u8() as u32,
-            target: 0,
+            target: action.target as u8 as u32,
         }
     }
 }
 
-#[cthulhu::invoke]
-pub extern "C" fn pahkat_rpc_new() {}
+// #[cthulhu::invoke]
+// pub extern "C" fn pahkat_rpc_new() {}
 
-#[cthulhu::invoke]
-pub extern "C" fn pahkat_rpc_notifications(handle: TODO) {}
+// #[cthulhu::invoke]
+// pub extern "C" fn pahkat_rpc_notifications(handle: TODO) {}
 
-#[cthulhu::invoke]
-pub extern "C" fn pahkat_rpc_repo_indexes(handle: TODO) {}
+// #[cthulhu::invoke]
+// pub extern "C" fn pahkat_rpc_repo_indexes(handle: TODO) {}
 
-#[cthulhu::invoke]
-pub extern "C" fn pahkat_rpc_status(handle: TODO) {}
+// #[cthulhu::invoke]
+// pub extern "C" fn pahkat_rpc_status(handle: TODO) {}
 
-#[cthulhu::invoke]
-pub extern "C" fn pahkat_rpc_process_transaction(handle: TODO) {}
+// #[cthulhu::invoke]
+// pub extern "C" fn pahkat_rpc_process_transaction(handle: TODO) {}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -76,13 +76,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let request = tonic::Request::new(pb::TransactionRequest {
         actions: vec![PackageAction::install(
-            PackageKey::try_from("https://test.com/packages/woo?platform=nope").unwrap(),
-            (),
+            PackageKey::try_from("https://x.brendan.so/divvun-pahkat-repo/packages/speller-smj").unwrap(),
+            Default::default(),
         )
         .into()],
     });
     let stream = client.process_transaction(request).await?;
     let mut stream = stream.into_inner();
+
+
+    while let Ok(Some(response)) = stream.message().await {
+        println!("RESPONSE={:?}", response);
+    }
 
     // let req = tonic::Request::new(pb::RefreshRequest {});
     // let response = client.refresh(req).await?;

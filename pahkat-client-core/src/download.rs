@@ -32,7 +32,7 @@ pub(crate) struct DownloadManager {
 // >;
 
 impl DownloadManager {
-    pub fn new(path: PathBuf, max_concurrent_downloads: u8) -> DownloadManager {
+    pub fn new(path: PathBuf, _max_concurrent_downloads: u8) -> DownloadManager {
         let client = Self::client();
 
         DownloadManager {

@@ -18,7 +18,7 @@ mod fbs;
 
 pub use self::config::{Config, Permission};
 pub use self::download::Download;
-pub use self::package_store::PackageStore;
+pub use self::package_store::{PackageStore, DownloadEvent};
 pub use self::repo::{LoadedRepository, PackageKey};
 pub use self::transaction::{PackageAction, PackageActionType, PackageTransaction};
 
@@ -30,22 +30,5 @@ pub use package_store::prefix::PrefixPackageStore;
 
 #[cfg(all(windows, feature = "windows"))]
 pub use package_store::windows::WindowsPackageStore;
-
-use once_cell::sync::Lazy;
-use std::sync::Mutex;
-
-static BASIC_RUNTIME: Lazy<Mutex<tokio::runtime::Runtime>> = Lazy::new(|| {
-    Mutex::new(
-        tokio::runtime::Builder::new()
-            .basic_scheduler()
-            .enable_all()
-            .build()
-            .expect("failed to build tokio runtime"),
-    )
-});
-
-fn block_on<F: std::future::Future>(future: F) -> F::Output {
-    BASIC_RUNTIME.lock().unwrap().block_on(future)
-}
 
 pub(crate) use fbs::generated::pahkat as pahkat_fbs;

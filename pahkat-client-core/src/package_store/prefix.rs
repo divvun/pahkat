@@ -166,8 +166,8 @@ impl PackageStore for PrefixPackageStore {
 
     fn import(&self, key: &PackageKey, installer_path: &Path) -> Result<PathBuf, ImportError> {
         log::debug!("IMPORTING");
-        let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
+        let query = crate::repo::ReleaseQuery::new(&key, &*repos);
         crate::repo::import(&self.config, key, &query, &*repos, installer_path)
     }
 
@@ -176,11 +176,11 @@ impl PackageStore for PrefixPackageStore {
         key: &PackageKey,
         progress: Box<dyn Fn(u64, u64) -> bool + Send + 'static>,
     ) -> Result<PathBuf, crate::download::DownloadError> {
-        let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
+        let query = crate::repo::ReleaseQuery::new(&key, &*repos);
         crate::repo::download(&self.config, key, &query, &*repos, progress)
     }
-    fn download_async(
+    fn download(
         &self,
         key: &PackageKey,
     ) -> std::pin::Pin<
@@ -191,9 +191,9 @@ impl PackageStore for PrefixPackageStore {
                 + 'static,
         >,
     > {
-        let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
-        crate::repo::download_async(&self.config, key, &query, &*repos)
+        let query = crate::repo::ReleaseQuery::new(&key, &*repos);
+        crate::repo::download(&self.config, key, &query, &*repos)
     }
 
     fn install(
@@ -201,8 +201,8 @@ impl PackageStore for PrefixPackageStore {
         key: &PackageKey,
         target: InstallTarget,
     ) -> Result<PackageStatus, InstallError> {
-        let mut query = crate::repo::ReleaseQuery::from(key).and_payloads(vec!["TarballPackage"]);
         let repos = self.repos.read().unwrap();
+        let mut query = crate::repo::ReleaseQuery::new(&key, &*repos);
 
         let (target, release, package) =
             crate::repo::resolve_payload(key, &query, &*repos).map_err(InstallError::Payload)?;
@@ -325,11 +325,11 @@ impl PackageStore for PrefixPackageStore {
             Some(v) => v,
         };
 
-        let mut query = crate::repo::ReleaseQuery::from(key).and_payloads(vec!["TarballPackage"]);
-        query.platform = "ios";
-        log::debug!("query: {:?}", &query);
-
         let repos = self.repos.read().unwrap();
+
+        let query = crate::repo::ReleaseQuery::new(key, &*repos)
+            .and_payloads(vec!["TarballPackage"]);
+        log::debug!("query: {:?}", &query);
 
         let (target, release, package) = crate::repo::resolve_payload(key, &query, &*repos)
             .map_err(PackageStatusError::Payload)?;

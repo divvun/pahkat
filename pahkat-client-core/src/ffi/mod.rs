@@ -11,7 +11,7 @@ use std::convert::TryFrom;
 use std::error::Error;
 use std::ffi::{CStr, CString};
 use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, Mutex};
 
 use cursed::{FromForeign, InputType, ReturnType, ToForeign};
 use once_cell::sync::Lazy;
@@ -372,4 +372,18 @@ impl<T, E: std::error::Error + 'static> BoxError for Result<T, E> {
     fn box_err(self) -> Result<Self::Item, Box<dyn Error>> {
         self.map_err(|e| Box::new(e) as _)
     }
+}
+
+static BASIC_RUNTIME: Lazy<Mutex<tokio::runtime::Runtime>> = Lazy::new(|| {
+    Mutex::new(
+        tokio::runtime::Builder::new()
+            .basic_scheduler()
+            .enable_all()
+            .build()
+            .expect("failed to build tokio runtime"),
+    )
+});
+
+fn block_on<F: std::future::Future>(future: F) -> F::Output {
+    BASIC_RUNTIME.lock().unwrap().block_on(future)
 }

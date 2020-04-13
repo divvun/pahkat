@@ -168,6 +168,7 @@ impl<'a> TryFrom<&'a Url> for PackageKey {
                 .map_err(|_| TryFromError::BaseForbidden)?;
             path_segments.clear();
             path_segments.extend(left);
+            path_segments.push("");
         }
 
         Ok(PackageKey {

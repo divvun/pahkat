@@ -1,24 +1,25 @@
 #[cfg(all(target_os = "macos", feature = "macos"))]
 pub mod macos;
-
 #[cfg(feature = "prefix")]
 pub mod prefix;
-
 #[cfg(all(windows, feature = "windows"))]
 pub mod windows;
 
-use crate::transaction::{PackageStatus, PackageStatusError};
-use crate::{LoadedRepository, PackageKey};
-use hashbrown::HashMap;
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
+use std::path::{Path, PathBuf};
+use std::pin::Pin;
+
+use hashbrown::HashMap;
+use pahkat_types::package::Package;
+use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::config::Config;
 use crate::transaction::{install::InstallError, uninstall::UninstallError};
-use pahkat_types::package::Package;
-use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use crate::transaction::{PackageStatus, PackageStatusError};
+use crate::{LoadedRepository, PackageKey};
+use crate::repo::RepoDownloadError;
 
 pub type SharedStoreConfig = Arc<RwLock<Config>>;
 pub type SharedRepos = Arc<RwLock<HashMap<Url, LoadedRepository>>>;
@@ -57,20 +58,18 @@ impl Default for InstallTarget {
     }
 }
 
+pub type Stream<T> = Pin<Box<dyn futures::stream::Stream<Item = T> + Send + Sync + 'static>>;
+pub type Future<T> = Pin<Box<dyn std::future::Future<Output = T>>>;
+
 pub trait PackageStore: Send + Sync {
     fn repos(&self) -> SharedRepos;
     fn config(&self) -> SharedStoreConfig;
 
+    #[must_use]
     fn download(
         &self,
         key: &PackageKey,
-        progress: Box<dyn Fn(u64, u64) -> bool + Send + 'static>,
-    ) -> Result<PathBuf, crate::download::DownloadError>;
-
-    fn download_async(
-        &self,
-        key: &PackageKey,
-    ) -> std::pin::Pin<Box<dyn futures::stream::Stream<Item = DownloadEvent> + Send + Sync + 'static>>;
+    ) -> Stream<DownloadEvent>;
 
     fn import(&self, key: &PackageKey, installer_path: &Path) -> Result<PathBuf, ImportError>;
 
@@ -102,12 +101,14 @@ pub trait PackageStore: Send + Sync {
 
     fn find_package_by_key(&self, key: &PackageKey) -> Option<Package>;
 
-    fn refresh_repos(&self);
+    #[must_use]
+    fn refresh_repos(&self) -> Future<Result<(), RepoDownloadError>>;
 
     fn clear_cache(&self);
 
-    fn force_refresh_repos(&self) {
+    #[must_use]
+    fn force_refresh_repos(&self) -> Future<Result<(), RepoDownloadError>> {
         self.clear_cache();
-        self.refresh_repos();
+        self.refresh_repos()
     }
 }
