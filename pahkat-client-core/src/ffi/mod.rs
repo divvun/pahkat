@@ -7,6 +7,10 @@ pub mod windows;
 #[cfg(feature = "prefix")]
 pub mod prefix;
 
+mod marshal;
+mod log;
+mod runtime;
+
 use std::convert::TryFrom;
 use std::error::Error;
 use std::ffi::{CStr, CString};
@@ -27,263 +31,16 @@ use crate::repo::PayloadError;
 use crate::transaction::{PackageStatus, PackageStatusError};
 use crate::{Config, PackageKey};
 
-pub struct TargetMarshaler;
-
-impl InputType for TargetMarshaler {
-    type Foreign = <cursed::StringMarshaler as InputType>::Foreign;
-}
-
-impl ReturnType for TargetMarshaler {
-    type Foreign = cursed::Slice<u8>;
-
-    fn foreign_default() -> Self::Foreign {
-        cursed::Slice::default()
-    }
-}
-
-impl ToForeign<MacOSInstallTarget, cursed::Slice<u8>> for TargetMarshaler {
-    type Error = std::convert::Infallible;
-
-    fn to_foreign(input: MacOSInstallTarget) -> Result<cursed::Slice<u8>, Self::Error> {
-        let str_target = match input {
-            MacOSInstallTarget::System => "system",
-            MacOSInstallTarget::User => "user",
-        };
-
-        cursed::StringMarshaler::to_foreign(str_target.to_string())
-    }
-}
-
-impl FromForeign<cursed::Slice<u8>, MacOSInstallTarget> for TargetMarshaler {
-    type Error = Box<dyn Error>;
-
-    unsafe fn from_foreign(ptr: cursed::Slice<u8>) -> Result<MacOSInstallTarget, Self::Error> {
-        let str_target = cursed::StringMarshaler::from_foreign(ptr)?;
-
-        Ok(match &*str_target {
-            "user" => MacOSInstallTarget::User,
-            _ => MacOSInstallTarget::System,
-        })
-    }
-}
-
-impl ToForeign<WindowsInstallTarget, cursed::Slice<u8>> for TargetMarshaler {
-    type Error = std::convert::Infallible;
-
-    fn to_foreign(input: WindowsInstallTarget) -> Result<cursed::Slice<u8>, Self::Error> {
-        let str_target = match input {
-            WindowsInstallTarget::System => "system",
-            WindowsInstallTarget::User => "user",
-        };
-
-        cursed::StringMarshaler::to_foreign(str_target.to_string())
-    }
-}
-
-impl FromForeign<cursed::Slice<u8>, WindowsInstallTarget> for TargetMarshaler {
-    type Error = Box<dyn Error>;
-
-    unsafe fn from_foreign(ptr: cursed::Slice<u8>) -> Result<WindowsInstallTarget, Self::Error> {
-        let str_target = cursed::StringMarshaler::from_foreign(ptr)?;
-
-        Ok(match &*str_target {
-            "user" => WindowsInstallTarget::User,
-            _ => WindowsInstallTarget::System,
-        })
-    }
-}
-
-#[inline(always)]
-fn level_u8_to_str(level: u8) -> Option<&'static str> {
-    Some(match level {
-        0 => return None,
-        1 => "error",
-        2 => "warn",
-        3 => "info",
-        4 => "debug",
-        _ => "trace",
-    })
-}
-
-#[cfg(not(target_os = "android"))]
-#[no_mangle]
-pub extern "C" fn pahkat_enable_logging(level: u8) {
-    use std::io::Write;
-
-    if let Some(level) = level_u8_to_str(level) {
-        std::env::set_var("RUST_LOG", format!("pahkat_client={}", level));
-    }
-
-    env_logger::builder()
-        .format(|buf, record| {
-            writeln!(
-                buf,
-                "{} {} {}:{} > {}",
-                record.level(),
-                record.target(),
-                record.file().unwrap_or("<unknown>"),
-                record.line().unwrap_or(0),
-                record.args()
-            )
-        })
-        .init();
-}
-
-#[cfg(target_os = "android")]
-#[no_mangle]
-pub extern "C" fn pahkat_enable_logging(level: u8) {
-    use std::io::Write;
-
-    if let Some(level) = level_u8_to_str(level) {
-        std::env::set_var("RUST_LOG", format!("pahkat_client={}", level));
-    }
-
-    let mut derp = android_log::LogBuilder::new("PahkatClient");
-    derp.format(|record| {
-        format!(
-            "{} {} {}:{} > {}",
-            record.level(),
-            record.target(),
-            record.file().unwrap_or("<unknown>"),
-            record.line().unwrap_or(0),
-            record.args()
-        )
-    });
-    derp.init().unwrap();
-}
-
-pub struct JsonRefMarshaler<'a>(&'a std::marker::PhantomData<()>);
-pub struct JsonMarshaler;
-
-impl InputType for JsonMarshaler {
-    type Foreign = <cursed::StringMarshaler as InputType>::Foreign;
-}
-
-impl ReturnType for JsonMarshaler {
-    type Foreign = cursed::Slice<u8>;
-
-    fn foreign_default() -> Self::Foreign {
-        cursed::Slice::default()
-    }
-}
-
-impl<'a> InputType for JsonRefMarshaler<'a> {
-    type Foreign = <cursed::StrMarshaler<'a> as InputType>::Foreign;
-}
-
-impl<T> ToForeign<T, cursed::Slice<u8>> for JsonMarshaler
-where
-    T: Serialize,
-{
-    type Error = Box<dyn Error>;
-
-    fn to_foreign(input: T) -> Result<cursed::Slice<u8>, Self::Error> {
-        let json_str = serde_json::to_string(&input)?;
-        Ok(cursed::StringMarshaler::to_foreign(json_str).unwrap())
-    }
-}
-
-impl<'a, T> FromForeign<cursed::Slice<u8>, T> for JsonRefMarshaler<'a>
-where
-    T: DeserializeOwned,
-{
-    type Error = Box<dyn Error>;
-
-    unsafe fn from_foreign(ptr: cursed::Slice<u8>) -> Result<T, Self::Error> {
-        let json_str = <cursed::StrMarshaler<'a> as FromForeign<cursed::Slice<u8>, &'a str>>::from_foreign(ptr)?;
-        log::debug!("JSON: {}, type: {}", &json_str, std::any::type_name::<T>());
-
-        let v: Result<T, _> = serde_json::from_str(&json_str);
-        v.map_err(|e| {
-            log::error!("Json error: {}", &e);
-            log::debug!("{:?}", &e);
-            Box::new(e) as _
-        })
-    }
-}
-
-pub struct PackageKeyMarshaler<'a>(&'a std::marker::PhantomData<()>);
-
-impl<'a> InputType for PackageKeyMarshaler<'a> {
-    type Foreign = <cursed::StrMarshaler<'a> as InputType>::Foreign;
-}
-
-impl<'a> ReturnType for PackageKeyMarshaler<'a> {
-    type Foreign = <cursed::StringMarshaler as ReturnType>::Foreign;
-
-    fn foreign_default() -> Self::Foreign {
-        Default::default()
-    }
-}
-
-impl<'a> ToForeign<&'a PackageKey, cursed::Slice<u8>> for PackageKeyMarshaler<'a> {
-    type Error = std::convert::Infallible;
-
-    fn to_foreign(key: &'a PackageKey) -> Result<cursed::Slice<u8>, Self::Error> {
-        cursed::StringMarshaler::to_foreign(key.to_string())
-    }
-}
-
-impl<'a> FromForeign<cursed::Slice<u8>, PackageKey> for PackageKeyMarshaler<'a> {
-    type Error = Box<dyn Error>;
-
-    unsafe fn from_foreign(string: cursed::Slice<u8>) -> Result<PackageKey, Self::Error> {
-        let s = <cursed::StrMarshaler<'a> as FromForeign<cursed::Slice<u8>, &'a str>>::from_foreign(string)?;
-        PackageKey::try_from(s).box_err()
-    }
-}
-
-struct ExternalLogger {
-    callback: LoggingCallback,
-}
-
-fn make_unknown_cstr() -> CString {
-    CString::new("<unknown>").unwrap()
-}
-
-impl log::Log for ExternalLogger {
-    fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
-        true
-    }
-
-    fn log(&self, record: &log::Record<'_>) {
-        use log::Level::*;
-
-        let level = match record.level() {
-            Error => 1,
-            Warn => 2,
-            Info => 3,
-            Debug => 4,
-            Trace => 5,
-        };
-
-        let msg =
-            CString::new(format!("{}", record.args())).unwrap_or_else(|_| make_unknown_cstr());
-        let module = CString::new(record.module_path().unwrap_or("<unknown>"))
-            .unwrap_or_else(|_| make_unknown_cstr());
-        let file_path = format!(
-            "{}:{}",
-            record.file().unwrap_or("<unknown>"),
-            record.line().unwrap_or(0)
-        );
-        let file_path = CString::new(file_path).unwrap_or_else(|_| make_unknown_cstr());
-
-        (self.callback)(level, msg.as_ptr(), module.as_ptr(), file_path.as_ptr());
-    }
-
-    fn flush(&self) {}
-}
-
-type LoggingCallback =
-    extern "C" fn(u8, *const libc::c_char, *const libc::c_char, *const libc::c_char);
-// static LOGGING_CALLBACK: Lazy<RwLock<Option<Box<ExternalLogger>>> = Lazy::new(|| RwLock::new(None));
+use self::log::ExternalLogger;
+use marshal::{JsonMarshaler, JsonRefMarshaler, PackageKeyMarshaler, TargetMarshaler};
+use runtime::block_on;
 
 #[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
 pub extern "C" fn pahkat_set_logging_callback(
     callback: extern "C" fn(u8, *const libc::c_char, *const libc::c_char, *const libc::c_char),
 ) -> Result<(), Box<dyn Error>> {
-    log::set_boxed_logger(Box::new(ExternalLogger { callback }))
-        .map(|_| log::set_max_level(log::LevelFilter::Trace))
+    ::log::set_boxed_logger(Box::new(ExternalLogger { callback }))
+        .map(|_| ::log::set_max_level(::log::LevelFilter::Trace))
         .box_err()
 }
 
@@ -372,18 +129,4 @@ impl<T, E: std::error::Error + 'static> BoxError for Result<T, E> {
     fn box_err(self) -> Result<Self::Item, Box<dyn Error>> {
         self.map_err(|e| Box::new(e) as _)
     }
-}
-
-static BASIC_RUNTIME: Lazy<Mutex<tokio::runtime::Runtime>> = Lazy::new(|| {
-    Mutex::new(
-        tokio::runtime::Builder::new()
-            .basic_scheduler()
-            .enable_all()
-            .build()
-            .expect("failed to build tokio runtime"),
-    )
-});
-
-fn block_on<F: std::future::Future>(future: F) -> F::Output {
-    BASIC_RUNTIME.lock().unwrap().block_on(future)
 }
