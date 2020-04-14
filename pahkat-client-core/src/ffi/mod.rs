@@ -94,18 +94,18 @@ pub extern "C" fn pahkat_config_settings_cache_url(
 pub extern "C" fn pahkat_android_init(
     #[marshal(cursed::PathBufMarshaler)] container_path: PathBuf,
 ) {
-    let _ = crate::config::CONTAINER_PATH.set(container_path).ok();
+    let _ = crate::config::path::CONTAINER_PATH.set(container_path).ok();
 
     std::panic::set_hook(Box::new(|info| {
         if let Some(s) = info.payload().downcast_ref::<&str>() {
-            log::error!("{}", s);
+            ::log::error!("{}", s);
         } else if let Some(s) = info.payload().downcast_ref::<String>() {
-            log::error!("{}", s);
+            ::log::error!("{}", s);
         }
 
         format!("{:?}", backtrace::Backtrace::new())
             .split("\n")
-            .for_each(|x| log::error!("{}", x));
+            .for_each(|x| ::log::error!("{}", x));
     }));
 }
 
