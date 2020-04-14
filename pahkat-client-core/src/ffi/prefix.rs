@@ -1,12 +1,11 @@
 use std::collections::BTreeMap;
-use std::convert::TryFrom;
 use std::error::Error;
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 use std::marker::PhantomData;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
-use cursed::{FromForeign, InputType, ReturnType, ToForeign};
+use cursed::{FromForeign, ToForeign};
 use futures::stream::{Stream, StreamExt};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -42,11 +41,21 @@ pub extern "C" fn pahkat_prefix_package_store_create(
         .box_err()
 }
 
+#[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<PrefixPackageStore>")]
+pub extern "C" fn pahkat_prefix_package_store_open_or_create(
+    #[marshal(cursed::PathBufMarshaler)] prefix_path: PathBuf,
+) -> Result<Arc<PrefixPackageStore>, Box<dyn Error>> {
+    block_on(PrefixPackageStore::open_or_create(prefix_path))
+        .map(|x| Arc::new(x))
+        .box_err()
+}
+
 #[cthulhu::invoke]
 pub extern "C" fn pahkat_prefix_package_store_status(
     #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
     #[marshal(PackageKeyMarshaler::<'_>)] package_key: PackageKey,
 ) -> i8 {
+    log::trace!("FFI pahkat_prefix_package_store_status called: {:?}", &package_key);
     status_to_i8(handle.status(&package_key, Default::default()))
 }
 
@@ -166,7 +175,7 @@ pub extern "C" fn pahkat_prefix_package_store_force_refresh_repos(
 // }
 
 #[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<RwLock<Config>>")]
-pub extern "C" fn pahkat_prefix_package_config(
+pub extern "C" fn pahkat_prefix_package_store_config(
     #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
 ) -> Arc<RwLock<Config>> {
     handle.config()
@@ -216,6 +225,19 @@ pub extern "C" fn pahkat_prefix_transaction_process(
             TransactionEvent::Uninstalling(key) => {
                 let k = PackageKeyMarshaler::to_foreign(&key).unwrap();
                 if progress_callback(tag, k, 2) == 0 {
+                    drop(canceler);
+                    break;
+                }
+            }
+            TransactionEvent::Complete => {
+                if progress_callback(tag, Default::default(), 3) == 0 {
+                    drop(canceler);
+                    break;
+                }
+            }
+            TransactionEvent::Error(key, _) => {
+                let k = PackageKeyMarshaler::to_foreign(&key).unwrap();
+                if progress_callback(tag, k, 4) == 0 {
                     drop(canceler);
                     break;
                 }

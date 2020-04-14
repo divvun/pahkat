@@ -57,9 +57,11 @@ impl fmt::Display for PackageStatus {
 use crate::package_store::InstallTarget;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub struct PackageAction {
     pub id: PackageKey,
     pub action: PackageActionType,
+    #[serde(default)]
     pub target: InstallTarget,
 }
 

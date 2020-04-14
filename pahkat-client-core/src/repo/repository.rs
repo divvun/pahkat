@@ -24,12 +24,12 @@ pub struct LoadedRepositoryMeta {
     // TODO: last update
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LoadedRepository {
-    info: pahkat_types::repo::Index,
-    packages: Box<[u8]>,
+    pub info: pahkat_types::repo::Index,
+    pub packages: Box<[u8]>,
     // strings: pahkat_types::strings::
-    meta: LoadedRepositoryMeta,
+    pub meta: LoadedRepositoryMeta,
 }
 
 impl LoadedRepository {

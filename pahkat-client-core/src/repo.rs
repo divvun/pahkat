@@ -126,14 +126,14 @@ impl<'a> ReleaseQueryIter<'a> {
                     self.next_release += 1;
                     continue;
                 }
-            } else if !self.query.channels.is_empty() {
+            } else if release.channel.is_some() && !self.query.channels.is_empty() {
                 log::trace!("Skipping (query channels not empty and no match)");
                 self.next_release += 1;
                 continue;
             }
 
             if let Some(payload) = self.next_payload(release) {
-                log::trace!("Payload resolved: {:?}", &payload);
+                log::trace!("Target resolved: {:#?}", &payload.target);
                 self.next_release += 1;
                 return Some(payload);
             }
