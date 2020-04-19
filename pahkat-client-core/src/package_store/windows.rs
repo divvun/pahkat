@@ -27,8 +27,7 @@ const UNINSTALL_PATH: &'static str = r"Software\Microsoft\Windows\CurrentVersion
 const DISPLAY_VERSION: &'static str = "DisplayVersion";
 const QUIET_UNINSTALL_STRING: &'static str = "QuietUninstallString";
 
-type SharedStoreConfig = Arc<RwLock<Config>>;
-type SharedRepos = Arc<RwLock<HashMap<Url, LoadedRepository>>>;
+use crate::package_store::{SharedRepos, SharedStoreConfig};
 
 #[derive(Debug)]
 pub struct WindowsPackageStore {

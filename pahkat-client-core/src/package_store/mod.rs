@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::pin::Pin;
 
 use hashbrown::HashMap;
+use dashmap::DashMap;
 use pahkat_types::package::Package;
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -22,7 +23,7 @@ use crate::{LoadedRepository, PackageKey};
 use crate::repo::RepoDownloadError;
 
 pub type SharedStoreConfig = Arc<RwLock<Config>>;
-pub type SharedRepos = Arc<RwLock<HashMap<Url, LoadedRepository>>>;
+pub type SharedRepos = Arc<dashmap::ReadOnlyView<Url, LoadedRepository>>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ImportError {
@@ -59,7 +60,7 @@ impl Default for InstallTarget {
 }
 
 pub type Stream<T> = Pin<Box<dyn futures::stream::Stream<Item = T> + Send + Sync + 'static>>;
-pub type Future<T> = Pin<Box<dyn std::future::Future<Output = T>>>;
+pub type Future<T> = Pin<Box<dyn std::future::Future<Output = T> + Send + Sync + 'static>>;
 
 pub trait PackageStore: Send + Sync {
     fn repos(&self) -> SharedRepos;

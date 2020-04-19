@@ -81,7 +81,7 @@ fn vectorize_strings<'a>(
 ) -> butte::WIPOffset<butte::Vector<'a, butte::WIPOffset<&'a str>>> {
     let len = keys.len();
     builder.start_vector::<butte::WIPOffset<&'_ str>>(len);
-    for key in keys.into_iter() {
+    for key in keys.into_iter().rev() {
         builder.push(key);
     }
     builder.end_vector::<butte::WIPOffset<&'_ str>>(len)
@@ -271,7 +271,7 @@ fn create_targets<'d, 'a>(
 
     let len = targets.len();
     builder.start_vector::<butte::WIPOffset<crate::fbs::pahkat::Target<&'_ [u8]>>>(len);
-    for target in targets {
+    for target in targets.into_iter().rev() {
         builder.push(target);
     }
     builder.end_vector::<butte::WIPOffset<crate::fbs::pahkat::Target<&'_ [u8]>>>(len)
@@ -346,7 +346,7 @@ fn create_releases<'d, 'a>(
 
     let len = releases.len();
     builder.start_vector::<butte::WIPOffset<crate::fbs::pahkat::Release<&'_ [u8]>>>(len);
-    for release in releases {
+    for release in releases.into_iter().rev() {
         builder.push(release);
     }
     builder.end_vector::<butte::WIPOffset<crate::fbs::pahkat::Release<&'_ [u8]>>>(len)
@@ -367,13 +367,13 @@ fn build_index<'a>(
         .collect::<Vec<_>>();
 
     builder.start_vector::<butte::WIPOffset<&'_ str>>(id_refs.len());
-    for id in id_refs.iter() {
+    for id in id_refs.iter().rev() {
         builder.push(id.clone());
     }
     let packages_keys = Some(builder.end_vector::<butte::WIPOffset<&'_ str>>(id_refs.len()));
 
     builder.start_vector::<u8>(id_refs.len());
-    for _ in id_refs.iter() {
+    for _ in id_refs.iter().rev() {
         builder.push(crate::fbs::pahkat::butte_gen::PackageType::Descriptor as u8);
     }
     let packages_values_types = Some(builder.end_vector::<u8>(id_refs.len()));
@@ -402,7 +402,7 @@ fn build_index<'a>(
                     .collect::<Vec<_>>();
                 let len = tags.len();
                 builder.start_vector::<butte::WIPOffset<&'_ str>>(len);
-                for tag_ref in tags.into_iter() {
+                for tag_ref in tags.into_iter().rev() {
                     builder.push(tag_ref);
                 }
                 Some(builder.end_vector::<butte::WIPOffset<&'_ str>>(len))
@@ -431,7 +431,7 @@ fn build_index<'a>(
 
     builder
         .start_vector::<butte::WIPOffset<crate::fbs::pahkat::Descriptor<&'_ [u8]>>>(id_refs.len());
-    for package_value in packages_values.into_iter() {
+    for package_value in packages_values.into_iter().rev() {
         builder.push(package_value);
     }
     let packages_values = Some(

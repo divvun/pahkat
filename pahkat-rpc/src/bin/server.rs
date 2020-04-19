@@ -1,3 +1,5 @@
+use std::path::Path;
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
@@ -8,15 +10,15 @@ async fn main() -> anyhow::Result<()> {
         format!("/tmp/pahkat")
     };
 
-    pahkat_rpc::start(path, config_path()).await
+    pahkat_rpc::start(Path::new(&path), config_path()).await
 }
 
 #[cfg(feature = "prefix")]
-fn config_path() -> Option<&'static std::path::Path> {
-    Some(std::path::Path::new("/tmp/pahkat-prefix"))
+fn config_path() -> Option<&'static Path> {
+    Some(Path::new("/tmp/pahkat-prefix"))
 }
 
 #[cfg(not(feature = "prefix"))]
-fn config_path() -> Option<&'static std::path::Path> {
+fn config_path() -> Option<&'static Path> {
     None
 }

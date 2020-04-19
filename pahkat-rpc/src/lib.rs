@@ -1,5 +1,6 @@
 #![recursion_limit = "1024"]
 
+use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::pin::Pin;
 use std::sync::Arc;
@@ -33,6 +34,62 @@ impl From<pb::PackageAction> for PackageAction {
     }
 }
 
+impl From<pahkat_client::repo::LoadedRepository> for pb::LoadedRepository {
+    fn from(value: pahkat_client::repo::LoadedRepository) -> pb::LoadedRepository {
+        pb::LoadedRepository {
+            index: Some(pb::loaded_repository::Index {
+                url: value.info.repository.url.to_string(),
+                channels: value.info.repository.channels,
+                default_channel: value
+                    .info
+                    .repository
+                    .default_channel
+                    .unwrap_or_else(|| "".into()),
+                name: value.info.name.into_iter().collect::<HashMap<_, _>>(),
+                description: value
+                    .info
+                    .description
+                    .into_iter()
+                    .collect::<HashMap<_, _>>(),
+                agent: Some(pb::loaded_repository::index::Agent {
+                    name: value.info.agent.name,
+                    version: value.info.agent.version,
+                    url: value
+                        .info
+                        .agent
+                        .url
+                        .map(|x| x.to_string())
+                        .unwrap_or_else(|| "".into()),
+                }),
+                landing_url: value
+                    .info
+                    .repository
+                    .landing_url
+                    .map(|x| x.to_string())
+                    .unwrap_or_else(|| "".into()),
+                linked_repositories: value
+                    .info
+                    .repository
+                    .linked_repositories
+                    .iter()
+                    .map(|x| x.to_string())
+                    .collect(),
+                accepted_redirections: value
+                    .info
+                    .repository
+                    .accepted_redirections
+                    .iter()
+                    .map(|x| x.to_string())
+                    .collect(),
+            }),
+            meta: Some(pb::loaded_repository::Meta {
+                channel: value.meta.clone().channel.unwrap_or_else(|| "".into()),
+            }),
+            packages_fbs: value.packages.to_vec(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 enum Notification {
     Test,
@@ -45,12 +102,13 @@ type Stream<T> =
 struct Rpc {
     store: Arc<dyn PackageStore>,
     notifications: broadcast::Sender<Notification>,
+    current_transaction: Arc<tokio::sync::Mutex<()>>,
 }
 
 #[tonic::async_trait]
 impl pb::pahkat_server::Pahkat for Rpc {
     type NotificationsStream = Stream<pb::NotificationResponse>;
-    // type SelfUpdateStream = Stream<pb::SelfUpdateResponse>;
+    type ProcessTransactionStream = Stream<pb::TransactionResponse>;
 
     async fn notifications(
         &self,
@@ -80,13 +138,6 @@ impl pb::pahkat_server::Pahkat for Rpc {
         Ok(Response::new(Box::pin(stream) as Self::NotificationsStream))
     }
 
-    // async fn self_update(
-    //     &self,
-    //     _request: Request<pb::SelfUpdateRequest>,
-    // ) -> Result<Self::SelfUpdateStream> {
-    //     Err(Status::unimplemented(""))
-    // }
-
     async fn status(&self, request: Request<pb::StatusRequest>) -> Result<pb::StatusResponse> {
         let request = request.into_inner();
         let package_id = PackageKey::try_from(&*request.package_id)
@@ -100,204 +151,208 @@ impl pb::pahkat_server::Pahkat for Rpc {
         }))
     }
 
-    // async fn repository_indexes(
-    //     &self,
-    //     _request: Request<pb::RepositoryIndexesRequest>,
-    // ) -> Result<pb::RepositoryIndexesResponse> {
-    //     Err(Status::unimplemented(""))
-    // }
+    async fn repository_indexes(
+        &self,
+        _request: Request<pb::RepositoryIndexesRequest>,
+    ) -> Result<pb::RepositoryIndexesResponse> {
+        let repos = self.store.repos();
 
-    type ProcessTransactionStream = Stream<pb::TransactionResponse>;
+        Ok(Response::new(pb::RepositoryIndexesResponse {
+            repositories: repos
+                .values()
+                .map(|x| pb::LoadedRepository::from(x.clone()))
+                .collect(),
+        }))
+    }
 
     async fn process_transaction(
         &self,
-        request: Request<pb::TransactionRequest>,
+        request: Request<tonic::Streaming<pb::TransactionRequest>>,
     ) -> Result<Self::ProcessTransactionStream> {
-        let request = request.into_inner();
-        let actions = request
-            .actions
-            .into_iter()
-            .map(|x| PackageAction::from(x))
-            .collect::<Vec<_>>();
-        println!("{:?}", &actions);
-
-        let transaction = PackageTransaction::new(Arc::clone(&self.store as _) as _, actions)
-            .map_err(|e| Status::failed_precondition(format!("{}", e)))?;
+        let mut request = request.into_inner();
+        let store: Arc<dyn PackageStore> = Arc::clone(&self.store as _);
+        let current_transaction = Arc::clone(&self.current_transaction);
 
         let (tx, rx) = mpsc::unbounded_channel();
-        let store = Arc::clone(&self.store);
-
+        // Get messages
         tokio::spawn(async move {
-            let tx = tx;
+            let mut has_requested = false;
+            let mut has_cancelled = false;
 
-            let tx1 = tx.clone();
-            let stream = async_stream::try_stream! {
-                let tx = tx1;
-                use pahkat_client::package_store::DownloadEvent;
-                use pb::transaction_response::*;
-
-                yield pb::TransactionResponse {
-                    value: Some(Value::TransactionStarted(TransactionStarted {}))
+            while let Ok(Some(request)) = request.message().await {
+                let value = match request.value {
+                    Some(v) => v,
+                    None => return,
                 };
 
-                for action in transaction.actions().iter() {
-                    let tx = tx.clone();
-                    let id = action.id.clone();
-                    let mut download = store.download(&action.id);
-
-                    while let Some(event) = download.next().await {
-                        match event {
-                            DownloadEvent::Error(e) => {
-                                yield pb::TransactionResponse {
-                                    value: Some(Value::DownloadError(TransactionError {
-                                        package_id: id.to_string(),
-                                        error: format!("{}", e)
-                                    }))
-                                };
-                                return;
-                            }
-                            DownloadEvent::Progress((current, total)) => {
-                                yield pb::TransactionResponse {
-                                    value: Some(Value::DownloadProgress(DownloadProgress {
-                                        package_id: id.to_string(),
-                                        current,
-                                        total,
-                                    }))
-                                };
-                            }
-                            DownloadEvent::Complete(_) => {
-                                yield pb::TransactionResponse {
-                                    value: Some(Value::DownloadComplete(DownloadComplete {
-                                        package_id: id.to_string(),
-                                    }))
-                                };
-                            }
-                        }
-                    }
-                }
-
-                let (canceler, mut tx_stream) = transaction.process();
-                let mut is_completed = false;
-
-                while let Some(event) = tx_stream.next().await {
-                    use pahkat_client::transaction::TransactionEvent;
-
-                    match event {
-                        TransactionEvent::Installing(id) => {
-                            yield pb::TransactionResponse {
-                                value: Some(Value::InstallStarted(InstallStarted {
-                                    package_id: id.to_string(),
-                                }))
-                            };
-                        }
-                        TransactionEvent::Uninstalling(id) => {
-                            yield pb::TransactionResponse {
-                                value: Some(Value::UninstallStarted(UninstallStarted {
-                                    package_id: id.to_string(),
-                                }))
-                            };
-                        }
-                        TransactionEvent::Progress(id, msg) => {
-                            yield pb::TransactionResponse {
-                                value: Some(Value::TransactionProgress(TransactionProgress {
-                                    package_id: id.to_string(),
-                                    message: msg,
-                                    current: 0,
-                                    total: 0,
-                                }))
-                            };
-                        }
-                        TransactionEvent::Error(id, err) => {
-                            yield pb::TransactionResponse {
-                                value: Some(Value::TransactionError(TransactionError {
-                                    package_id: id.to_string(),
-                                    error: format!("{}", err),
-                                }))
-                            };
+                let request = match value {
+                    pb::transaction_request::Value::Transaction(v) => {
+                        if has_requested {
+                            // Duplicate transaction requests on same pipe is an error.
+                            // TODO: reply with an error message
                             return;
                         }
-                        TransactionEvent::Complete => {
+                        has_requested = true;
+                        v
+                    }
+                    pb::transaction_request::Value::Cancel(_) => {
+                        if has_requested {
+                            // We can cancel this transaction as it is ours.
+                            has_cancelled = true;
+                        }
+
+                        return;
+                    }
+                };
+
+                let actions = request
+                    .actions
+                    .into_iter()
+                    .map(|x| PackageAction::from(x))
+                    .collect::<Vec<_>>();
+                println!("{:?}", &actions);
+
+                let transaction =
+                    PackageTransaction::new(Arc::clone(&store) as _, actions).unwrap(); // .map_err(|e| Status::failed_precondition(format!("{}", e)))?;
+
+                let store = Arc::clone(&store);
+                let current_transaction = Arc::clone(&current_transaction);
+
+                let tx = tx.clone();
+
+                tokio::spawn(async move {
+                    // If there is a running transaction, we must block on this transaction and wait
+
+                    log::debug!("Waiting for transaction lock…");
+                    let _guard = current_transaction.lock().await;
+                    log::debug!("Transaction lock attained.");
+
+                    let tx1 = tx.clone();
+                    let stream = async_stream::try_stream! {
+                        let tx = tx1;
+                        use pahkat_client::package_store::DownloadEvent;
+                        use pb::transaction_response::*;
+
+                        yield pb::TransactionResponse {
+                            value: Some(Value::TransactionStarted(TransactionStarted {}))
+                        };
+
+                        for action in transaction.actions().iter() {
+                            let tx = tx.clone();
+                            let id = action.id.clone();
+                            let mut download = store.download(&action.id);
+
+                            // TODO: handle cancel here
+
+                            while let Some(event) = download.next().await {
+                                match event {
+                                    DownloadEvent::Error(e) => {
+                                        yield pb::TransactionResponse {
+                                            value: Some(Value::DownloadError(TransactionError {
+                                                package_id: id.to_string(),
+                                                error: format!("{}", e)
+                                            }))
+                                        };
+                                        return;
+                                    }
+                                    DownloadEvent::Progress((current, total)) => {
+                                        yield pb::TransactionResponse {
+                                            value: Some(Value::DownloadProgress(DownloadProgress {
+                                                package_id: id.to_string(),
+                                                current,
+                                                total,
+                                            }))
+                                        };
+                                    }
+                                    DownloadEvent::Complete(_) => {
+                                        yield pb::TransactionResponse {
+                                            value: Some(Value::DownloadComplete(DownloadComplete {
+                                                package_id: id.to_string(),
+                                            }))
+                                        };
+                                    }
+                                }
+                            }
+                        }
+
+                        let (canceler, mut tx_stream) = transaction.process();
+                        let mut is_completed = false;
+
+                        while let Some(event) = tx_stream.next().await {
+                            use pahkat_client::transaction::TransactionEvent;
+
+                            // TODO: handle cancel here
+
+                            match event {
+                                TransactionEvent::Installing(id) => {
+                                    yield pb::TransactionResponse {
+                                        value: Some(Value::InstallStarted(InstallStarted {
+                                            package_id: id.to_string(),
+                                        }))
+                                    };
+                                }
+                                TransactionEvent::Uninstalling(id) => {
+                                    yield pb::TransactionResponse {
+                                        value: Some(Value::UninstallStarted(UninstallStarted {
+                                            package_id: id.to_string(),
+                                        }))
+                                    };
+                                }
+                                TransactionEvent::Progress(id, msg) => {
+                                    yield pb::TransactionResponse {
+                                        value: Some(Value::TransactionProgress(TransactionProgress {
+                                            package_id: id.to_string(),
+                                            message: msg,
+                                            current: 0,
+                                            total: 0,
+                                        }))
+                                    };
+                                }
+                                TransactionEvent::Error(id, err) => {
+                                    yield pb::TransactionResponse {
+                                        value: Some(Value::TransactionError(TransactionError {
+                                            package_id: id.to_string(),
+                                            error: format!("{}", err),
+                                        }))
+                                    };
+                                    return;
+                                }
+                                TransactionEvent::Complete => {
+                                    yield pb::TransactionResponse {
+                                        value: Some(Value::TransactionComplete(TransactionComplete {}))
+                                    };
+                                    is_completed = true;
+                                }
+                            }
+                        }
+
+                        if !is_completed {
                             yield pb::TransactionResponse {
-                                value: Some(Value::TransactionComplete(TransactionComplete {}))
+                                value: Some(Value::TransactionError(TransactionError {
+                                    package_id: "".to_string(),
+                                    error: "user cancelled".to_string(),
+                                }))
                             };
-                            is_completed = true;
+                        }
+                    };
+
+                    futures::pin_mut!(stream);
+
+                    while let Some(value) = stream.next().await {
+                        match tx.send(value) {
+                            Ok(_) => {}
+                            Err(err) => {
+                                log::error!("{:?}", err);
+                            }
                         }
                     }
-                }
-
-                if !is_completed {
-                    yield pb::TransactionResponse {
-                        value: Some(Value::TransactionError(TransactionError {
-                            package_id: "".to_string(),
-                            error: "user cancelled".to_string(),
-                        }))
-                    };
-                }
-
-                // let result = tokio::task::spawn_blocking(move || {
-                //     transaction.process(move |id, event| {
-                //         let mut tx = tx.clone();
-                //         tokio::spawn(async move {
-                //             let response = Ok(pb::TransactionResponse {
-                //                 value: Some(Value::InstallStarted(InstallStarted {
-                //                     package_id: id.to_string(),
-                //                 }))
-                //             });
-                //             tx.send(response).unwrap();
-                //         });
-                //         true
-                //     }).join().unwrap()
-                // }).await;
-
-                // match result {
-                //     Ok(_) => {},
-                //     Err(e) => {
-                //         yield pb::TransactionResponse {
-                //             value: Some(Value::InstallError(InstallError {
-                //                 package_id: "<unknown>".to_string(), // TODO: add pkg
-                //                 error: format!("{}", e)
-                //             }))
-                //         };
-                //         return;
-                //     }
-                // };
-
-                // yield pb::TransactionResponse {
-                //     value: Some(Value::TransactionComplete(TransactionComplete {}))
-                // };
-            };
-
-            futures::pin_mut!(stream);
-
-            while let Some(value) = stream.next().await {
-                match tx.send(value) {
-                    Ok(_) => {},
-                    Err(err) => {
-                        log::error!("{:?}", err);
-                    }
-                }
+                });
             }
         });
 
         Ok(Response::new(Box::pin(rx) as Self::ProcessTransactionStream))
+        // todo!()
     }
-
-    // async fn refresh(
-    //     &self,
-    //     request: Request<pb::RefreshRequest>,
-    // ) -> Result<pb::RefreshResponse> {
-    //     log::debug!("refresh: {:?}", &request);
-    //     self.notifications.send(Notification::Test).unwrap();
-
-    //     Ok(tonic::Response::new(pb::RefreshResponse {}))
-    // }
-
-    // async fn clear_cache(
-    //     &self,
-    //     _request: Request<pb::ClearCacheRequest>,
-    // ) -> Result<pb::ClearCacheResponse> {
-    //     Err(Status::unimplemented(""))
-    // }
 }
 
 use std::path::Path;
@@ -310,7 +365,7 @@ async fn store(config_path: Option<&Path>) -> anyhow::Result<Arc<dyn PackageStor
     let store = Arc::new(store);
 
     if store.config().read().unwrap().repos().len() == 0 {
-        println!("WARNING: There are no repositories in the given config.");
+        log::warn!("There are no repositories in the given config.");
     }
 
     Ok(store)
@@ -327,39 +382,60 @@ async fn store(config_path: Option<&Path>) -> anyhow::Result<Arc<dyn PackageStor
     let store = Arc::new(store);
 
     if store.config().read().unwrap().repos().len() == 0 {
-        println!("WARNING: There are no repositories in the given config.");
+        log::warn!("There are no repositories in the given config.");
     }
 
     Ok(store)
 }
 
+const UPDATE_INTERVAL: Duration = Duration::from_secs(15 * 60); // 15 minutes
 
 pub async fn start(
-    path: String,
+    path: &Path,
     config_path: Option<&Path>,
 ) -> std::result::Result<(), anyhow::Error> {
-    let mut endpoint = tokio::net::UnixListener::bind(path).unwrap();
-    // let mut endpoint = Endpoint::new(path);
-    // endpoint.set_security_attributes(SecurityAttributes::empty().allow_everyone_connect().unwrap());
+    use std::os::unix::fs::FileTypeExt;
 
-    let incoming = endpoint.incoming()
-        .map(|x| {
-            match x {
-                Ok(v) => {
-                    log::debug!("PEER: {:?}", &v.peer_cred());
-                    Ok(v)
-                },
-                Err(e) => Err(e)
+    match std::fs::metadata(path) {
+        Ok(v) => {
+            log::warn!(
+                "Unexpected file found at UNIX socket path: {}",
+                &path.display()
+            );
+            if v.file_type().is_socket() {
+                std::fs::remove_file(&path)?;
+                log::warn!("Deleted stale socket.");
+            } else {
+                log::error!("File is not a UNIX socket, refusing to clean up automatically.");
+                anyhow::bail!("Unexpected file at desired UNIX socket path ({}) cannot be automatically cleaned up.", &path.display());
             }
-        });//.expect("failed to open new socket");
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            log::error!("{}", &e);
+            return Err(e.into());
+        }
+    };
+
+    let mut endpoint = tokio::net::UnixListener::bind(&path).unwrap();
+    let current_transaction = Arc::new(tokio::sync::Mutex::new(()));
+
+    let incoming = endpoint.incoming().map(|x| match x {
+        Ok(v) => {
+            log::debug!("PEER: {:?}", &v.peer_cred());
+            Ok(v)
+        }
+        Err(e) => Err(e),
+    }); //.expect("failed to open new socket");
     let (sender, mut _rx) = broadcast::channel(5);
 
     let store = store(config_path).await?;
     log::debug!("Created store.");
 
     let rpc = Rpc {
-        store,
+        store: Arc::clone(&store),
         notifications: sender,
+        current_transaction: Arc::clone(&current_transaction),
     };
 
     let sigint_listener = signal(SignalKind::interrupt())?.into_future();
@@ -371,6 +447,76 @@ pub async fn start(
     let _sigusr2_listener = signal(SignalKind::user_defined2())?.into_future();
 
     log::debug!("Created signal listeners for: SIGINT, SIGTERM, SIGQUIT, SIGUSR1, SIGUSR2.");
+
+    // Create the background updater
+    tokio::spawn(async move {
+        let current_transaction = Arc::clone(&current_transaction);
+        let store = Arc::clone(&store);
+
+        use tokio::time::{self, Duration};
+        let mut interval = time::interval(UPDATE_INTERVAL);
+
+        loop {
+            interval.tick().await;
+            log::info!("Running update check…");
+
+            // Currently installed packages:
+            log::debug!("Iterating through all known packages...");
+            let updates = {
+                let _ = store.refresh_repos().await;
+                let repos = store.repos();
+
+                let mut updates = vec![];
+
+                for (url, repo) in repos.iter() {
+                    log::debug!("## Repo: {:?}", &url);
+                    let statuses = store.all_statuses(url, pahkat_client::InstallTarget::System);
+
+                    for (key, value) in statuses.into_iter() {
+                        log::debug!(" - {:?}: {:?}", &key, &value);
+                        if let Ok(pahkat_client::PackageStatus::RequiresUpdate) = value {
+                            updates.push((
+                                pahkat_client::PackageKey {
+                                    repository_url: url.clone(),
+                                    id: key,
+                                    query: Default::default(),
+                                },
+                                pahkat_client::InstallTarget::System,
+                            ));
+                        }
+                    }
+                }
+
+                updates
+            };
+
+            log::debug!("Proposed updates: {:?}", &updates);
+
+            if updates.is_empty() {
+                log::info!("No updates found.");
+                continue;
+            }
+
+            let actions = updates
+                .into_iter()
+                .map(|(package_key, target)| PackageAction::install(package_key, target))
+                .collect::<Vec<_>>();
+
+            log::debug!("Waiting for transaction lock…");
+            let _guard = current_transaction.lock().await;
+            log::debug!("Transaction lock attained.");
+
+            let transaction = PackageTransaction::new(Arc::clone(&store) as _, actions).unwrap(); // .map_err(|e| Status::failed_precondition(format!("{}", e)))?;
+
+            let (_, mut stream) = transaction.process();
+
+            // futures::pin_mut!(stream);
+
+            if let Some(message) = stream.next().await {
+                log::trace!("{:?}", message);
+            }
+        }
+    });
 
     Server::builder()
         .add_service(pb::pahkat_server::PahkatServer::new(rpc))
@@ -390,38 +536,11 @@ pub async fn start(
         })
         .await?;
 
+    drop(endpoint);
+
+    log::info!("Cleaning up UNIX socket at path: {}", &path.display());
+    std::fs::remove_file(&path)?;
+
+    log::info!("Shutdown complete!");
     Ok(())
 }
-
-// #[derive(Debug)]
-// struct StreamBox<T: AsyncRead + AsyncWrite>(T);
-
-// impl<T: AsyncRead + AsyncWrite> Connected for StreamBox<T> {}
-
-// impl<T: AsyncRead + AsyncWrite + Unpin> AsyncRead for StreamBox<T> {
-//     fn poll_read(
-//         mut self: Pin<&mut Self>,
-//         cx: &mut Context<'_>,
-//         buf: &mut [u8],
-//     ) -> Poll<std::io::Result<usize>> {
-//         Pin::new(&mut self.0).poll_read(cx, buf)
-//     }
-// }
-
-// impl<T: AsyncRead + AsyncWrite + Unpin> AsyncWrite for StreamBox<T> {
-//     fn poll_write(
-//         mut self: Pin<&mut Self>,
-//         cx: &mut Context<'_>,
-//         buf: &[u8],
-//     ) -> Poll<std::io::Result<usize>> {
-//         Pin::new(&mut self.0).poll_write(cx, buf)
-//     }
-
-//     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-//         Pin::new(&mut self.0).poll_flush(cx)
-//     }
-
-//     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-//         Pin::new(&mut self.0).poll_shutdown(cx)
-//     }
-// }

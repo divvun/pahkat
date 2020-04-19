@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -34,41 +34,52 @@ pub struct LoadedRepository {
 
 impl LoadedRepository {
     pub async fn from_cache_or_url(
-        url: &Url,
+        url: Url,
         channel: Option<String>,
-        cache_dir: &Path,
+        cache_dir: PathBuf,
     ) -> Result<LoadedRepository, RepoDownloadError> {
         Self::from_url(url, channel).await
     }
 
-    async fn from_url(url: &Url, channel: Option<String>) -> Result<LoadedRepository, RepoDownloadError> {
-        let client = reqwest::Client::new();
+    async fn from_url(url: Url, channel: Option<String>) -> Result<LoadedRepository, RepoDownloadError> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
 
-        log::trace!("Loading repo: {} channel:{:?}", &url, &channel);
+        tokio::spawn(async move {
 
-        let info = client.get(&format!("{}/index.toml", url)).send().await?.text().await?;
-        let info: pahkat_types::repo::Index = toml::from_str(&info)?;
+            let result = async move {
+                let client = reqwest::Client::new();
 
-        let packages = client
-            .get(&format!("{}/packages/index.bin", url))
-            .send()
-            .await?
-            .bytes()
-            .await?
-            .to_vec()
-            .into_boxed_slice();
+                log::trace!("Loading repo: {} channel:{:?}", &url, &channel);
 
-        let repo = LoadedRepository {
-            info,
-            packages,
-            meta: LoadedRepositoryMeta {
-                channel,
-                // hash_id: "".into(),
-            },
-        };
+                let info = client.get(&format!("{}/index.toml", url)).send().await?.text().await?;
+                let info: pahkat_types::repo::Index = toml::from_str(&info)?;
 
-        log::trace!("Loaded.");
-        Ok(repo)
+                let packages = client
+                    .get(&format!("{}/packages/index.bin", url))
+                    .send()
+                    .await?
+                    .bytes()
+                    .await?
+                    .to_vec()
+                    .into_boxed_slice();
+
+                let repo = LoadedRepository {
+                    info,
+                    packages,
+                    meta: LoadedRepositoryMeta {
+                        channel,
+                        // hash_id: "".into(),
+                    },
+                };
+
+                log::trace!("Loaded.");
+                Ok(repo)
+            }.await;
+
+            tx.send(result).unwrap();
+        });
+
+        rx.await.unwrap()
     }
 
     pub fn info(&self) -> &pahkat_types::repo::Index {

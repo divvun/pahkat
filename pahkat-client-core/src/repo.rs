@@ -203,7 +203,7 @@ impl<'a> ReleaseQuery<'a> {
         }
     }
 
-    pub fn new(key: &'a PackageKey, repos: &'a HashMap<Url, LoadedRepository>) -> Self {
+    pub fn new(key: &'a PackageKey, repos: &'a dashmap::ReadOnlyView<Url, LoadedRepository>) -> Self {
         let channels = key
             .query
             .channel
@@ -248,7 +248,7 @@ impl<'a> ReleaseQuery<'a> {
 
 pub(crate) fn resolve_package<'a>(
     package_key: &PackageKey,
-    repos: &'a HashMap<Url, LoadedRepository>,
+    repos: &'a dashmap::ReadOnlyView<Url, LoadedRepository>,
 ) -> Result<pahkat_types::package::Descriptor, PayloadError> {
     log::trace!("Finding package");
     let package = find_package_by_key(package_key, repos).ok_or(PayloadError::NoPackage)?;
@@ -262,7 +262,7 @@ pub(crate) fn resolve_package<'a>(
 pub(crate) fn resolve_payload<'a>(
     package_key: &PackageKey,
     query: &ReleaseQuery<'a>,
-    repos: &'a HashMap<Url, LoadedRepository>,
+    repos: &'a dashmap::ReadOnlyView<Url, LoadedRepository>,
 ) -> Result<
     (
         pahkat_types::payload::Target,
@@ -285,7 +285,7 @@ pub(crate) fn import<'a>(
     config: &Arc<RwLock<Config>>,
     package_key: &PackageKey,
     query: &ReleaseQuery<'a>,
-    repos: &HashMap<Url, LoadedRepository>,
+    repos: &dashmap::ReadOnlyView<Url, LoadedRepository>,
     installer_path: &Path,
 ) -> Result<std::path::PathBuf, crate::package_store::ImportError> {
     use pahkat_types::payload::AsDownloadUrl;
@@ -309,7 +309,7 @@ use futures::stream::StreamExt;
 //     config: &Arc<RwLock<Config>>,
 //     package_key: &PackageKey,
 //     query: &ReleaseQuery<'a>,
-//     repos: &HashMap<Url, LoadedRepository>,
+//     repos: &dashmap::ReadOnlyView<Url, LoadedRepository>,
 //     progress: Box<dyn Fn(u64, u64) -> bool + Send + 'static>,
 // ) -> Result<std::path::PathBuf, crate::download::DownloadError> {
 //     log::trace!("Downloading {} {:?}", package_key, &query);
@@ -364,7 +364,7 @@ pub(crate) fn download<'a>(
     config: &Arc<RwLock<Config>>,
     package_key: &PackageKey,
     query: &ReleaseQuery<'a>,
-    repos: &HashMap<Url, LoadedRepository>,
+    repos: &dashmap::ReadOnlyView<Url, LoadedRepository>,
 ) -> std::pin::Pin<
     Box<
         dyn futures::stream::Stream<Item = crate::package_store::DownloadEvent>
@@ -457,7 +457,6 @@ where
     let mut map = BTreeMap::new();
 
     let repos = store.repos();
-    let repos = repos.read().unwrap();
 
     if let Some(repo) = repos.get(repo_url) {
         let packages = repo.packages();
@@ -486,12 +485,12 @@ where
 
 pub(crate) fn find_package_by_key<'p>(
     package_key: &PackageKey,
-    repos: &'p HashMap<Url, LoadedRepository>,
+    repos: &'p dashmap::ReadOnlyView<Url, LoadedRepository>,
 ) -> Option<Package> {
     log::trace!("Resolving package...");
     log::trace!("My pkg id: {}", &package_key.id);
     log::trace!("Repo url: {}", &package_key.repository_url);
-    log::trace!("Repos: {:?}", repos.keys());
+    log::trace!("Repos: {:?}", repos.iter().map(|(x, _)| x).collect::<Vec<_>>());
 
     repos.get(&package_key.repository_url).and_then(|r| {
         log::trace!("Got repo");
@@ -521,7 +520,7 @@ pub(crate) fn find_package_by_key<'p>(
 pub(crate) fn find_package_by_id<P>(
     store: &P,
     package_id: &str,
-    repos: &HashMap<Url, LoadedRepository>,
+    repos: &dashmap::ReadOnlyView<Url, LoadedRepository>,
 ) -> Option<(PackageKey, Package)>
 where
     P: PackageStore,
@@ -553,27 +552,56 @@ where
     })
 }
 
-#[must_use]
-pub(crate) async fn refresh_repos(config: &Arc<RwLock<Config>>) -> Result<HashMap<Url, LoadedRepository>, RepoDownloadError> {
-    let repos = Arc::new(DashMap::new());
+use futures::future::{Future, FutureExt};
 
+#[must_use]
+pub(crate) async fn refresh_repos(config: Config) -> Result<dashmap::ReadOnlyView<Url, LoadedRepository>, RepoDownloadError> {
+    let config = Arc::new(config);
+    
     log::debug!("Refreshing repos...");
 
-    let config = Arc::new(config.read().unwrap().clone());
+    let repo_data = {
+        let repo_keys = config.repos().keys().fold(crossbeam_queue::SegQueue::new(), |mut acc, cur| {
+            acc.push(cur.clone());
+            acc
+        });
 
-    for url in config.repos().keys() {
-        log::trace!("{:?}", &url);
-        recurse_repo(url.clone(), Arc::clone(&repos), Arc::clone(&config)).await?;
+        workqueue::work(config, repo_keys, |url, queue, config| Box::pin(async move {
+            log::trace!("Downloading repo at {:?}…", &url);
+
+            let cache_dir = config.settings().repo_cache_dir();
+            let channel = config.repos().get(&url).and_then(|r| r.channel.clone());
+    
+            match LoadedRepository::from_cache_or_url(url, channel, cache_dir).await {
+                Ok(repo) => {
+                    for url in repo.info().repository.linked_repositories.iter() {
+                        log::trace!("Queuing linked repo: {:?}", &url);
+                        queue.push(url.clone());
+                        // recurse_repo(url.clone(), Arc::clone(&repos), Arc::clone(&config)).await?;
+                    }
+    
+                    Ok(repo)
+                }
+                Err(e) => {
+                    log::error!("{:?}", e);
+                    Err(e)
+                }
+            }
+        })).await.unwrap()
+    };
+
+    let mut map = DashMap::new();
+
+    for (key, value) in repo_data.into_iter() {
+        log::debug!("Resolved repository: {:?}", &key);
+
+        match value {
+            Ok(v) => { map.insert(key, v); },
+            Err(e) => return Err(e)
+        }
     }
 
-    let repos = Arc::try_unwrap(repos).expect("There must not be any current users of the dashmap");
-
-    let mut map = HashMap::new();
-
-    for (k, v) in repos.into_iter() {
-        map.insert(k, v);
-    }
-    Ok(map)
+    Ok(map.into_read_only())
 }
 
 pub(crate) fn clear_cache(config: &Arc<RwLock<Config>>) {
@@ -685,33 +713,33 @@ pub(crate) fn find_package_dependencies(
 
 // use crate::repo::repository::RepoDownloadError;
 
-#[must_use]
-fn recurse_repo(
-    url: Url,
-    repos: Arc<DashMap<Url, LoadedRepository>>,
-    config: Arc<crate::config::Config>,
-) -> Pin<Box<dyn std::future::Future<Output = Result<(), RepoDownloadError>>>> {
-    if repos.contains_key(&url) {
-        return Box::pin(async { Ok(()) });
-    }
+// #[must_use]
+// fn recurse_repo(
+//     url: Url,
+//     repos: Arc<dashmap::ReadOnlyView<Url, LoadedRepository>>,
+//     config: Arc<Config>,
+// ) -> Pin<Box<dyn std::future::Future<Output = Result<(), RepoDownloadError>>>> {
+//     if repos.contains_key(&url) {
+//         return Box::pin(async { Ok(()) });
+//     }
 
-    let cache_dir = config.settings().repo_cache_dir();
-    let channel = config.repos().get(&url).and_then(|r| r.channel.clone());
+//     Box::pin(async move {
+//         let cache_dir = config.settings().repo_cache_dir();
+//         let channel = config.repos().get(&url).and_then(|r| r.channel.clone());
 
-    Box::pin(async move {
-        match LoadedRepository::from_cache_or_url(&url, channel, &cache_dir).await {
-            Ok(repo) => {
-                for url in repo.info().repository.linked_repositories.iter() {
-                    recurse_repo(url.clone(), Arc::clone(&repos), Arc::clone(&config)).await?;
-                }
+//         match LoadedRepository::from_cache_or_url(url, channel, cache_dir).await {
+//             Ok(repo) => {
+//                 for url in repo.info().repository.linked_repositories.iter() {
+//                     recurse_repo(url.clone(), Arc::clone(&repos), Arc::clone(&config)).await?;
+//                 }
 
-                repos.insert(url.clone(), repo);
-                Ok(())
-            }
-            Err(e) => {
-                log::error!("{:?}", e);
-                Err(e)
-            }
-        }
-    })
-}
+//                 repos.insert(url.clone(), repo);
+//                 Ok(())
+//             }
+//             Err(e) => {
+//                 log::error!("{:?}", e);
+//                 Err(e)
+//             }
+//         }
+//     })
+// }

@@ -21,6 +21,33 @@ message NotificationsRequest {
 }
 
 
+message LoadedRepository {
+    message Index {
+        message Agent {
+            string name = 1;
+            string version = 2;
+            string url = 3;
+        }
+        string url = 1;
+        repeated string channels = 2;
+        string default_channel = 3;
+        map<string, string> name = 4;
+        map<string, string> description = 5;
+        Agent agent = 6;
+        string landing_url = 7;
+
+        repeated string linked_repositories = 30;
+        repeated string accepted_redirections = 31;
+    }
+    message Meta {
+        string channel = 1;
+    }
+    Index index = 1;
+    Meta meta = 2;
+    bytes packages_fbs = 3;
+    // TODO: strings field
+}
+
 message StatusRequest {
     string package_id = 1;
     uint32 target = 2;
@@ -33,7 +60,7 @@ message StatusResponse {
 message RepositoryIndexesRequest {}
 
 message RepositoryIndexesResponse {
-    repeated bytes repositories = 1;
+    repeated LoadedRepository repositories = 1;
 }
 
 message PackageAction {
@@ -43,7 +70,15 @@ message PackageAction {
 }
 
 message TransactionRequest {
-    repeated PackageAction actions = 1;
+    message Transaction {
+        repeated PackageAction actions = 1;
+    }
+    message Cancel {}
+
+    oneof value {
+        Transaction transaction = 1;
+        Cancel cancel = 2;
+    }
 }
 
 message TransactionResponse {
@@ -107,8 +142,8 @@ service Pahkat {
 
     // Store
     rpc Status(StatusRequest) returns (StatusResponse) {}
-    // rpc RepositoryIndexes(RepositoryIndexesRequest) returns (RepositoryIndexesResponse) {}
-    rpc ProcessTransaction(TransactionRequest) returns (stream TransactionResponse) {}
+    rpc RepositoryIndexes(RepositoryIndexesRequest) returns (RepositoryIndexesResponse) {}
+    rpc ProcessTransaction(stream TransactionRequest) returns (stream TransactionResponse) {}
     // rpc Refresh(RefreshRequest) returns (RefreshResponse) {}
     // rpc ClearCache(ClearCacheRequest) returns (ClearCacheResponse) {}
     

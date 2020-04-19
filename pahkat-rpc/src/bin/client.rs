@@ -76,14 +76,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let request = tonic::Request::new(pb::TransactionRequest {
         actions: vec![PackageAction::install(
-            PackageKey::try_from("https://x.brendan.so/divvun-pahkat-repo/packages/speller-smj").unwrap(),
+            PackageKey::try_from("https://x.brendan.so/divvun-pahkat-repo/packages/speller-smj")
+                .unwrap(),
             Default::default(),
         )
         .into()],
     });
     let stream = client.process_transaction(request).await?;
     let mut stream = stream.into_inner();
-
 
     while let Ok(Some(response)) = stream.message().await {
         println!("RESPONSE={:?}", response);

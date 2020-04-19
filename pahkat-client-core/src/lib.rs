@@ -21,9 +21,9 @@ mod fbs;
 
 pub use self::config::{Config, Permission};
 pub use self::download::Download;
-pub use self::package_store::{PackageStore, DownloadEvent};
+pub use self::package_store::{PackageStore, DownloadEvent, InstallTarget};
 pub use self::repo::{LoadedRepository, PackageKey};
-pub use self::transaction::{PackageAction, PackageActionType, PackageTransaction};
+pub use self::transaction::{PackageAction, PackageActionType, PackageStatus, PackageTransaction};
 
 #[cfg(all(target_os = "macos", feature = "macos"))]
 pub use package_store::macos::MacOSPackageStore;
