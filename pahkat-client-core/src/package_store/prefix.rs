@@ -5,6 +5,7 @@ use std::fs::{create_dir_all, read_dir, remove_dir, remove_file, File};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
+use dashmap::DashMap;
 use hashbrown::HashMap;
 use pahkat_types::package::{Descriptor, Package};
 use r2d2_sqlite::SqliteConnectionManager;
@@ -29,7 +30,7 @@ const SQL_INIT: &str = include_str!("prefix/prefix_init.sql");
 pub struct PrefixPackageStore {
     pool: r2d2::Pool<SqliteConnectionManager>,
     prefix: PathBuf,
-    repos: Arc<RwLock<HashMap<Url, LoadedRepository>>>,
+    repos: Arc<dashmap::ReadOnlyView<Url, LoadedRepository>>,
     config: Arc<RwLock<Config>>,
 }
 
@@ -83,7 +84,7 @@ impl PrefixPackageStore {
         let store = PrefixPackageStore {
             pool,
             prefix: prefix_path,
-            repos: Arc::new(RwLock::new(HashMap::new())),
+            repos: Arc::new(DashMap::new().into_read_only()),
             config: Arc::new(RwLock::new(config)),
         };
 
@@ -109,7 +110,7 @@ impl PrefixPackageStore {
         let store = PrefixPackageStore {
             pool,
             prefix: prefix_path,
-            repos: Arc::new(RwLock::new(HashMap::new())),
+            repos: Arc::new(DashMap::new().into_read_only()),
             config: Arc::new(RwLock::new(config)),
         };
 
@@ -169,8 +170,8 @@ impl PackageStore for PrefixPackageStore {
 
     fn import(&self, key: &PackageKey, installer_path: &Path) -> Result<PathBuf, ImportError> {
         log::debug!("IMPORTING");
-        let repos = self.repos.read().unwrap();
-        let query = crate::repo::ReleaseQuery::new(&key, &*repos);
+        let repos = self.repos();
+        let query = crate::repo::ReleaseQuery::new(key, &*repos);
         crate::repo::import(&self.config, key, &query, &*repos, installer_path)
     }
 
@@ -185,8 +186,8 @@ impl PackageStore for PrefixPackageStore {
                 + 'static,
         >,
     > {
-        let repos = self.repos.read().unwrap();
-        let query = crate::repo::ReleaseQuery::new(&key, &*repos);
+        let repos = self.repos();
+        let query = crate::repo::ReleaseQuery::new(key, &*repos);
         crate::repo::download(&self.config, key, &query, &*repos)
     }
 
@@ -195,8 +196,8 @@ impl PackageStore for PrefixPackageStore {
         key: &PackageKey,
         target: InstallTarget,
     ) -> Result<PackageStatus, InstallError> {
-        let repos = self.repos.read().unwrap();
-        let mut query = crate::repo::ReleaseQuery::new(&key, &*repos);
+        let repos = self.repos();
+        let query = crate::repo::ReleaseQuery::new(key, &*repos);
 
         let (target, release, package) =
             crate::repo::resolve_payload(key, &query, &*repos).map_err(InstallError::Payload)?;
@@ -319,8 +320,7 @@ impl PackageStore for PrefixPackageStore {
             Some(v) => v,
         };
 
-        let repos = self.repos.read().unwrap();
-
+        let repos = self.repos();
         let query = crate::repo::ReleaseQuery::new(key, &*repos)
             .and_payloads(vec!["TarballPackage"]);
         log::debug!("query: {:?}", &query);
@@ -348,21 +348,19 @@ impl PackageStore for PrefixPackageStore {
     }
 
     fn find_package_by_key(&self, key: &PackageKey) -> Option<Package> {
-        let repos = self.repos.read().unwrap();
+        let repos = self.repos();
         crate::repo::find_package_by_key(key, &*repos)
     }
 
     fn find_package_by_id(&self, package_id: &str) -> Option<(PackageKey, Package)> {
-        let repos = self.repos.read().unwrap();
+        let repos = self.repos();
         crate::repo::find_package_by_id(self, package_id, &*repos)
     }
 
     fn refresh_repos(&self) -> crate::package_store::Future<Result<(), RepoDownloadError>> {
-        let repos = self.repos();
-        let config = self.config();
+        let config = self.config().read().unwrap().clone();
         Box::pin(async move {
-            let mut repos = repos.write().unwrap();
-            *repos = crate::repo::refresh_repos(&config).await?;
+            crate::repo::refresh_repos(config).await?;
             Ok(())
         })
     }
