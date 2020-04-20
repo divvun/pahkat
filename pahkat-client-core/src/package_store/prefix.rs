@@ -447,7 +447,13 @@ impl<'a> PackageDbConnection<'a> {
             ],
         )
         .unwrap();
-        let id = tx.last_insert_rowid();
+        let id: i64;
+        {
+            let mut stmt = tx.prepare("SELECT id FROM packages WHERE url = :url").unwrap();
+            let mut rows = stmt.query_named(&[(":url", &pkg.url)]).unwrap();
+            id = rows.next().unwrap().unwrap().get(0).unwrap()
+        }
+
         log::trace!("Row id: {}", id);
         tx.execute(
             "DELETE FROM packages_dependencies WHERE package_id = ?",
