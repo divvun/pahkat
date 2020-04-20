@@ -123,6 +123,7 @@ pub extern "C" fn pahkat_prefix_package_store_download_url(
     use crate::repo::*;
 
     let repos = handle.repos();
+    let repos = repos.read().unwrap();
     let query = crate::repo::ReleaseQuery::new(&package_key, &*repos);
 
     let (target, _, _) = match resolve_payload(&package_key, &query, &repos) {
@@ -167,7 +168,7 @@ pub extern "C" fn pahkat_prefix_package_store_force_refresh_repos(
 // pub extern "C" fn pahkat_prefix_package_store_repo_indexes(
 //     #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
 // ) -> Result<String, Box<dyn Error>> {
-//     let rwlock = handle.repos();
+//     let rwlock = handle.repos().read().unwrap();
 //     let guard = rwlock.read().unwrap();
 //     let indexes = guard.values().collect::<Vec<&_>>();
 //     serde_json::to_string(&indexes).map_err(|e| Box::new(e) as _)

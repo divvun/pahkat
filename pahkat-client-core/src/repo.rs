@@ -11,6 +11,7 @@ use std::sync::{Arc, RwLock};
 use std::pin::Pin;
 
 use dashmap::DashMap;
+use futures::future::{Future, FutureExt};
 use hashbrown::HashMap;
 use sha2::digest::Digest;
 use sha2::Sha256;
@@ -203,7 +204,7 @@ impl<'a> ReleaseQuery<'a> {
         }
     }
 
-    pub fn new(key: &'a PackageKey, repos: &'a dashmap::ReadOnlyView<Url, LoadedRepository>) -> Self {
+    pub fn new(key: &'a PackageKey, repos: &'a HashMap<Url, LoadedRepository>) -> Self {
         let channels = key
             .query
             .channel
@@ -248,7 +249,7 @@ impl<'a> ReleaseQuery<'a> {
 
 pub(crate) fn resolve_package<'a>(
     package_key: &PackageKey,
-    repos: &'a dashmap::ReadOnlyView<Url, LoadedRepository>,
+    repos: &'a HashMap<Url, LoadedRepository>,
 ) -> Result<pahkat_types::package::Descriptor, PayloadError> {
     log::trace!("Finding package");
     let package = find_package_by_key(package_key, repos).ok_or(PayloadError::NoPackage)?;
@@ -262,7 +263,7 @@ pub(crate) fn resolve_package<'a>(
 pub(crate) fn resolve_payload<'a>(
     package_key: &PackageKey,
     query: &ReleaseQuery<'a>,
-    repos: &'a dashmap::ReadOnlyView<Url, LoadedRepository>,
+    repos: &'a HashMap<Url, LoadedRepository>,
 ) -> Result<
     (
         pahkat_types::payload::Target,
@@ -285,7 +286,7 @@ pub(crate) fn import<'a>(
     config: &Arc<RwLock<Config>>,
     package_key: &PackageKey,
     query: &ReleaseQuery<'a>,
-    repos: &dashmap::ReadOnlyView<Url, LoadedRepository>,
+    repos: &HashMap<Url, LoadedRepository>,
     installer_path: &Path,
 ) -> Result<std::path::PathBuf, crate::package_store::ImportError> {
     use pahkat_types::payload::AsDownloadUrl;
@@ -309,7 +310,7 @@ use futures::stream::StreamExt;
 //     config: &Arc<RwLock<Config>>,
 //     package_key: &PackageKey,
 //     query: &ReleaseQuery<'a>,
-//     repos: &dashmap::ReadOnlyView<Url, LoadedRepository>,
+//     repos: &HashMap<Url, LoadedRepository>,
 //     progress: Box<dyn Fn(u64, u64) -> bool + Send + 'static>,
 // ) -> Result<std::path::PathBuf, crate::download::DownloadError> {
 //     log::trace!("Downloading {} {:?}", package_key, &query);
@@ -364,7 +365,7 @@ pub(crate) fn download<'a>(
     config: &Arc<RwLock<Config>>,
     package_key: &PackageKey,
     query: &ReleaseQuery<'a>,
-    repos: &dashmap::ReadOnlyView<Url, LoadedRepository>,
+    repos: &HashMap<Url, LoadedRepository>,
 ) -> std::pin::Pin<
     Box<
         dyn futures::stream::Stream<Item = crate::package_store::DownloadEvent>
@@ -457,6 +458,7 @@ where
     let mut map = BTreeMap::new();
 
     let repos = store.repos();
+    let repos = repos.read().unwrap();
 
     if let Some(repo) = repos.get(repo_url) {
         let packages = repo.packages();
@@ -485,7 +487,7 @@ where
 
 pub(crate) fn find_package_by_key<'p>(
     package_key: &PackageKey,
-    repos: &'p dashmap::ReadOnlyView<Url, LoadedRepository>,
+    repos: &'p HashMap<Url, LoadedRepository>,
 ) -> Option<Package> {
     log::trace!("Resolving package...");
     log::trace!("My pkg id: {}", &package_key.id);
@@ -520,7 +522,7 @@ pub(crate) fn find_package_by_key<'p>(
 pub(crate) fn find_package_by_id<P>(
     store: &P,
     package_id: &str,
-    repos: &dashmap::ReadOnlyView<Url, LoadedRepository>,
+    repos: &HashMap<Url, LoadedRepository>,
 ) -> Option<(PackageKey, Package)>
 where
     P: PackageStore,
@@ -552,10 +554,8 @@ where
     })
 }
 
-use futures::future::{Future, FutureExt};
-
 #[must_use]
-pub(crate) async fn refresh_repos(config: Config) -> Result<dashmap::ReadOnlyView<Url, LoadedRepository>, RepoDownloadError> {
+pub(crate) async fn refresh_repos(config: Config) -> Result<HashMap<Url, LoadedRepository>, RepoDownloadError> {
     let config = Arc::new(config);
     
     log::debug!("Refreshing repos...");
@@ -590,7 +590,7 @@ pub(crate) async fn refresh_repos(config: Config) -> Result<dashmap::ReadOnlyVie
         })).await.unwrap()
     };
 
-    let mut map = DashMap::new();
+    let mut map = HashMap::new();
 
     for (key, value) in repo_data.into_iter() {
         log::debug!("Resolved repository: {:?}", &key);
@@ -601,7 +601,7 @@ pub(crate) async fn refresh_repos(config: Config) -> Result<dashmap::ReadOnlyVie
         }
     }
 
-    Ok(map.into_read_only())
+    Ok(map)
 }
 
 pub(crate) fn clear_cache(config: &Arc<RwLock<Config>>) {
@@ -716,7 +716,7 @@ pub(crate) fn find_package_dependencies(
 // #[must_use]
 // fn recurse_repo(
 //     url: Url,
-//     repos: Arc<dashmap::ReadOnlyView<Url, LoadedRepository>>,
+//     repos: Arc<HashMap<Url, LoadedRepository>>,
 //     config: Arc<Config>,
 // ) -> Pin<Box<dyn std::future::Future<Output = Result<(), RepoDownloadError>>>> {
 //     if repos.contains_key(&url) {

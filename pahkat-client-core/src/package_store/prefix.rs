@@ -30,7 +30,7 @@ const SQL_INIT: &str = include_str!("prefix/prefix_init.sql");
 pub struct PrefixPackageStore {
     pool: r2d2::Pool<SqliteConnectionManager>,
     prefix: PathBuf,
-    repos: Arc<dashmap::ReadOnlyView<Url, LoadedRepository>>,
+    repos: Arc<RwLock<HashMap<Url, LoadedRepository>>>,
     config: Arc<RwLock<Config>>,
 }
 
@@ -84,7 +84,7 @@ impl PrefixPackageStore {
         let store = PrefixPackageStore {
             pool,
             prefix: prefix_path,
-            repos: Arc::new(DashMap::new().into_read_only()),
+            repos: Arc::new(RwLock::new(HashMap::new())),
             config: Arc::new(RwLock::new(config)),
         };
 
@@ -110,7 +110,7 @@ impl PrefixPackageStore {
         let store = PrefixPackageStore {
             pool,
             prefix: prefix_path,
-            repos: Arc::new(DashMap::new().into_read_only()),
+            repos: Arc::new(RwLock::new(HashMap::new())),
             config: Arc::new(RwLock::new(config)),
         };
 
@@ -170,7 +170,7 @@ impl PackageStore for PrefixPackageStore {
 
     fn import(&self, key: &PackageKey, installer_path: &Path) -> Result<PathBuf, ImportError> {
         log::debug!("IMPORTING");
-        let repos = self.repos();
+        let repos = self.repos.read().unwrap();
         let query = crate::repo::ReleaseQuery::new(key, &*repos);
         crate::repo::import(&self.config, key, &query, &*repos, installer_path)
     }
@@ -186,7 +186,7 @@ impl PackageStore for PrefixPackageStore {
                 + 'static,
         >,
     > {
-        let repos = self.repos();
+        let repos = self.repos.read().unwrap();
         let query = crate::repo::ReleaseQuery::new(key, &*repos);
         crate::repo::download(&self.config, key, &query, &*repos)
     }
@@ -196,7 +196,7 @@ impl PackageStore for PrefixPackageStore {
         key: &PackageKey,
         target: InstallTarget,
     ) -> Result<PackageStatus, InstallError> {
-        let repos = self.repos();
+        let repos = self.repos.read().unwrap();
         let query = crate::repo::ReleaseQuery::new(key, &*repos);
 
         let (target, release, package) =
@@ -320,7 +320,7 @@ impl PackageStore for PrefixPackageStore {
             Some(v) => v,
         };
 
-        let repos = self.repos();
+        let repos = self.repos.read().unwrap();
         let query = crate::repo::ReleaseQuery::new(key, &*repos)
             .and_payloads(vec!["TarballPackage"]);
         log::debug!("query: {:?}", &query);
@@ -348,19 +348,21 @@ impl PackageStore for PrefixPackageStore {
     }
 
     fn find_package_by_key(&self, key: &PackageKey) -> Option<Package> {
-        let repos = self.repos();
+        let repos = self.repos.read().unwrap();
         crate::repo::find_package_by_key(key, &*repos)
     }
 
     fn find_package_by_id(&self, package_id: &str) -> Option<(PackageKey, Package)> {
-        let repos = self.repos();
+        let repos = self.repos.read().unwrap();
         crate::repo::find_package_by_id(self, package_id, &*repos)
     }
 
     fn refresh_repos(&self) -> crate::package_store::Future<Result<(), RepoDownloadError>> {
         let config = self.config().read().unwrap().clone();
+        let repos = self.repos();
         Box::pin(async move {
-            crate::repo::refresh_repos(config).await?;
+            let result = crate::repo::refresh_repos(config).await?;
+            *repos.write().unwrap() = result;
             Ok(())
         })
     }

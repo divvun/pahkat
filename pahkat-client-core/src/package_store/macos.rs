@@ -69,7 +69,7 @@ impl PackageStore for MacOSPackageStore {
         key: &PackageKey,
         install_target: InstallTarget,
     ) -> Result<PackageStatus, InstallError> {
-        let repos = self.repos();
+        let repos = self.repos.read().unwrap();
         let query = crate::repo::ReleaseQuery::new(key, &*repos);
 
         let (target, release, descriptor) =
@@ -99,7 +99,7 @@ impl PackageStore for MacOSPackageStore {
         key: &PackageKey,
         install_target: InstallTarget,
     ) -> Result<PackageStatus, UninstallError> {
-        let repos = self.repos();
+        let repos = self.repos.read().unwrap();
         let query = crate::repo::ReleaseQuery::new(key, &*repos);
 
         let (target, release, descriptor) =
@@ -118,7 +118,7 @@ impl PackageStore for MacOSPackageStore {
     }
 
     fn import(&self, key: &PackageKey, installer_path: &Path) -> Result<PathBuf, ImportError> {
-        let repos = self.repos();
+        let repos = self.repos.read().unwrap();
         let query = crate::repo::ReleaseQuery::new(key, &*repos);
         crate::repo::import(&self.config, key, &query, &*repos, installer_path)
     }
@@ -134,7 +134,7 @@ impl PackageStore for MacOSPackageStore {
                 + 'static,
         >,
     > {
-        let repos = self.repos();
+        let repos = self.repos.read().unwrap();
         let query = crate::repo::ReleaseQuery::new(key, &*repos);
         crate::repo::download(&self.config, key, &query, &*repos)
     }
@@ -144,7 +144,7 @@ impl PackageStore for MacOSPackageStore {
         key: &PackageKey,
         install_target: InstallTarget,
     ) -> Result<PackageStatus, PackageStatusError> {
-        let repos = self.repos();
+        let repos = self.repos.read().unwrap();
         let query = crate::repo::ReleaseQuery::new(key, &*repos);
 
         let (target, release, descriptor) = crate::repo::resolve_payload(key, &query, &*repos)
@@ -166,34 +166,23 @@ impl PackageStore for MacOSPackageStore {
     }
 
     fn find_package_by_key(&self, key: &PackageKey) -> Option<Package> {
-        let repos = self.repos();
+        let repos = self.repos.read().unwrap();
         crate::repo::find_package_by_key(key, &*repos)
     }
 
     fn find_package_by_id(&self, package_id: &str) -> Option<(PackageKey, Package)> {
-        let repos = self.repos();
+        let repos = self.repos.read().unwrap();
         crate::repo::find_package_by_id(self, package_id, &*repos)
     }
 
     fn refresh_repos(&self) -> crate::package_store::Future<Result<(), RepoDownloadError>> {
         let config = self.config().read().unwrap().clone();
+        let repos = self.repos();
         Box::pin(async move {
-            crate::repo::refresh_repos(config).await?;
+            let result = crate::repo::refresh_repos(config).await?;
+            *repos.write().unwrap() = result;
             Ok(())
         })
-        // use futures::future::FutureExt;
-        // let repos = self.repos();
-        // let repos.write = 
-
-        // Box::pin(crate::repo::refresh_repos(config).then(|map| async move {
-        //     match map {
-        //         Ok(v) => {
-        //             *repos = v;
-        //             Ok(())
-        //         }
-        //         Err(e) => Err(e)
-        //     }
-        // }))
     }
 
     fn clear_cache(&self) {
@@ -213,7 +202,7 @@ impl MacOSPackageStore {
     #[must_use]
     pub async fn new(config: Config) -> MacOSPackageStore {
         let store = MacOSPackageStore {
-            repos: Arc::new(DashMap::new().into_read_only()),
+            repos: Arc::new(RwLock::new(HashMap::new())),
             config: Arc::new(RwLock::new(config)),
         };
 

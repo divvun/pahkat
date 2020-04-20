@@ -23,7 +23,7 @@ use crate::{LoadedRepository, PackageKey};
 use crate::repo::RepoDownloadError;
 
 pub type SharedStoreConfig = Arc<RwLock<Config>>;
-pub type SharedRepos = Arc<dashmap::ReadOnlyView<Url, LoadedRepository>>;
+pub type SharedRepos = Arc<RwLock<HashMap<Url, LoadedRepository>>>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ImportError {
