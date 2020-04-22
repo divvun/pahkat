@@ -20,19 +20,24 @@ pub struct ReposData(IndexMap<Url, RepoRecord>);
 
 impl ReposData {
     fn load<P: AsRef<Path>>(path: P) -> Result<ReposData, FileError> {
-        let file = std::fs::read_to_string(path).map_err(FileError::Read)?;
-        let file = toml::from_str(&file)?;
+        let file = std::fs::read_to_string(&path).map_err(|e| FileError::Read(e, path.as_ref().to_path_buf()))?;
+        let file = toml::from_str(&file).map_err(|e| FileError::FromToml(e, path.as_ref().to_path_buf()))?;
         Ok(file)
     }
 
     fn save<P: AsRef<Path>>(&self, path: P) -> Result<(), FileError> {
-        let mut file = File::create(path).map_err(FileError::Write)?;
-        let b = toml::to_vec(&self)?;
-        file.write_all(&b).map_err(FileError::Write)?;
+        let mut file = File::create(&path).map_err(|e| FileError::Write(e, path.as_ref().to_path_buf()))?;
+        let b = toml::to_vec(&self).map_err(|e| FileError::ToToml(e, path.as_ref().to_path_buf()))?;
+        file.write_all(&b).map_err(|e| FileError::Write(e, path.as_ref().to_path_buf()))?;
         Ok(())
     }
 
     fn create<P: AsRef<Path>>(path: P) -> Result<ReposData, FileError> {
+        // Create parent directories if they don't exist
+        let parent = path.as_ref().parent()
+            .ok_or_else(|| FileError::PathParent(path.as_ref().to_path_buf()))?;
+        std::fs::create_dir_all(&parent).map_err(|e| FileError::CreateParentDir(e, parent.to_path_buf()))?;
+
         let file = Self::default();
         file.save(path)?;
         Ok(file)
@@ -82,7 +87,7 @@ impl Repos {
 
     fn reload(&mut self) -> Result<(), FileError> {
         if self.permission == Permission::ReadOnly {
-            return Err(FileError::ReadOnly);
+            return Err(FileError::ReadOnly(self.path.clone()));
         }
         self.data = ReposData::load(&self.path)?;
         Ok(())
@@ -90,7 +95,7 @@ impl Repos {
 
     fn save(&self) -> Result<(), FileError> {
         if self.permission == Permission::ReadOnly {
-            return Err(FileError::ReadOnly);
+            return Err(FileError::ReadOnly(self.path.clone()));
         }
         self.data.save(&self.path)
     }

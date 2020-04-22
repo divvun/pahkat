@@ -12,6 +12,7 @@ use std::time::Duration;
 use futures::stream::{StreamExt, TryStreamExt};
 use parity_tokio_ipc::{Endpoint, SecurityAttributes};
 use tokio::io::{AsyncRead, AsyncWrite};
+#[cfg(unix)]
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
@@ -140,7 +141,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
     ) -> Result<Self::NotificationsStream> {
         let mut rx = self.notifications.subscribe();
 
-        log::info!("Peer: {:?}", _request.peer_cred());
+        // log::info!("Peer: {:?}", _request.peer_cred());
 
         let stream = async_stream::try_stream! {
             while let response = rx.recv().await {
@@ -526,12 +527,28 @@ async fn store(config_path: Option<&Path>) -> anyhow::Result<Arc<dyn PackageStor
     Ok(store)
 }
 
-const UPDATE_INTERVAL: Duration = Duration::from_secs(15 * 60); // 15 minutes
+#[inline(always)]
+#[cfg(feature = "windows")]
+async fn store(config_path: Option<&Path>) -> anyhow::Result<Arc<dyn PackageStore>> {
+    let config = match config_path {
+        Some(v) => pahkat_client::Config::load(&v, pahkat_client::Permission::ReadWrite)?,
+        None => pahkat_client::Config::load_default()?,
+    };
+    log::debug!("Loading config...");
+    let store = pahkat_client::WindowsPackageStore::new(config).await;
+    let store = Arc::new(store);
 
-pub async fn start(
-    path: &Path,
-    config_path: Option<&Path>,
-) -> std::result::Result<(), anyhow::Error> {
+    if store.config().read().unwrap().repos().len() == 0 {
+        log::warn!("There are no repositories in the given config.");
+    }
+
+    Ok(store)
+}
+
+
+#[cfg(unix)]
+#[inline(always)]
+fn endpoint(path: &Path) -> std::result::Result<UnixListener, anyhow::Error> {
     use std::os::unix::fs::FileTypeExt;
 
     match std::fs::metadata(path) {
@@ -555,46 +572,25 @@ pub async fn start(
         }
     };
 
-    let mut endpoint = tokio::net::UnixListener::bind(&path).unwrap();
-    let current_transaction = Arc::new(tokio::sync::Mutex::new(()));
+    tokio::net::UnixListener::bind(&path).unwrap()
+}
 
-    let incoming = endpoint.incoming().map(|x| match x {
-        Ok(v) => {
-            log::debug!("PEER: {:?}", &v.peer_cred());
-            Ok(v)
-        }
-        Err(e) => Err(e),
-    }); //.expect("failed to open new socket");
-    let (sender, mut _rx) = broadcast::channel(5);
+fn endpoint(path: &Path) -> std::result::Result<Endpoint, anyhow::Error> {
+    Ok(Endpoint::new(path.to_str().unwrap().to_string()))
+}
 
-    let store = store(config_path).await?;
-    log::debug!("Created store.");
 
-    let rpc = Rpc {
-        store: Arc::clone(&store),
-        notifications: sender,
-        current_transaction: Arc::clone(&current_transaction),
-    };
+fn create_background_update_service(store: Arc<dyn PackageStore>, current_transaction: Arc<tokio::sync::Mutex<()>>) {
+    const UPDATE_INTERVAL: Duration = Duration::from_secs(15 * 60); // 15 minutes
 
-    let sigint_listener = signal(SignalKind::interrupt())?.into_future();
-    let sigterm_listener = signal(SignalKind::terminate())?.into_future();
-    let sigquit_listener = signal(SignalKind::quit())?.into_future();
-
-    // SIGUSR1 and SIGUSR2 do nothing, just swallow events.
-    let _sigusr1_listener = signal(SignalKind::user_defined1())?.into_future();
-    let _sigusr2_listener = signal(SignalKind::user_defined2())?.into_future();
-
-    log::debug!("Created signal listeners for: SIGINT, SIGTERM, SIGQUIT, SIGUSR1, SIGUSR2.");
-
-    // Create the background updater
     tokio::spawn(async move {
-        let current_transaction = Arc::clone(&current_transaction);
-        let store = Arc::clone(&store);
+        // let current_transaction = Arc::clone(&current_transaction);
+        // let store = Arc::clone(&store);
 
         use tokio::time::{self, Duration};
         let mut interval = time::interval(UPDATE_INTERVAL);
 
-        loop {
+        'main: loop {
             interval.tick().await;
             log::info!("Running update check…");
 
@@ -647,38 +643,147 @@ pub async fn start(
 
             let transaction = PackageTransaction::new(Arc::clone(&store) as _, actions).unwrap(); // .map_err(|e| Status::failed_precondition(format!("{}", e)))?;
 
-            let (_, mut stream) = transaction.process();
+            for action in transaction.actions().iter() {
+                // let tx = tx.clone();
+                // let id = action.id.clone();
+                let mut download = store.download(&action.id);
 
-            // futures::pin_mut!(stream);
+                // TODO: handle cancel here
 
-            if let Some(message) = stream.next().await {
+                use pahkat_client::package_store::DownloadEvent;
+
+                while let Some(event) = download.next().await {
+                    match event {
+                        DownloadEvent::Error(e) => {
+                            log::error!("{:?}", &e);
+                            continue 'main;
+                        }
+                        event => {
+                            log::debug!("{:?}", &event);
+                        }
+                    };
+                    //     DownloadEvent::Progress((current, total)) => {
+                    //         yield pb::TransactionResponse {
+                    //             value: Some(Value::DownloadProgress(DownloadProgress {
+                    //                 package_id: id.to_string(),
+                    //                 current,
+                    //                 total,
+                    //             }))
+                    //         };
+                    //     }
+                    //     DownloadEvent::Complete(_) => {
+                    //         yield pb::TransactionResponse {
+                    //             value: Some(Value::DownloadComplete(DownloadComplete {
+                    //                 package_id: id.to_string(),
+                    //             }))
+                    //         };
+                    //     }
+                    // }
+                }
+            }
+
+            let (_canceler, mut stream) = transaction.process();
+
+            futures::pin_mut!(stream);
+
+            while let Some(message) = stream.next().await {
                 log::trace!("{:?}", message);
             }
+
+            log::debug!("Completed background transaction.");
         }
     });
+}
+
+// #[cfg(unix)]
+// fn shutdown_handler() -> impl Future { 
+//     async move {
+//         tokio::select! {
+//             _ = sigint_listener => {
+//                 log::info!("SIGINT received; gracefully shutting down.");
+//             },
+//             _ = sigterm_listener => {
+//                 log::info!("SIGTERM received; gracefully shutting down.");
+//             }
+//             _ = sigquit_listener => {
+//                 log::info!("SIGQUIT received; gracefully shutting down.");
+//             }
+//         };
+//         ()
+//     }
+// } 
+fn shutdown_handler(mut shutdown_rx: mpsc::UnboundedReceiver<()>, current_transaction: Arc<tokio::sync::Mutex<()>>) -> impl std::future::Future<Output = ()> {
+    let ctrl_c = tokio::signal::ctrl_c();
+
+    async move {
+        tokio::select! {
+            _ = shutdown_rx.recv() => {
+                log::info!("Shutdown signal received; gracefully shutting down.");
+            } 
+            _ = ctrl_c => {
+                log::info!("Ctrl+C received; gracefully shutting down.");
+            }
+        };
+
+        log::info!("Attempting to attain transaction lock...");
+        current_transaction.lock().await;
+        log::info!("Lock attained!");
+        ()
+    }
+}
+
+pub async fn start(
+    path: &Path,
+    config_path: Option<&Path>,
+    shutdown_rx: mpsc::UnboundedReceiver<()>,
+) -> std::result::Result<(), anyhow::Error> {
+    let endpoint = endpoint(path)?;
+
+    // let incoming = endpoint.incoming().map(|x| match x {
+    //     Ok(v) => {
+    //         log::debug!("PEER: {:?}", &v.peer_cred());
+    //         Ok(v)
+    //     }
+    //     Err(e) => Err(e),
+    // }); //.expect("failed to open new socket");
+
+    // let sigint_listener = signal(SignalKind::interrupt())?.into_future();
+    // let sigterm_listener = signal(SignalKind::terminate())?.into_future();
+    // let sigquit_listener = signal(SignalKind::quit())?.into_future();
+
+    // // SIGUSR1 and SIGUSR2 do nothing, just swallow events.
+    // let _sigusr1_listener = signal(SignalKind::user_defined1())?.into_future();
+    // let _sigusr2_listener = signal(SignalKind::user_defined2())?.into_future();
+
+    // log::debug!("Created signal listeners for: SIGINT, SIGTERM, SIGQUIT, SIGUSR1, SIGUSR2.");
+
+
+    let store = store(config_path).await?;
+    log::debug!("Created store.");
+
+    let current_transaction = Arc::new(tokio::sync::Mutex::new(()));
+
+    // Create the background updater
+    create_background_update_service(Arc::clone(&store), Arc::clone(&current_transaction));
+
+    // Notifications
+    let (notifications, mut notif_rx) = broadcast::channel(5);
+
+    let rpc = Rpc {
+        store: Arc::clone(&store),
+        notifications,
+        current_transaction: Arc::clone(&current_transaction),
+    };
 
     Server::builder()
         .add_service(pb::pahkat_server::PahkatServer::new(rpc))
-        .serve_with_incoming_shutdown(incoming, async move {
-            tokio::select! {
-                _ = sigint_listener => {
-                    log::info!("SIGINT received; gracefully shutting down.");
-                },
-                _ = sigterm_listener => {
-                    log::info!("SIGTERM received; gracefully shutting down.");
-                }
-                _ = sigquit_listener => {
-                    log::info!("SIGQUIT received; gracefully shutting down.");
-                }
-            };
-            ()
-        })
+        .serve_with_incoming_shutdown(endpoint.incoming().unwrap(), shutdown_handler(shutdown_rx, Arc::clone(&current_transaction)))
         .await?;
 
-    drop(endpoint);
+    // drop(endpoint);
 
-    log::info!("Cleaning up Unix socket at path: {}", &path.display());
-    std::fs::remove_file(&path)?;
+    // log::info!("Cleaning up Unix socket at path: {}", &path.display());
+    // std::fs::remove_file(&path)?;
 
     log::info!("Shutdown complete!");
     Ok(())

@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
+use std::fmt::Debug;
 
 use hashbrown::HashMap;
 use pahkat_types::package::Package;
@@ -36,7 +37,8 @@ pub enum ImportError {
     InvalidPayloadType,
 }
 
-pub enum ProgressEvent<P, C, E> {
+#[derive(Debug)]
+pub enum ProgressEvent<P: Debug, C: Debug, E: Debug> {
     Progress(P),
     Complete(C),
     Error(E),

@@ -386,6 +386,8 @@ impl PackageTransaction {
             yield TransactionEvent::Complete;
         };
 
+        log::debug!("Sure are!");
+
         (canceler, Box::pin(valve.wrap(stream)))
     }
 }

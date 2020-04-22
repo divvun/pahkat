@@ -6,7 +6,7 @@ pub use path::ConfigPath;
 pub use repos::{RepoRecord, Repos, ReposData};
 pub use settings::{Settings, SettingsData};
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 
@@ -26,20 +26,26 @@ pub enum Error {
 
 #[derive(Debug, Error)]
 pub enum FileError {
-    #[error("The file is read only and could not be written to")]
-    ReadOnly,
+    #[error("The file {0} is read only and could not be written to.")]
+    ReadOnly(PathBuf),
 
-    #[error("Could not read file")]
-    Read(#[source] std::io::Error),
+    #[error("Could not read file: {1}")]
+    Read(#[source] std::io::Error, PathBuf),
 
-    #[error("Could not write file")]
-    Write(#[source] std::io::Error),
+    #[error("Could not write file: {1}")]
+    Write(#[source] std::io::Error, PathBuf),
 
-    #[error("Could not convert from TOML format")]
-    FromToml(#[from] toml::de::Error),
+    #[error("Could not convert from TOML format: {1}")]
+    FromToml(#[source] toml::de::Error, PathBuf),
 
-    #[error("Could not convert into TOML format")]
-    ToToml(#[from] toml::ser::Error),
+    #[error("Could not convert into TOML format: {1}")]
+    ToToml(#[source] toml::ser::Error, PathBuf),
+
+    #[error("Could not get parent for path: {0}")]
+    PathParent(PathBuf),
+
+    #[error("Could not create directory: {1}")]
+    CreateParentDir(#[source] std::io::Error, PathBuf),
 }
 
 #[derive(Debug, Clone)]
@@ -68,7 +74,7 @@ impl Config {
 
         let settings = match Settings::load(&settings_path, permission) {
             Ok(v) => v,
-            Err(FileError::Read(_)) if permission != Permission::ReadOnly => {
+            Err(FileError::Read(_, _)) if permission != Permission::ReadOnly => {
                 Settings::create(&settings_path).map_err(Error::SettingsFile)?
             }
             Err(e) => return Err(Error::SettingsFile(e)),
@@ -78,7 +84,7 @@ impl Config {
 
         let repos = match Repos::load(&repos_path, permission) {
             Ok(v) => v,
-            Err(FileError::Read(_)) if permission != Permission::ReadOnly => {
+            Err(FileError::Read(_, _)) if permission != Permission::ReadOnly => {
                 Repos::create(&repos_path).map_err(Error::ReposFile)?
             }
             Err(e) => return Err(Error::ReposFile(e)),

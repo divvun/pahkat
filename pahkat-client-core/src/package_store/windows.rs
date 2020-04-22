@@ -5,9 +5,10 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, RwLock};
+use std::convert::{TryFrom, TryInto};
 
+use dashmap::DashMap;
 use hashbrown::HashMap;
-use pahkat_types::payload::windows::InstallTarget;
 use url::Url;
 use winreg::enums::*;
 use winreg::RegKey;
@@ -17,6 +18,8 @@ use crate::transaction::{
     PackageStatusError,
 };
 use crate::Config;
+use crate::package_store::{ImportError, InstallTarget};
+use crate::repo::RepoDownloadError;
 use crate::{repo::PayloadError, LoadedRepository, PackageKey, PackageStore};
 use pahkat_types::{
     package::{Descriptor, Package},
@@ -48,8 +51,6 @@ fn uninstall_regkey(installer: &windows::Executable) -> Option<RegKey> {
 }
 
 impl PackageStore for WindowsPackageStore {
-    type Target = InstallTarget;
-
     fn config(&self) -> SharedStoreConfig {
         Arc::clone(&self.config)
     }
@@ -61,20 +62,26 @@ impl PackageStore for WindowsPackageStore {
     fn download(
         &self,
         key: &PackageKey,
-        progress: Box<dyn Fn(u64, u64) -> bool + Send + 'static>,
-    ) -> Result<PathBuf, crate::download::DownloadError> {
-        let query = crate::repo::ReleaseQuery::from(key);
+    ) -> std::pin::Pin<
+        Box<
+            dyn futures::stream::Stream<Item = crate::package_store::DownloadEvent>
+                + Send
+                + Sync
+                + 'static,
+        >,
+    > {
         let repos = self.repos.read().unwrap();
-        crate::repo::download(&self.config, key, &query, &*repos, progress)
+        let query = crate::repo::ReleaseQuery::new(key, &*repos);
+        crate::repo::download(&self.config, key, &query, &*repos)
     }
 
     fn install(
         &self,
         key: &PackageKey,
-        install_target: &Self::Target,
+        install_target: InstallTarget,
     ) -> Result<PackageStatus, InstallError> {
-        let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
+        let query = crate::repo::ReleaseQuery::new(key, &*repos);
 
         let (target, release, descriptor) =
             crate::repo::resolve_payload(key, &query, &*repos).map_err(InstallError::Payload)?;
@@ -153,10 +160,10 @@ impl PackageStore for WindowsPackageStore {
     fn uninstall(
         &self,
         key: &PackageKey,
-        install_target: &Self::Target,
+        install_target: InstallTarget,
     ) -> Result<PackageStatus, UninstallError> {
-        let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
+        let query = crate::repo::ReleaseQuery::new(key, &*repos);
 
         let (target, release, descriptor) =
             crate::repo::resolve_payload(key, &query, &*repos).map_err(UninstallError::Payload)?;
@@ -231,12 +238,12 @@ impl PackageStore for WindowsPackageStore {
     fn status(
         &self,
         key: &PackageKey,
-        install_target: &InstallTarget,
+        install_target: InstallTarget,
     ) -> Result<PackageStatus, PackageStatusError> {
         log::debug!("status: {}, target: {:?}", &key.to_string(), install_target);
 
-        let query = crate::repo::ReleaseQuery::from(key);
         let repos = self.repos.read().unwrap();
+        let query = crate::repo::ReleaseQuery::new(key, &*repos);
 
         let (target, release, descriptor) = crate::repo::resolve_payload(key, &query, &*repos)
             .map_err(PackageStatusError::Payload)?;
@@ -258,41 +265,44 @@ impl PackageStore for WindowsPackageStore {
         crate::repo::find_package_by_id(self, package_id, &*repos)
     }
 
-    fn refresh_repos(&self) {
-        *self.repos.write().unwrap() = crate::repo::refresh_repos(&self.config);
+    fn refresh_repos(&self) -> crate::package_store::Future<Result<(), RepoDownloadError>> {
+        let config = self.config().read().unwrap().clone();
+        let repos = self.repos();
+        Box::pin(async move {
+            let result = crate::repo::refresh_repos(config).await?;
+            *repos.write().unwrap() = result;
+            Ok(())
+        })
     }
 
     fn clear_cache(&self) {
         crate::repo::clear_cache(&self.config)
     }
 
-    fn import(
-        &self,
-        key: &PackageKey,
-        installer_path: &Path,
-    ) -> Result<PathBuf, crate::package_store::ImportError> {
-        unimplemented!()
+    fn import(&self, key: &PackageKey, installer_path: &Path) -> Result<PathBuf, ImportError> {
+        let repos = self.repos.read().unwrap();
+        let query = crate::repo::ReleaseQuery::new(key, &*repos);
+        crate::repo::import(&self.config, key, &query, &*repos, installer_path)
     }
 
     fn all_statuses(
         &self,
         repo_url: &Url,
-        target: &Self::Target,
+        target: InstallTarget,
     ) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>> {
-        unimplemented!()
+        crate::repo::all_statuses(self, repo_url, target)
     }
 }
 
-use std::convert::{TryFrom, TryInto};
-
 impl WindowsPackageStore {
-    pub fn new(config: Config) -> WindowsPackageStore {
+    pub async fn new(config: Config) -> WindowsPackageStore {
         let store = WindowsPackageStore {
-            repos: Arc::new(RwLock::new(HashMap::new())),
+            repos: Default::default(),
             config: Arc::new(RwLock::new(config)),
         };
 
-        store.refresh_repos();
+        // We ignore errors here.
+        let _ = store.refresh_repos().await;
 
         store
     }
@@ -305,7 +315,7 @@ impl WindowsPackageStore {
         &self,
         id: &PackageKey,
         package: &Descriptor,
-        _target: &InstallTarget,
+        _target: InstallTarget,
     ) -> Result<PackageStatus, PackageStatusError> {
         let mut query = crate::repo::ReleaseQuery::default();
         query.arch = None;
