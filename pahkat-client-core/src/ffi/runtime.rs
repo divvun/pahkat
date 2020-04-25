@@ -1,9 +1,8 @@
-
 use std::convert::TryFrom;
 use std::error::Error;
 use std::ffi::{CStr, CString};
 use std::path::PathBuf;
-use std::sync::{Arc, RwLock, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use cursed::{FromForeign, InputType, ReturnType, ToForeign};
 use once_cell::sync::Lazy;
@@ -15,11 +14,10 @@ use serde::Serialize;
 use url::Url;
 
 use crate::config::ConfigPath;
+use crate::ffi::BoxError;
 use crate::repo::PayloadError;
 use crate::transaction::{PackageStatus, PackageStatusError};
 use crate::{Config, PackageKey};
-use crate::ffi::BoxError;
-
 
 static BASIC_RUNTIME: Lazy<Mutex<tokio::runtime::Runtime>> = Lazy::new(|| {
     Mutex::new(

@@ -10,11 +10,11 @@ use futures::stream::{Stream, StreamExt};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
+use crate::download::DownloadError;
 use crate::package_store::PackageStore;
 use crate::transaction::{
-    PackageAction, PackageTransaction, PackageStatus, PackageStatusError, PackageTransactionError,
+    PackageAction, PackageStatus, PackageStatusError, PackageTransaction, PackageTransactionError,
 };
-use crate::download::DownloadError;
 use crate::{Config, PackageKey, PrefixPackageStore};
 
 use super::{JsonMarshaler, PackageKeyMarshaler};
@@ -55,7 +55,10 @@ pub extern "C" fn pahkat_prefix_package_store_status(
     #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
     #[marshal(PackageKeyMarshaler::<'_>)] package_key: PackageKey,
 ) -> i8 {
-    log::trace!("FFI pahkat_prefix_package_store_status called: {:?}", &package_key);
+    log::trace!(
+        "FFI pahkat_prefix_package_store_status called: {:?}",
+        &package_key
+    );
     status_to_i8(handle.status(&package_key, Default::default()))
 }
 
@@ -80,7 +83,6 @@ pub extern "C" fn pahkat_prefix_package_store_import(
     handle.import(&package_key, &installer_path).box_err()
 }
 
-
 #[cthulhu::invoke(return_marshaler = "cursed::PathBufMarshaler")]
 pub extern "C" fn pahkat_prefix_package_store_download(
     #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
@@ -89,12 +91,12 @@ pub extern "C" fn pahkat_prefix_package_store_download(
 ) -> Result<PathBuf, Box<dyn Error>> {
     let package_key_str = CString::new(package_key.to_string()).unwrap();
     let mut stream = handle.download(&package_key);
-    
+
     let mut path: Option<PathBuf> = None;
 
     while let Some(event) = block_on(stream.next()) {
         use crate::package_store::DownloadEvent;
-        
+
         match event {
             DownloadEvent::Error(e) => {
                 return Err(e).box_err();
@@ -110,8 +112,9 @@ pub extern "C" fn pahkat_prefix_package_store_download(
 
     match path {
         Some(v) => Ok(v),
-        None => Err(DownloadError::UserCancelled)
-    }.box_err()
+        None => Err(DownloadError::UserCancelled),
+    }
+    .box_err()
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::UrlMarshaler")]
@@ -119,8 +122,8 @@ pub extern "C" fn pahkat_prefix_package_store_download_url(
     #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
     #[marshal(PackageKeyMarshaler::<'_>)] package_key: PackageKey,
 ) -> Result<url::Url, Box<dyn Error>> {
-    use pahkat_types::AsDownloadUrl;
     use crate::repo::*;
+    use pahkat_types::AsDownloadUrl;
 
     let repos = handle.repos();
     let repos = repos.read().unwrap();
@@ -244,7 +247,7 @@ pub extern "C" fn pahkat_prefix_transaction_process(
             }
             _ => {}
         }
-        
+
         // PackageKeyMarshaler::drop_foreign(k);
     }
 

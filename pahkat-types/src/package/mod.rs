@@ -1,7 +1,6 @@
 pub mod version;
 
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use typed_builder::TypedBuilder;
 use url::Url;
@@ -101,15 +100,6 @@ impl<'a> TryFrom<&'a Package> for &'a Redirect {
             x => Err(x),
         }
     }
-}
-
-#[derive(
-    Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
-)]
-pub struct Index {
-    #[serde(default)]
-    #[builder(default)]
-    pub packages: BTreeMap<String, Package>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, TypedBuilder)]

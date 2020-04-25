@@ -81,6 +81,12 @@ message TransactionRequest {
     }
 }
 
+message ResolvedAction {
+    PackageAction action = 1;
+    map<string, string> name = 2;
+    string version = 3;
+}
+
 message TransactionResponse {
     message DownloadProgress {
         string package_id = 1;
@@ -110,7 +116,9 @@ message TransactionResponse {
         string package_id = 1;
         string error = 2;
     }
-    message TransactionStarted {}
+    message TransactionStarted {
+        repeated ResolvedAction actions = 1;
+    }
     message TransactionComplete {}
 
     oneof value {
@@ -136,6 +144,18 @@ message ClearCacheRequest {}
 
 message ClearCacheResponse {}
 
+message StringRequest {
+    string category = 1;
+    string language = 2;
+}
+
+message StringResponse {
+    message MessageMap {
+        map<string, string> values = 1;
+    }
+    map<string, MessageMap> repos = 1;
+}
+
 service Pahkat {
     rpc Notifications(NotificationsRequest) returns (stream NotificationResponse) {}
     // rpc SelfUpdate(SelfUpdateRequest) returns (stream SelfUpdateResponse) {}
@@ -144,6 +164,8 @@ service Pahkat {
     rpc Status(StatusRequest) returns (StatusResponse) {}
     rpc RepositoryIndexes(RepositoryIndexesRequest) returns (RepositoryIndexesResponse) {}
     rpc ProcessTransaction(stream TransactionRequest) returns (stream TransactionResponse) {}
+    rpc Strings(StringRequest) returns (StringResponse) {}
+
     // rpc Refresh(RefreshRequest) returns (RefreshResponse) {}
     // rpc ClearCache(ClearCacheRequest) returns (ClearCacheResponse) {}
     

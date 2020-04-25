@@ -8,8 +8,7 @@ use typed_builder::TypedBuilder;
 use url::Url;
 
 use pahkat_types::{
-    package::Index as PackagesIndex,
-    repo::{Agent, Index, Repository, RepositoryData},
+    repo::{Agent, Index, RepositoryData},
     LangTagMap,
 };
 
@@ -142,7 +141,9 @@ pub fn init<'a>(request: Request<'a>) -> Result<(), Error> {
     create_dir_all(&request.path)
         .map_err(|e| Error::DirCreateFailed(request.path.to_path_buf(), e))?;
     create_dir_all(&request.path.join("packages"))
-        .map_err(|e| Error::DirCreateFailed(request.path.to_path_buf(), e))?;
+        .map_err(|e| Error::DirCreateFailed(request.path.join("packages").to_path_buf(), e))?;
+    create_dir_all(&request.path.join("strings"))
+        .map_err(|e| Error::DirCreateFailed(request.path.join("strings").to_path_buf(), e))?;
 
     // Create empty repository index
     let mut name = LangTagMap::new();
@@ -163,11 +164,6 @@ pub fn init<'a>(request: Request<'a>) -> Result<(), Error> {
 
     let repo_index_path = request.path.join("index.toml");
     write_index(&repo_index_path, &index)?;
-
-    // Create empty packages index
-    let packages_index = PackagesIndex::builder().build();
-    let packages_index_path = request.path.join("packages/index.toml");
-    write_index(&packages_index_path, &packages_index)?;
 
     Ok(())
 }

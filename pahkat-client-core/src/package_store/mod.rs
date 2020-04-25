@@ -6,21 +6,20 @@ pub mod prefix;
 pub mod windows;
 
 use std::collections::BTreeMap;
-use std::sync::{Arc, RwLock};
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
+use std::sync::{Arc, RwLock};
 
 use hashbrown::HashMap;
-use dashmap::DashMap;
 use pahkat_types::package::Package;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::config::Config;
+use crate::repo::RepoDownloadError;
 use crate::transaction::{install::InstallError, uninstall::UninstallError};
 use crate::transaction::{PackageStatus, PackageStatusError};
 use crate::{LoadedRepository, PackageKey};
-use crate::repo::RepoDownloadError;
 
 pub type SharedStoreConfig = Arc<RwLock<Config>>;
 pub type SharedRepos = Arc<RwLock<HashMap<Url, LoadedRepository>>>;
@@ -45,12 +44,37 @@ pub enum ProgressEvent<P, C, E> {
 
 pub type DownloadEvent = ProgressEvent<(u64, u64), PathBuf, crate::download::DownloadError>;
 
-#[non_exhaustive]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[non_exhaustive]
 pub enum InstallTarget {
     System,
     User,
+}
+
+impl InstallTarget {
+    pub fn to_u8(&self) -> u8 {
+        match self {
+            InstallTarget::System => 0,
+            InstallTarget::User => 1,
+        }
+    }
+}
+
+impl From<u8> for InstallTarget {
+    fn from(value: u8) -> InstallTarget {
+        match value {
+            1 => InstallTarget::User,
+            _ => InstallTarget::System,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+#[non_exhaustive]
+pub enum StringCategory {
+    Tags,
 }
 
 impl Default for InstallTarget {
@@ -67,10 +91,7 @@ pub trait PackageStore: Send + Sync {
     fn config(&self) -> SharedStoreConfig;
 
     #[must_use]
-    fn download(
-        &self,
-        key: &PackageKey,
-    ) -> Stream<DownloadEvent>;
+    fn download(&self, key: &PackageKey) -> Stream<DownloadEvent>;
 
     fn import(&self, key: &PackageKey, installer_path: &Path) -> Result<PathBuf, ImportError>;
 
@@ -112,4 +133,6 @@ pub trait PackageStore: Send + Sync {
         self.clear_cache();
         self.refresh_repos()
     }
+
+    fn strings(&self, category: StringCategory, language: String) -> Future<HashMap<Url, HashMap<String, String>>>;
 }

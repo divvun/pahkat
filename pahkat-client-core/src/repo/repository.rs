@@ -41,17 +41,24 @@ impl LoadedRepository {
         Self::from_url(url, channel).await
     }
 
-    async fn from_url(url: Url, channel: Option<String>) -> Result<LoadedRepository, RepoDownloadError> {
+    async fn from_url(
+        url: Url,
+        channel: Option<String>,
+    ) -> Result<LoadedRepository, RepoDownloadError> {
         let (tx, rx) = tokio::sync::oneshot::channel();
 
         tokio::spawn(async move {
-
             let result = async move {
                 let client = reqwest::Client::new();
 
                 log::trace!("Loading repo: {} channel:{:?}", &url, &channel);
 
-                let info = client.get(&format!("{}/index.toml", url)).send().await?.text().await?;
+                let info = client
+                    .get(&format!("{}/index.toml", url))
+                    .send()
+                    .await?
+                    .text()
+                    .await?;
                 let info: pahkat_types::repo::Index = toml::from_str(&info)?;
 
                 let packages = client
@@ -74,7 +81,8 @@ impl LoadedRepository {
 
                 log::trace!("Loaded.");
                 Ok(repo)
-            }.await;
+            }
+            .await;
 
             tx.send(result).unwrap();
         });

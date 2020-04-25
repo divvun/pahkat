@@ -7,8 +7,8 @@ pub use repository::{LoadedRepository, RepoDownloadError};
 use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 use std::path::Path;
-use std::sync::{Arc, RwLock};
 use std::pin::Pin;
+use std::sync::{Arc, RwLock};
 
 use dashmap::DashMap;
 use futures::future::{Future, FutureExt};
@@ -25,7 +25,6 @@ use crate::package_store::PackageStore;
 use crate::transaction::{PackageDependencyError, PackageStatus, PackageStatusError};
 use pahkat_types::package::{Package, Release, Version};
 use pahkat_types::payload::Target;
-
 
 #[derive(Debug, Clone, Error)]
 pub enum PayloadError {
@@ -117,7 +116,11 @@ impl<'a> ReleaseQueryIter<'a> {
         log::trace!("Beginning release query iter: {:#?}", &self.query);
 
         while let Some(release) = self.descriptor.release.get(self.next_release) {
-            log::trace!("Candidate release: version:{:?}, channel:{:?}", &release.version.to_string(), &release.channel);
+            log::trace!(
+                "Candidate release: version:{:?}, channel:{:?}",
+                &release.version.to_string(),
+                &release.channel
+            );
 
             // eprintln!("release: {:?}", &release);
             // If query is empty, it means search only for the main empty channel
@@ -149,7 +152,11 @@ impl<'a> ReleaseQueryIter<'a> {
     #[inline(always)]
     fn next_payload(&mut self, release: &'a Release) -> Option<ReleaseQueryResponse<'a>> {
         for ref target in release.target.iter() {
-            log::trace!("Candidate target: platform:{} arch:{:?}", &target.platform, &target.arch);
+            log::trace!(
+                "Candidate target: platform:{} arch:{:?}",
+                &target.platform,
+                &target.arch
+            );
 
             if target.platform != self.query.platform {
                 log::trace!("Skipping (platform does not match)");
@@ -210,17 +217,23 @@ impl<'a> ReleaseQuery<'a> {
             .channel
             .as_ref()
             .map(|x| vec![&**x])
-            .unwrap_or_else(|| repos.iter().find_map(|(url, repo)| {
-                log::trace!("ReleaseQuery::new() {} {}", &key.repository_url, url);
-                if &key.repository_url == url {
-                    log::trace!("{:?}", repo.meta());
-                    let channel = repo.meta().channel.as_ref().map(|x| &**x);
-                    log::trace!("Channel? {:?}", &channel);
-                    channel
-                } else {
-                    None
-                }
-            }).map(|x| vec![x]).unwrap_or_else(|| vec![]));
+            .unwrap_or_else(|| {
+                repos
+                    .iter()
+                    .find_map(|(url, repo)| {
+                        log::trace!("ReleaseQuery::new() {} {}", &key.repository_url, url);
+                        if &key.repository_url == url {
+                            log::trace!("{:?}", repo.meta());
+                            let channel = repo.meta().channel.as_ref().map(|x| &**x);
+                            log::trace!("Channel? {:?}", &channel);
+                            channel
+                        } else {
+                            None
+                        }
+                    })
+                    .map(|x| vec![x])
+                    .unwrap_or_else(|| vec![])
+            });
 
         ReleaseQuery {
             platform: key
@@ -485,6 +498,14 @@ where
     map
 }
 
+pub(crate) async fn strings<'p>(
+    repo_urls: Vec<Url>,
+    category: crate::package_store::StringCategory,
+    language: String
+) -> HashMap<Url, HashMap<String, String>> {
+    Default::default()
+}
+
 pub(crate) fn find_package_by_key<'p>(
     package_key: &PackageKey,
     repos: &'p HashMap<Url, LoadedRepository>,
@@ -492,7 +513,10 @@ pub(crate) fn find_package_by_key<'p>(
     log::trace!("Resolving package...");
     log::trace!("My pkg id: {}", &package_key.id);
     log::trace!("Repo url: {}", &package_key.repository_url);
-    log::trace!("Repos: {:?}", repos.iter().map(|(x, _)| x).collect::<Vec<_>>());
+    log::trace!(
+        "Repos: {:?}",
+        repos.iter().map(|(x, _)| x).collect::<Vec<_>>()
+    );
 
     repos.get(&package_key.repository_url).and_then(|r| {
         log::trace!("Got repo");
@@ -555,39 +579,49 @@ where
 }
 
 #[must_use]
-pub(crate) async fn refresh_repos(config: Config) -> Result<HashMap<Url, LoadedRepository>, RepoDownloadError> {
+pub(crate) async fn refresh_repos(
+    config: Config,
+) -> Result<HashMap<Url, LoadedRepository>, RepoDownloadError> {
     let config = Arc::new(config);
-    
+
     log::debug!("Refreshing repos...");
 
     let repo_data = {
-        let repo_keys = config.repos().keys().fold(crossbeam_queue::SegQueue::new(), |mut acc, cur| {
-            acc.push(cur.clone());
-            acc
-        });
+        let repo_keys =
+            config
+                .repos()
+                .keys()
+                .fold(crossbeam_queue::SegQueue::new(), |mut acc, cur| {
+                    acc.push(cur.clone());
+                    acc
+                });
 
-        workqueue::work(config, repo_keys, |url, queue, config| Box::pin(async move {
-            log::trace!("Downloading repo at {:?}…", &url);
+        workqueue::work(config, repo_keys, |url, queue, config| {
+            Box::pin(async move {
+                log::trace!("Downloading repo at {:?}…", &url);
 
-            let cache_dir = config.settings().repo_cache_dir();
-            let channel = config.repos().get(&url).and_then(|r| r.channel.clone());
-    
-            match LoadedRepository::from_cache_or_url(url, channel, cache_dir).await {
-                Ok(repo) => {
-                    for url in repo.info().repository.linked_repositories.iter() {
-                        log::trace!("Queuing linked repo: {:?}", &url);
-                        queue.push(url.clone());
-                        // recurse_repo(url.clone(), Arc::clone(&repos), Arc::clone(&config)).await?;
+                let cache_dir = config.settings().repo_cache_dir();
+                let channel = config.repos().get(&url).and_then(|r| r.channel.clone());
+
+                match LoadedRepository::from_cache_or_url(url, channel, cache_dir).await {
+                    Ok(repo) => {
+                        for url in repo.info().repository.linked_repositories.iter() {
+                            log::trace!("Queuing linked repo: {:?}", &url);
+                            queue.push(url.clone());
+                            // recurse_repo(url.clone(), Arc::clone(&repos), Arc::clone(&config)).await?;
+                        }
+
+                        Ok(repo)
                     }
-    
-                    Ok(repo)
+                    Err(e) => {
+                        log::error!("{:?}", e);
+                        Err(e)
+                    }
                 }
-                Err(e) => {
-                    log::error!("{:?}", e);
-                    Err(e)
-                }
-            }
-        })).await.unwrap()
+            })
+        })
+        .await
+        .unwrap()
     };
 
     let mut map = HashMap::new();
@@ -596,8 +630,10 @@ pub(crate) async fn refresh_repos(config: Config) -> Result<HashMap<Url, LoadedR
         log::debug!("Resolved repository: {:?}", &key);
 
         match value {
-            Ok(v) => { map.insert(key, v); },
-            Err(e) => return Err(e)
+            Ok(v) => {
+                map.insert(key, v);
+            }
+            Err(e) => return Err(e),
         }
     }
 
@@ -622,7 +658,7 @@ pub(crate) fn clear_cache(config: &Arc<RwLock<Config>>) {
 
 fn recurse_package_dependencies(
     store: &Arc<dyn PackageStore>,
-    package: &Package,
+    package: &Descriptor,
     candidates: &mut HashMap<PackageKey, Package>,
 ) -> Result<(), PackageDependencyError> {
     // for (package_key, _version) in package.dependencies.iter() {
@@ -651,15 +687,16 @@ fn recurse_package_dependencies(
     Ok(())
     // todo!()
 }
+use pahkat_types::package::Descriptor;
 
 pub(crate) fn find_package_dependencies(
     store: &Arc<dyn PackageStore>,
     _key: &PackageKey,
-    package: &Package,
+    package: &Descriptor,
     _target: &crate::package_store::InstallTarget,
 ) -> Result<Vec<(PackageKey, Package)>, PackageDependencyError> {
     let mut candidates = HashMap::new();
-    recurse_package_dependencies(store, &package, &mut candidates)?;
+    recurse_package_dependencies(store, package, &mut candidates)?;
     Ok(candidates.into_iter().map(|(k, v)| (k, v)).collect())
     // for (package_id, version) in package.dependencies.iter() {
     //     // avoid circular references by keeping

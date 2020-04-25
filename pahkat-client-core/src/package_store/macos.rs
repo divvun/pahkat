@@ -16,10 +16,10 @@ use serde::Deserialize;
 use url::Url;
 
 use super::{PackageStore, SharedRepos, SharedStoreConfig};
-use crate::package_store::{ImportError, InstallTarget};
+use crate::package_store::{ImportError, InstallTarget, StringCategory};
+use crate::repo::RepoDownloadError;
 use crate::transaction::{install::InstallError, install::ProcessError, uninstall::UninstallError};
 use crate::transaction::{PackageStatus, PackageStatusError};
-use crate::repo::RepoDownloadError;
 use crate::{cmp, Config, PackageKey};
 
 #[cfg(target_os = "macos")]
@@ -188,15 +188,14 @@ impl PackageStore for MacOSPackageStore {
     fn clear_cache(&self) {
         crate::repo::clear_cache(&self.config)
     }
-}
 
-// impl std::default::Default for MacOSPackageStore {
-//     fn default() -> Self {
-//         // let config = StoreConfig::load_or_default(true);
-//         // MacOSPackageStore::new(config)
-//         todo!()
-//     }
-// }
+    fn strings(&self, category: StringCategory, language: String) -> crate::package_store::Future<HashMap<Url, HashMap<String, String>>> {
+        let repos = self.repos.read().unwrap();
+        let urls = repos.keys().cloned().collect::<Vec<_>>();
+
+        Box::pin(crate::repo::strings(urls, category, language))
+    }
+}
 
 impl MacOSPackageStore {
     #[must_use]
@@ -232,8 +231,9 @@ impl MacOSPackageStore {
             })
         });
 
-        let pkg_info = pkg_ids.iter().find_map(|pkg_id| {
-            match get_package_info(&pkg_id, target) {
+        let pkg_info = pkg_ids
+            .iter()
+            .find_map(|pkg_id| match get_package_info(&pkg_id, target) {
                 Ok(v) => Some(v),
                 Err(e) => {
                     match e {
@@ -245,12 +245,11 @@ impl MacOSPackageStore {
 
                     None
                 }
-            }
-        });
+            });
 
         let pkg_info = match pkg_info {
             Some(v) => v,
-            None => return Ok(PackageStatus::NotInstalled)
+            None => return Ok(PackageStatus::NotInstalled),
         };
 
         let status = self::cmp::cmp(&pkg_info.pkg_version, &release.version);

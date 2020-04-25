@@ -6,6 +6,12 @@ use typed_builder::TypedBuilder;
 pub fn index(request: Request<'_>) -> anyhow::Result<()> {
     log::debug!("Attempting to load repo in path: {:?}", &request.path);
     let packages_path = request.path.join("packages");
+    std::fs::create_dir_all(&packages_path)?;
+
+    // Attempt to make strings directory if it doesn't exist
+    let strings_path = request.path.join("strings");
+    std::fs::create_dir_all(&strings_path)?;
+
     // Find all package descriptor TOMLs
     let packages = std::fs::read_dir(&*packages_path)?
         .filter_map(Result::ok)

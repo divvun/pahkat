@@ -18,6 +18,7 @@ use tonic::{transport::Server, Request, Response, Status, Streaming};
 
 use pahkat_client::{
     PackageAction, PackageActionType, PackageKey, PackageStore, PackageTransaction,
+    package_store::InstallTarget,
 };
 
 mod pb {
@@ -29,7 +30,27 @@ impl From<pb::PackageAction> for PackageAction {
         PackageAction {
             id: PackageKey::try_from(&*input.id).unwrap(),
             action: PackageActionType::from_u8(input.action as u8),
-            target: Default::default(),
+            target: InstallTarget::from(input.target as u8),
+        }
+    }
+}
+
+impl From<PackageAction> for pb::PackageAction {
+    fn from(input: PackageAction) -> pb::PackageAction {
+        pb::PackageAction {
+            id: input.id.to_string(),
+            action: input.action.to_u8() as u32,
+            target: input.target.to_u8() as u32,
+        }
+    }
+}
+
+impl From<pahkat_client::transaction::ResolvedAction> for pb::ResolvedAction {
+    fn from(record: pahkat_client::transaction::ResolvedAction) -> Self {
+        pb::ResolvedAction {
+            action: Some(record.action.into()),
+            name: record.descriptor.name.into_iter().collect(),
+            version: record.release.version.to_string(),
         }
     }
 }
@@ -137,6 +158,31 @@ impl pb::pahkat_server::Pahkat for Rpc {
 
         Ok(Response::new(Box::pin(stream) as Self::NotificationsStream))
     }
+    
+    async fn strings(&self, request: Request<pb::StringRequest>) -> Result<pb::StringResponse> {
+        let pb::StringRequest { category, language } = request.into_inner();
+
+        let category = match &*category {
+            "tags" => pahkat_client::package_store::StringCategory::Tags,
+            unknown => return Err(Status::failed_precondition(format!("Unknown category: {}", unknown))),
+        };
+
+        let strings = self.store.strings(category, language).await;
+
+        // message StringResponse {
+        //     message MessageMap {
+        //         map<string, string> values = 1;
+        //     }
+        //     map<string, MessageMap> repos = 1;
+        // }
+        use pb::string_response::MessageMap;
+
+        Ok(Response::new(pb::StringResponse {
+            repos: strings.into_iter().map(|(k, v)| (k.to_string(), MessageMap {
+                values: v.into_iter().collect()
+            })).collect()
+        }))
+    }
 
     async fn status(&self, request: Request<pb::StatusRequest>) -> Result<pb::StatusResponse> {
         let request = request.into_inner();
@@ -156,6 +202,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
         _request: Request<pb::RepositoryIndexesRequest>,
     ) -> Result<pb::RepositoryIndexesResponse> {
         let repos = self.store.repos();
+        let repos = repos.read().unwrap();
 
         Ok(Response::new(pb::RepositoryIndexesResponse {
             repositories: repos
@@ -234,13 +281,15 @@ impl pb::pahkat_server::Pahkat for Rpc {
                         use pb::transaction_response::*;
 
                         yield pb::TransactionResponse {
-                            value: Some(Value::TransactionStarted(TransactionStarted {}))
+                            value: Some(Value::TransactionStarted(TransactionStarted {
+                                actions: transaction.actions().iter().cloned().map(|x| x.into()).collect()
+                            }))
                         };
 
-                        for action in transaction.actions().iter() {
+                        for record in transaction.actions().iter() {
                             let tx = tx.clone();
-                            let id = action.id.clone();
-                            let mut download = store.download(&action.id);
+                            let id = record.action.id.clone();
+                            let mut download = store.download(&record.action.id);
 
                             // TODO: handle cancel here
 
@@ -351,7 +400,6 @@ impl pb::pahkat_server::Pahkat for Rpc {
         });
 
         Ok(Response::new(Box::pin(rx) as Self::ProcessTransactionStream))
-        // todo!()
     }
 }
 
@@ -399,15 +447,15 @@ pub async fn start(
     match std::fs::metadata(path) {
         Ok(v) => {
             log::warn!(
-                "Unexpected file found at UNIX socket path: {}",
+                "Unexpected file found at Unix socket path: {}",
                 &path.display()
             );
             if v.file_type().is_socket() {
                 std::fs::remove_file(&path)?;
                 log::warn!("Deleted stale socket.");
             } else {
-                log::error!("File is not a UNIX socket, refusing to clean up automatically.");
-                anyhow::bail!("Unexpected file at desired UNIX socket path ({}) cannot be automatically cleaned up.", &path.display());
+                log::error!("File is not a Unix socket, refusing to clean up automatically.");
+                anyhow::bail!("Unexpected file at desired Unix socket path ({}) cannot be automatically cleaned up.", &path.display());
             }
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -465,6 +513,7 @@ pub async fn start(
             let updates = {
                 let _ = store.refresh_repos().await;
                 let repos = store.repos();
+                let repos = repos.read().unwrap();
 
                 let mut updates = vec![];
 
@@ -538,7 +587,7 @@ pub async fn start(
 
     drop(endpoint);
 
-    log::info!("Cleaning up UNIX socket at path: {}", &path.display());
+    log::info!("Cleaning up Unix socket at path: {}", &path.display());
     std::fs::remove_file(&path)?;
 
     log::info!("Shutdown complete!");

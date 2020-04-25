@@ -7,15 +7,15 @@ pub mod windows;
 #[cfg(feature = "prefix")]
 pub mod prefix;
 
-mod marshal;
 mod log;
+mod marshal;
 mod runtime;
 
 use std::convert::TryFrom;
 use std::error::Error;
 use std::ffi::{CStr, CString};
 use std::path::PathBuf;
-use std::sync::{Arc, RwLock, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use cursed::{FromForeign, InputType, ReturnType, ToForeign};
 use once_cell::sync::Lazy;

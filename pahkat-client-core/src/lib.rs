@@ -1,5 +1,4 @@
 #![recursion_limit = "2048"]
-
 #![deny(unused_must_use)]
 #![deny(rust_2018_idioms)]
 
@@ -21,7 +20,7 @@ mod fbs;
 
 pub use self::config::{Config, Permission};
 pub use self::download::Download;
-pub use self::package_store::{PackageStore, DownloadEvent, InstallTarget};
+pub use self::package_store::{DownloadEvent, InstallTarget, PackageStore};
 pub use self::repo::{LoadedRepository, PackageKey};
 pub use self::transaction::{PackageAction, PackageActionType, PackageStatus, PackageTransaction};
 

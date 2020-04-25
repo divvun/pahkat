@@ -1,9 +1,8 @@
-
 use std::convert::TryFrom;
 use std::error::Error;
 use std::ffi::{CStr, CString};
 use std::path::PathBuf;
-use std::sync::{Arc, RwLock, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use cursed::{FromForeign, InputType, ReturnType, ToForeign};
 use once_cell::sync::Lazy;
@@ -15,10 +14,10 @@ use serde::Serialize;
 use url::Url;
 
 use crate::config::ConfigPath;
+use crate::ffi::BoxError;
 use crate::repo::PayloadError;
 use crate::transaction::{PackageStatus, PackageStatusError};
 use crate::{Config, PackageKey};
-use crate::ffi::BoxError;
 
 pub struct JsonRefMarshaler<'a>(&'a std::marker::PhantomData<()>);
 pub struct JsonMarshaler;
@@ -58,7 +57,10 @@ where
     type Error = Box<dyn Error>;
 
     unsafe fn from_foreign(ptr: cursed::Slice<u8>) -> Result<T, Self::Error> {
-        let json_str = <cursed::StrMarshaler<'a> as FromForeign<cursed::Slice<u8>, &'a str>>::from_foreign(ptr)?;
+        let json_str =
+            <cursed::StrMarshaler<'a> as FromForeign<cursed::Slice<u8>, &'a str>>::from_foreign(
+                ptr,
+            )?;
         log::debug!("JSON: {}, type: {}", &json_str, std::any::type_name::<T>());
 
         let v: Result<T, _> = serde_json::from_str(&json_str);

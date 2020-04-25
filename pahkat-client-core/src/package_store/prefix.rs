@@ -13,10 +13,10 @@ use url::Url;
 use xz2::read::XzDecoder;
 
 use super::InstallTarget;
+use crate::repo::RepoDownloadError;
 use crate::transaction::{
     install::InstallError, uninstall::UninstallError, PackageDependencyError,
 };
-use crate::repo::RepoDownloadError;
 use crate::{
     cmp, download::Download, download::DownloadManager, package_store::ImportError,
     repo::LoadedRepository, transaction::PackageStatus, transaction::PackageStatusError, Config,
@@ -53,7 +53,9 @@ pub enum Error {
 }
 
 impl PrefixPackageStore {
-    pub async fn open_or_create<P: AsRef<Path>>(prefix_path: P) -> Result<PrefixPackageStore, Error> {
+    pub async fn open_or_create<P: AsRef<Path>>(
+        prefix_path: P,
+    ) -> Result<PrefixPackageStore, Error> {
         match Self::open(prefix_path.as_ref()).await {
             Ok(v) => return Ok(v),
             Err(e) => match e {
@@ -321,8 +323,8 @@ impl PackageStore for PrefixPackageStore {
         };
 
         let repos = self.repos.read().unwrap();
-        let query = crate::repo::ReleaseQuery::new(key, &*repos)
-            .and_payloads(vec!["TarballPackage"]);
+        let query =
+            crate::repo::ReleaseQuery::new(key, &*repos).and_payloads(vec!["TarballPackage"]);
         log::debug!("query: {:?}", &query);
 
         let (target, release, package) = crate::repo::resolve_payload(key, &query, &*repos)
@@ -449,7 +451,9 @@ impl<'a> PackageDbConnection<'a> {
         .unwrap();
         let id: i64;
         {
-            let mut stmt = tx.prepare("SELECT id FROM packages WHERE url = :url").unwrap();
+            let mut stmt = tx
+                .prepare("SELECT id FROM packages WHERE url = :url")
+                .unwrap();
             let mut rows = stmt.query_named(&[(":url", &pkg.url)]).unwrap();
             id = rows.next().unwrap().unwrap().get(0).unwrap()
         }

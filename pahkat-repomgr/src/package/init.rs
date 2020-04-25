@@ -1,17 +1,9 @@
 use std::borrow::Cow;
-use std::fs::{self, create_dir_all, File};
-use std::io::{self, Read, Write};
+use std::fs::{self, create_dir_all};
+use std::io;
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
 use typed_builder::TypedBuilder;
-use url::Url;
-
-use pahkat_types::{
-    package::Index as PackagesIndex,
-    repo::{Agent, Index, Repository},
-    LangTagMap,
-};
 
 #[non_exhaustive]
 #[derive(Debug, Clone, TypedBuilder)]
