@@ -292,6 +292,13 @@ impl PackageStore for WindowsPackageStore {
     ) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>> {
         crate::repo::all_statuses(self, repo_url, target)
     }
+
+    fn strings(&self, category: crate::package_store::StringCategory, language: String) -> crate::package_store::Future<HashMap<Url, HashMap<String, String>>> {
+        let repos = self.repos.read().unwrap();
+        let urls = repos.keys().cloned().collect::<Vec<_>>();
+
+        Box::pin(crate::repo::strings(urls, category, language))
+    }
 }
 
 impl WindowsPackageStore {
