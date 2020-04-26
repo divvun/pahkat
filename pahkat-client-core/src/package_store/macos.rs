@@ -16,7 +16,7 @@ use serde::Deserialize;
 use url::Url;
 
 use super::{PackageStore, SharedRepos, SharedStoreConfig};
-use crate::package_store::{ImportError, InstallTarget, StringCategory};
+use crate::package_store::{ImportError, InstallTarget, LocalizedStrings};
 use crate::repo::RepoDownloadError;
 use crate::transaction::{install::InstallError, install::ProcessError, uninstall::UninstallError};
 use crate::transaction::{PackageStatus, PackageStatusError};
@@ -189,11 +189,11 @@ impl PackageStore for MacOSPackageStore {
         crate::repo::clear_cache(&self.config)
     }
 
-    fn strings(&self, category: StringCategory, language: String) -> crate::package_store::Future<HashMap<Url, HashMap<String, String>>> {
+    fn strings(&self, language: String) -> crate::package_store::Future<HashMap<Url, LocalizedStrings>> {
         let repos = self.repos.read().unwrap();
         let urls = repos.keys().cloned().collect::<Vec<_>>();
 
-        Box::pin(crate::repo::strings(urls, category, language))
+        Box::pin(crate::repo::strings(urls, language))
     }
 }
 

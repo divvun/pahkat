@@ -7,13 +7,13 @@ pub extern crate pahkat_types as types;
 #[cfg(feature = "ffi")]
 pub mod ffi;
 
+pub mod config;
 pub mod defaults;
 pub mod package_store;
 pub mod repo;
 pub mod transaction;
 
 mod cmp;
-mod config;
 mod download;
 mod ext;
 mod fbs;

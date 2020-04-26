@@ -115,6 +115,16 @@ impl Repos {
         Ok(())
     }
 
+    pub fn remove(&mut self, key: &Url) -> Result<bool, FileError> {
+        let result = self.data.0.remove(key).is_some();
+
+        if self.permission == Permission::ReadWrite {
+            self.data.save(&self.path)?;
+        }
+
+        Ok(result)
+    }
+
     pub fn data(&self) -> &ReposData {
         &self.data
     }

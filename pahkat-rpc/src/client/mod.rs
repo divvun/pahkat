@@ -7,13 +7,13 @@ use std::{
     task::{Context, Poll},
     time::Duration,
 };
+use structopt::StructOpt;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::mpsc;
 use tonic::transport::server::Connected;
 use tonic::transport::{Endpoint, Uri};
 use tonic::{transport::Server, Request, Response, Status, Streaming};
 use tower::service_fn;
-use structopt::StructOpt;
 
 use crate::pb;
 
@@ -24,9 +24,7 @@ struct StatusCommand {
 }
 
 #[derive(Debug, StructOpt)]
-struct RepoIndexesCommand {
-}
-
+struct RepoIndexesCommand {}
 
 #[derive(Debug, StructOpt)]
 struct ProcessTransactionCommand {
@@ -36,7 +34,6 @@ struct ProcessTransactionCommand {
 
 #[derive(Debug, StructOpt)]
 struct StringsCommand {
-    category: String,
     language: String,
 }
 
@@ -56,9 +53,9 @@ struct Args {
 
 type PahkatClient = pb::pahkat_client::PahkatClient<tonic::transport::channel::Channel>;
 use once_cell::sync::Lazy;
-use std::sync::{RwLock, Arc};
 use std::error::Error;
 use std::path::PathBuf;
+use std::sync::{Arc, RwLock};
 
 async fn new_client() -> anyhow::Result<PahkatClient> {
     let channel = Endpoint::try_from("file://tmp/pahkat")?
@@ -85,44 +82,43 @@ pub async fn run() -> anyhow::Result<()> {
         Command::Status(command) => {
             let request = Request::new(pb::StatusRequest {
                 package_id: command.package_id,
-                target: if command.target == "user" { 1 } else { 0 }
+                target: if command.target == "user" { 1 } else { 0 },
             });
 
             let response = client.status(request).await?;
             println!("{:#?}", response);
         }
         Command::RepoIndexes(_) => {
-            let request = Request::new(pb::RepositoryIndexesRequest {
-            });
+            let request = Request::new(pb::RepositoryIndexesRequest {});
 
             let response = client.repository_indexes(request).await?;
             println!("{:?}", response);
         }
         Command::ProcessTransaction(command) => {
-            let actions = command.actions.into_iter().map(|s| {
-                let mut s = s.split("::");
-                let id = s.next().unwrap().to_string();
-                let action = if s.next().unwrap_or_else(|| "install") == "install" {
-                    0
-                } else {
-                    1
-                };
-                let target = if s.next().unwrap_or_else(|| "system") != "user" {
-                    0
-                } else {
-                    1
-                };
-                pb::PackageAction {
-                    id,
-                    action,
-                    target,
-                }
-            }).collect::<Vec<_>>();
-                
+            let actions = command
+                .actions
+                .into_iter()
+                .map(|s| {
+                    let mut s = s.split("::");
+                    let id = s.next().unwrap().to_string();
+                    let action = if s.next().unwrap_or_else(|| "install") == "install" {
+                        0
+                    } else {
+                        1
+                    };
+                    let target = if s.next().unwrap_or_else(|| "system") != "user" {
+                        0
+                    } else {
+                        1
+                    };
+                    pb::PackageAction { id, action, target }
+                })
+                .collect::<Vec<_>>();
+
             let req = stream::iter(vec![pb::TransactionRequest {
                 value: Some(pb::transaction_request::Value::Transaction(
-                    pb::transaction_request::Transaction { actions }
-                ))
+                    pb::transaction_request::Transaction { actions },
+                )),
             }]);
 
             let request = Request::new(req);
@@ -134,23 +130,19 @@ pub async fn run() -> anyhow::Result<()> {
                 println!("{:?}", message);
             }
         }
-        Command::Strings(StringsCommand { category, language }) => {
-            let request = Request::new(pb::StringsRequest {
-                category,
-                language
-            });
+        Command::Strings(StringsCommand { language }) => {
+            let request = Request::new(pb::StringsRequest { language });
 
             let response = client.strings(request).await?;
             println!("{:?}", response);
-        }
-        // Args::SetRepos
-        // Args::Refresh
+        } // Args::SetRepos
+          // Args::Refresh
     }
     Ok(())
 }
 
+use cursed::{FromForeign, InputType, ReturnType, ToForeign};
 use serde::Serialize;
-use cursed::{FromForeign, ToForeign, InputType, ReturnType};
 
 pub struct JsonMarshaler;
 
@@ -188,8 +180,7 @@ pub extern "C" fn pahkat_rpc_new() -> Result<Arc<RwLock<PahkatClient>>, Box<dyn 
 
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_rpc_repo_indexes(
-    #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)]
-    client: Arc<RwLock<PahkatClient>>
+    #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
 ) -> Result<pb::RepositoryIndexesResponse, Box<dyn Error>> {
     let request = Request::new(pb::RepositoryIndexesRequest {});
 

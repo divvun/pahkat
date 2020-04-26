@@ -70,11 +70,12 @@ impl From<u8> for InstallTarget {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[non_exhaustive]
-pub enum StringCategory {
-    Tags,
+pub struct LocalizedStrings {
+    pub tags: HashMap<String, String>,
+    pub channels: HashMap<String, String>,
 }
 
 impl Default for InstallTarget {
@@ -134,5 +135,5 @@ pub trait PackageStore: Send + Sync {
         self.refresh_repos()
     }
 
-    fn strings(&self, category: StringCategory, language: String) -> Future<HashMap<Url, HashMap<String, String>>>;
+    fn strings(&self, language: String) -> Future<HashMap<Url, LocalizedStrings>>;
 }

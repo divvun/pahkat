@@ -145,20 +145,51 @@ message ClearCacheRequest {}
 message ClearCacheResponse {}
 
 message StringsRequest {
-    string category = 1;
-    string language = 2;
+    string language = 1;
 }
 
 message StringsResponse {
     message MessageMap {
-        map<string, string> values = 1;
+        map<string, string> channels = 1;
+        map<string, string> tags = 2;
     }
     map<string, MessageMap> repos = 1;
 }
 
+message RepoRecord {
+    string channel = 1;
+}
+
+message SetRepoRequest {
+    string url = 1;
+    RepoRecord settings = 2;
+}
+
+message SetRepoResponse {
+    bool is_success = 1;
+    string error = 2;
+}
+
+message GetRepoRecordRequest {
+    string url = 1;
+}
+
+message GetRepoRecordResponse {
+    RepoRecord settings = 1;
+    string error = 2;
+}
+
+message RemoveRepoRequest {
+    string url = 1;
+}
+
+message RemoveRepoResponse {
+    bool is_success = 1;
+    string error = 2;
+}
+
 service Pahkat {
     rpc Notifications(NotificationsRequest) returns (stream NotificationResponse) {}
-    // rpc SelfUpdate(SelfUpdateRequest) returns (stream SelfUpdateResponse) {}
 
     // Store
     rpc Status(StatusRequest) returns (StatusResponse) {}
@@ -170,6 +201,10 @@ service Pahkat {
     // rpc ClearCache(ClearCacheRequest) returns (ClearCacheResponse) {}
     
     // Config
-    // CRUD for repositories
     // autoupdate settings
+
+    // CRUD for repositories
+    rpc SetRepo(SetRepoRequest) returns (SetRepoResponse) {}
+    rpc GetRepoRecord(GetRepoRecordRequest) returns (GetRepoRecordResponse) {}
+    rpc RemoveRepo(RemoveRepoRequest) returns (RemoveRepoResponse) {}
 }

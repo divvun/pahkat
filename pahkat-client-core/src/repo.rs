@@ -500,9 +500,8 @@ where
 
 pub(crate) async fn strings<'p>(
     repo_urls: Vec<Url>,
-    category: crate::package_store::StringCategory,
     language: String
-) -> HashMap<Url, HashMap<String, String>> {
+) -> HashMap<Url, crate::package_store::LocalizedStrings> {
     Default::default()
 }
 

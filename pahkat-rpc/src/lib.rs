@@ -17,10 +17,11 @@ use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tonic::transport::server::Connected;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
+use url::Url;
 
 use pahkat_client::{
-    PackageAction, PackageActionType, PackageKey, PackageStore, PackageTransaction,
-    package_store::InstallTarget,
+    config::RepoRecord, package_store::InstallTarget, PackageAction, PackageActionType, PackageKey,
+    PackageStore, PackageTransaction,
 };
 
 mod pb {
@@ -160,29 +161,27 @@ impl pb::pahkat_server::Pahkat for Rpc {
 
         Ok(Response::new(Box::pin(stream) as Self::NotificationsStream))
     }
-    
+
     async fn strings(&self, request: Request<pb::StringsRequest>) -> Result<pb::StringsResponse> {
-        let pb::StringsRequest { category, language } = request.into_inner();
+        let pb::StringsRequest { language } = request.into_inner();
 
-        let category = match &*category {
-            "tags" => pahkat_client::package_store::StringCategory::Tags,
-            unknown => return Err(Status::failed_precondition(format!("Unknown category: {}", unknown))),
-        };
+        let strings = self.store.strings(language).await;
 
-        let strings = self.store.strings(category, language).await;
-
-        // message StringsResponse {
-        //     message MessageMap {
-        //         map<string, string> values = 1;
-        //     }
-        //     map<string, MessageMap> repos = 1;
-        // }
         use pb::strings_response::MessageMap;
 
         Ok(Response::new(pb::StringsResponse {
-            repos: strings.into_iter().map(|(k, v)| (k.to_string(), MessageMap {
-                values: v.into_iter().collect()
-            })).collect()
+            repos: strings
+                .into_iter()
+                .map(|(k, v)| {
+                    (
+                        k.to_string(),
+                        MessageMap {
+                            tags: v.tags.into_iter().collect(),
+                            channels: v.channels.into_iter().collect(),
+                        },
+                    )
+                })
+                .collect(),
         }))
     }
 
@@ -402,6 +401,95 @@ impl pb::pahkat_server::Pahkat for Rpc {
         });
 
         Ok(Response::new(Box::pin(rx) as Self::ProcessTransactionStream))
+    }
+
+    async fn set_repo(
+        &self,
+        request: tonic::Request<pb::SetRepoRequest>,
+    ) -> Result<pb::SetRepoResponse> {
+        let request = request.into_inner();
+        let url =
+            Url::parse(&request.url).map_err(|e| Status::failed_precondition(format!("{}", e)))?;
+
+        {
+            let config = self.store.config();
+            let mut config = config.write().unwrap();
+            let mut repos = config.repos_mut();
+
+            let mut record = RepoRecord::default();
+
+            if let Some(other_record) = request.settings {
+                if other_record.channel != "" {
+                    record.channel = Some(other_record.channel);
+                }
+            }
+
+            repos
+                .insert(url, record)
+                .map_err(|e| Status::failed_precondition(format!("{}", e)))?;
+        }
+
+        self.store
+            .force_refresh_repos()
+            .await
+            .map_err(|e| Status::failed_precondition(format!("{}", e)))?;
+
+        Ok(tonic::Response::new(pb::SetRepoResponse {
+            is_success: true,
+            error: "".into(),
+        }))
+    }
+
+    async fn get_repo_record(
+        &self,
+        request: tonic::Request<pb::GetRepoRecordRequest>,
+    ) -> Result<pb::GetRepoRecordResponse> {
+        let request = request.into_inner();
+
+        let url =
+            Url::parse(&request.url).map_err(|e| Status::failed_precondition(format!("{}", e)))?;
+
+        let config = self.store.config();
+        let config = config.read().unwrap();
+        let repos = config.repos();
+        let record = repos
+            .get(&url)
+            .ok_or_else(|| Status::failed_precondition("No repo found for key"))?;
+
+        Ok(tonic::Response::new(pb::GetRepoRecordResponse {
+            settings: Some(pb::RepoRecord {
+                channel: record
+                    .channel
+                    .as_ref()
+                    .map(|x| x.to_string())
+                    .unwrap_or_else(|| "".into()),
+            }),
+            error: "".into(),
+        }))
+    }
+
+    async fn remove_repo(
+        &self,
+        request: tonic::Request<pb::RemoveRepoRequest>,
+    ) -> Result<pb::RemoveRepoResponse> {
+        let request = request.into_inner();
+
+        let url =
+            Url::parse(&request.url).map_err(|e| Status::failed_precondition(format!("{}", e)))?;
+
+        let is_success = {
+            let config = self.store.config();
+            let mut config = config.write().unwrap();
+            let mut repos = config.repos_mut();
+            repos
+                .remove(&url)
+                .map_err(|e| Status::failed_precondition(format!("{}", e)))?
+        };
+
+        Ok(tonic::Response::new(pb::RemoveRepoResponse {
+            is_success,
+            error: "".into(),
+        }))
     }
 }
 
