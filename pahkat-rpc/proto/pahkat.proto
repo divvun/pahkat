@@ -144,12 +144,12 @@ message ClearCacheRequest {}
 
 message ClearCacheResponse {}
 
-message StringRequest {
+message StringsRequest {
     string category = 1;
     string language = 2;
 }
 
-message StringResponse {
+message StringsResponse {
     message MessageMap {
         map<string, string> values = 1;
     }
@@ -164,7 +164,7 @@ service Pahkat {
     rpc Status(StatusRequest) returns (StatusResponse) {}
     rpc RepositoryIndexes(RepositoryIndexesRequest) returns (RepositoryIndexesResponse) {}
     rpc ProcessTransaction(stream TransactionRequest) returns (stream TransactionResponse) {}
-    rpc Strings(StringRequest) returns (StringResponse) {}
+    rpc Strings(StringsRequest) returns (StringsResponse) {}
 
     // rpc Refresh(RefreshRequest) returns (RefreshResponse) {}
     // rpc ClearCache(ClearCacheRequest) returns (ClearCacheResponse) {}

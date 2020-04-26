@@ -1,5 +1,7 @@
 #![recursion_limit = "1024"]
 
+pub mod client;
+
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::pin::Pin;
@@ -159,8 +161,8 @@ impl pb::pahkat_server::Pahkat for Rpc {
         Ok(Response::new(Box::pin(stream) as Self::NotificationsStream))
     }
     
-    async fn strings(&self, request: Request<pb::StringRequest>) -> Result<pb::StringResponse> {
-        let pb::StringRequest { category, language } = request.into_inner();
+    async fn strings(&self, request: Request<pb::StringsRequest>) -> Result<pb::StringsResponse> {
+        let pb::StringsRequest { category, language } = request.into_inner();
 
         let category = match &*category {
             "tags" => pahkat_client::package_store::StringCategory::Tags,
@@ -169,15 +171,15 @@ impl pb::pahkat_server::Pahkat for Rpc {
 
         let strings = self.store.strings(category, language).await;
 
-        // message StringResponse {
+        // message StringsResponse {
         //     message MessageMap {
         //         map<string, string> values = 1;
         //     }
         //     map<string, MessageMap> repos = 1;
         // }
-        use pb::string_response::MessageMap;
+        use pb::strings_response::MessageMap;
 
-        Ok(Response::new(pb::StringResponse {
+        Ok(Response::new(pb::StringsResponse {
             repos: strings.into_iter().map(|(k, v)| (k.to_string(), MessageMap {
                 values: v.into_iter().collect()
             })).collect()

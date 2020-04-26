@@ -19,7 +19,6 @@ use crate::repo::PayloadError;
 use crate::transaction::{PackageStatus, PackageStatusError};
 use crate::{Config, PackageKey};
 
-pub struct JsonRefMarshaler<'a>(&'a std::marker::PhantomData<()>);
 pub struct JsonMarshaler;
 
 impl InputType for JsonMarshaler {
@@ -34,10 +33,6 @@ impl ReturnType for JsonMarshaler {
     }
 }
 
-impl<'a> InputType for JsonRefMarshaler<'a> {
-    type Foreign = <cursed::StrMarshaler<'a> as InputType>::Foreign;
-}
-
 impl<T> ToForeign<T, cursed::Slice<u8>> for JsonMarshaler
 where
     T: Serialize,
@@ -48,6 +43,12 @@ where
         let json_str = serde_json::to_string(&input)?;
         Ok(cursed::StringMarshaler::to_foreign(json_str).unwrap())
     }
+}
+
+pub struct JsonRefMarshaler<'a>(&'a std::marker::PhantomData<()>);
+
+impl<'a> InputType for JsonRefMarshaler<'a> {
+    type Foreign = <cursed::StrMarshaler<'a> as InputType>::Foreign;
 }
 
 impl<'a, T> FromForeign<cursed::Slice<u8>, T> for JsonRefMarshaler<'a>
