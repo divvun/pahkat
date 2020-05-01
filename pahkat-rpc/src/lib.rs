@@ -299,7 +299,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
                                 match event {
                                     DownloadEvent::Error(e) => {
                                         yield pb::TransactionResponse {
-                                            value: Some(Value::DownloadError(TransactionError {
+                                            value: Some(Value::TransactionError(TransactionError {
                                                 package_id: id.to_string(),
                                                 error: format!("{}", e)
                                             }))

@@ -128,7 +128,6 @@ message TransactionResponse {
         TransactionError transaction_error = 4;
 
         DownloadProgress download_progress = 10;
-        TransactionError download_error = 11;
         DownloadComplete download_complete = 12;
 
         InstallStarted install_started = 14;

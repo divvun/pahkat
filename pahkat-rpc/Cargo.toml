@@ -13,7 +13,7 @@ pahkat-client = { path = "../pahkat-client-core" }
 tonic = { git = "https://github.com/bbqsrc/tonic", branch = "master", features = ["prost"] }
 bytes = "0.5.4"
 prost = "0.6"
-tokio = { version = "0.2", features = ["rt-threaded", "time", "stream", "fs", "macros", "uds", "sync", "blocking", "signal"] }
+tokio = { version = "0.2", features = ["rt-threaded", "rt-util", "time", "stream", "fs", "macros", "uds", "sync", "blocking", "signal"] }
 futures = { version = "0.3", default-features = false, features = ["alloc"] }
 async-stream = "0.2.1"
 http = "0.2"
