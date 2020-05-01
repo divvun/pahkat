@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use log::info;
+use log::{error, info, warn};
 use std::time::Duration;
 use std::{
     ffi::{OsStr, OsString},
@@ -7,6 +7,7 @@ use std::{
 };
 use tokio::sync::mpsc;
 
+use windows_service::Error::Winapi;
 use windows_service::{
     define_windows_service,
     service::{
@@ -44,19 +45,36 @@ pub fn install_service(exe_path: &Path) -> Result<()> {
     Ok(())
 }
 
-pub fn uninstall_service() -> Result<()> {
+pub async fn uninstall_service() -> Result<()> {
     let manager_access = ServiceManagerAccess::CONNECT;
     let service_manager = ServiceManager::local_computer(None::<&str>, manager_access)?;
 
     let service_access = ServiceAccess::QUERY_STATUS | ServiceAccess::DELETE;
 
-    match service_manager.open_service(OsString::from(SERVICE_NAME), service_access) {
-        Err(e) => {
-            dbg!(e);
-            Ok(())
+    loop {
+        let service =
+            match service_manager.open_service(OsString::from(SERVICE_NAME), service_access) {
+                Err(Winapi(e)) if e.raw_os_error() == Some(1060) => {
+                    info!("Tried to uninstall a service that doesn't exist");
+                    return Ok(());
+                }
+                e => e,
+            }?;
+
+        match service.delete() {
+            // Service can't accept control commands, try again
+            Err(Winapi(e)) if e.raw_os_error() == Some(1061) => {
+                warn!("Service can't accept control commands, trying again");
+                tokio::time::delay_for(Duration::from_secs(1)).await;
+            }
+            Ok(_) => return Ok(()),
+            e => {
+                e?;
+            }
         }
-        Ok(service) => Ok(service.delete()?),
     }
+
+    Ok(())
 }
 
 pub async fn stop_service() -> Result<()> {
@@ -64,15 +82,33 @@ pub async fn stop_service() -> Result<()> {
     let service_manager = ServiceManager::local_computer(None::<&str>, manager_access)?;
 
     let service_access = ServiceAccess::QUERY_STATUS | ServiceAccess::STOP;
-    let service = service_manager.open_service(OsString::from(SERVICE_NAME), service_access)?;
+    let service = match service_manager.open_service(OsString::from(SERVICE_NAME), service_access) {
+        Err(Winapi(e)) if e.raw_os_error() == Some(1060) => {
+            info!("Tried to stop a service that doesn't exist");
+            return Ok(());
+        }
+        e => e,
+    }?;
 
     loop {
         let service_status = service.query_status()?;
-        info!("status: {:?}", service_status);
         if service_status.current_state == ServiceState::Stopped {
             break;
         }
-        service.stop()?;
+        match service.stop() {
+            // Service is not started, happens even with the state being Running, i.e. it's probably stopping right now
+            Err(Winapi(e)) if e.raw_os_error() == Some(1062) => {
+                info!("tried to stop a non-running service");
+                // We'll break in the next loop if the service is stopped
+            }
+            Err(Winapi(e)) if e.raw_os_error() == Some(1061) => {
+                info!("service can't accept control commands, trying again");
+                tokio::time::delay_for(Duration::from_secs(1)).await;
+            }
+            e => {
+                e?;
+            }
+        };
         // Wait for service to stop
         tokio::time::delay_for(Duration::from_secs(1));
     }

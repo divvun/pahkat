@@ -595,6 +595,7 @@ fn create_background_update_service(
         'main: loop {
             interval.tick().await;
             log::info!("Running update check…");
+            //crate::server::windows::initiate_self_update();
 
             // Currently installed packages:
             log::debug!("Iterating through all known packages...");
@@ -694,8 +695,6 @@ fn create_background_update_service(
             }
 
             log::debug!("Completed background transaction.");
-
-            crate::server::windows::initiate_self_update();
         }
     });
 }
