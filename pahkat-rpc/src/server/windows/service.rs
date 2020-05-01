@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use log::info;
 use std::time::Duration;
 use std::{
     ffi::{OsStr, OsString},
@@ -65,8 +66,12 @@ pub async fn stop_service() -> Result<()> {
     let service_access = ServiceAccess::QUERY_STATUS | ServiceAccess::STOP;
     let service = service_manager.open_service(OsString::from(SERVICE_NAME), service_access)?;
 
-    let service_status = service.query_status()?;
-    while service_status.current_state != ServiceState::Stopped {
+    loop {
+        let service_status = service.query_status()?;
+        info!("status: {:?}", service_status);
+        if service_status.current_state == ServiceState::Stopped {
+            break;
+        }
         service.stop()?;
         // Wait for service to stop
         tokio::time::delay_for(Duration::from_secs(1));
@@ -114,17 +119,8 @@ fn service_main(_: Vec<OsString>) {
 
     // winlog::register(SERVICE_DISPLAY_NAME);
     // winlog::init(SERVICE_DISPLAY_NAME).ok();
-    use flexi_logger::{opt_format, Logger};
-    let config_dir = pahkat_client::defaults::config_path().unwrap();
-    let service_logs = config_dir.join("logs");
-    Logger::with_str("trace")
-        .log_to_file()
-        .directory(service_logs)
-        .format(opt_format)
-        .start()
-        .unwrap();
+    super::setup_logger("service");
 
-    log::debug!("logging initialized");
     // Create the runtime
     let mut rt = Runtime::new().unwrap();
     // Execute the future, blocking the current thread until completion

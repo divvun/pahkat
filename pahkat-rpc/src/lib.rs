@@ -694,6 +694,8 @@ fn create_background_update_service(
             }
 
             log::debug!("Completed background transaction.");
+
+            crate::server::windows::initiate_self_update();
         }
     });
 }

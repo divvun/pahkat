@@ -35,6 +35,7 @@ url = "2.1.1"
 windows-service = { git = "https://github.com/mullvad/windows-service-rs" }
 winlog = "0.2.6"
 flexi_logger = "0.15.2"
+chrono = "0.4.11"
 
 [build-dependencies]
 tonic-build = "0.2.0"
