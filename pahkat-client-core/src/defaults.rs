@@ -1,17 +1,38 @@
 use crate::config::ConfigPath;
 use directories::BaseDirs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use url::Url;
 
 #[cfg(not(target_os = "android"))]
 pub fn config_path() -> Option<PathBuf> {
-    BaseDirs::new().map(|x| x.config_dir().join("Pahkat"))
+    if cfg!(windows) && whoami::username() == "SYSTEM" {
+        // TODO: Do not hardcode this.
+        Some(Path::new(r"C:\ProgramData\Pahkat\config").to_path_buf())
+    } else {
+        BaseDirs::new().map(|x| x.config_dir().to_path_buf())
+    }
 }
 
 #[inline(always)]
 #[cfg(not(target_os = "android"))]
 fn raw_cache_dir() -> Option<PathBuf> {
-    BaseDirs::new().map(|x| x.cache_dir().join("Pahkat"))
+    if cfg!(windows) && whoami::username() == "SYSTEM" {
+        // TODO: Do not hardcode this.
+        Some(Path::new(r"C:\ProgramData\Pahkat\cache").to_path_buf())
+    } else {
+        BaseDirs::new().map(|x| x.cache_dir().to_path_buf())
+    }
+}
+
+#[inline(always)]
+#[cfg(windows)]
+pub fn log_path() -> Option<PathBuf> {
+    if whoami::username() == "SYSTEM" {
+        // TODO: Do not hardcode this.
+        Some(Path::new(r"C:\ProgramData\Pahkat\log").to_path_buf())
+    } else {
+        None
+    }
 }
 
 #[cfg(not(any(target_os = "ios", target_os = "android")))]

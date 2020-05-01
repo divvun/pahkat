@@ -643,7 +643,8 @@ fn create_background_update_service(store: Arc<dyn PackageStore>, current_transa
 
             let transaction = PackageTransaction::new(Arc::clone(&store) as _, actions).unwrap(); // .map_err(|e| Status::failed_precondition(format!("{}", e)))?;
 
-            for action in transaction.actions().iter() {
+            for record in transaction.actions().iter() {
+                let action = &record.action;
                 // let tx = tx.clone();
                 // let id = action.id.clone();
                 let mut download = store.download(&action.id);
