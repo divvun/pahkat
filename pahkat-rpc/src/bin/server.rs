@@ -10,7 +10,7 @@ async fn main() -> anyhow::Result<()> {
         format!("/tmp/pahkat")
     };
 
-    pahkat_rpc::start(Path::new(&path), config_path()).await
+    //pahkat_rpc::start(Path::new(&path), config_path()).await
 }
 
 #[cfg(feature = "prefix")]

@@ -1,6 +1,7 @@
 #![recursion_limit = "1024"]
 
 pub mod client;
+pub mod server;
 
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
@@ -545,7 +546,6 @@ async fn store(config_path: Option<&Path>) -> anyhow::Result<Arc<dyn PackageStor
     Ok(store)
 }
 
-
 #[cfg(unix)]
 #[inline(always)]
 fn endpoint(path: &Path) -> std::result::Result<UnixListener, anyhow::Error> {
@@ -579,8 +579,10 @@ fn endpoint(path: &Path) -> std::result::Result<Endpoint, anyhow::Error> {
     Ok(Endpoint::new(path.to_str().unwrap().to_string()))
 }
 
-
-fn create_background_update_service(store: Arc<dyn PackageStore>, current_transaction: Arc<tokio::sync::Mutex<()>>) {
+fn create_background_update_service(
+    store: Arc<dyn PackageStore>,
+    current_transaction: Arc<tokio::sync::Mutex<()>>,
+) {
     const UPDATE_INTERVAL: Duration = Duration::from_secs(15 * 60); // 15 minutes
 
     tokio::spawn(async move {
@@ -697,7 +699,7 @@ fn create_background_update_service(store: Arc<dyn PackageStore>, current_transa
 }
 
 // #[cfg(unix)]
-// fn shutdown_handler() -> impl Future { 
+// fn shutdown_handler() -> impl Future {
 //     async move {
 //         tokio::select! {
 //             _ = sigint_listener => {
@@ -712,15 +714,18 @@ fn create_background_update_service(store: Arc<dyn PackageStore>, current_transa
 //         };
 //         ()
 //     }
-// } 
-fn shutdown_handler(mut shutdown_rx: mpsc::UnboundedReceiver<()>, current_transaction: Arc<tokio::sync::Mutex<()>>) -> impl std::future::Future<Output = ()> {
+// }
+fn shutdown_handler(
+    mut shutdown_rx: mpsc::UnboundedReceiver<()>,
+    current_transaction: Arc<tokio::sync::Mutex<()>>,
+) -> impl std::future::Future<Output = ()> {
     let ctrl_c = tokio::signal::ctrl_c();
 
     async move {
         tokio::select! {
             _ = shutdown_rx.recv() => {
                 log::info!("Shutdown signal received; gracefully shutting down.");
-            } 
+            }
             _ = ctrl_c => {
                 log::info!("Ctrl+C received; gracefully shutting down.");
             }
@@ -758,7 +763,6 @@ pub async fn start(
 
     // log::debug!("Created signal listeners for: SIGINT, SIGTERM, SIGQUIT, SIGUSR1, SIGUSR2.");
 
-
     let store = store(config_path).await?;
     log::debug!("Created store.");
 
@@ -778,7 +782,10 @@ pub async fn start(
 
     Server::builder()
         .add_service(pb::pahkat_server::PahkatServer::new(rpc))
-        .serve_with_incoming_shutdown(endpoint.incoming().unwrap(), shutdown_handler(shutdown_rx, Arc::clone(&current_transaction)))
+        .serve_with_incoming_shutdown(
+            endpoint.incoming().unwrap(),
+            shutdown_handler(shutdown_rx, Arc::clone(&current_transaction)),
+        )
         .await?;
 
     // drop(endpoint);

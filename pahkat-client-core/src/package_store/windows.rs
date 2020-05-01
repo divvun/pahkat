@@ -1,11 +1,11 @@
 mod sys;
 
 use std::collections::BTreeMap;
+use std::convert::{TryFrom, TryInto};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, RwLock};
-use std::convert::{TryFrom, TryInto};
 
 use dashmap::DashMap;
 use hashbrown::HashMap;
@@ -13,13 +13,13 @@ use url::Url;
 use winreg::enums::*;
 use winreg::RegKey;
 
+use crate::package_store::{ImportError, InstallTarget};
+use crate::repo::RepoDownloadError;
 use crate::transaction::{
     install::InstallError, install::ProcessError, uninstall::UninstallError, PackageStatus,
     PackageStatusError,
 };
 use crate::Config;
-use crate::package_store::{ImportError, InstallTarget};
-use crate::repo::RepoDownloadError;
 use crate::{repo::PayloadError, LoadedRepository, PackageKey, PackageStore};
 use pahkat_types::{
     package::{Descriptor, Package},
@@ -30,6 +30,7 @@ const UNINSTALL_PATH: &'static str = r"Software\Microsoft\Windows\CurrentVersion
 const DISPLAY_VERSION: &'static str = "DisplayVersion";
 const QUIET_UNINSTALL_STRING: &'static str = "QuietUninstallString";
 
+use super::LocalizedStrings;
 use crate::package_store::{SharedRepos, SharedStoreConfig};
 
 #[derive(Debug)]
@@ -293,11 +294,14 @@ impl PackageStore for WindowsPackageStore {
         crate::repo::all_statuses(self, repo_url, target)
     }
 
-    fn strings(&self, category: crate::package_store::StringCategory, language: String) -> crate::package_store::Future<HashMap<Url, HashMap<String, String>>> {
+    fn strings(
+        &self,
+        language: String,
+    ) -> crate::package_store::Future<HashMap<Url, LocalizedStrings>> {
         let repos = self.repos.read().unwrap();
         let urls = repos.keys().cloned().collect::<Vec<_>>();
 
-        Box::pin(crate::repo::strings(urls, category, language))
+        Box::pin(crate::repo::strings(urls, language))
     }
 }
 
