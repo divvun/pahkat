@@ -9,7 +9,7 @@ pub fn config_path() -> Option<PathBuf> {
         // TODO: Do not hardcode this.
         Some(Path::new(r"C:\ProgramData\Pahkat\config").to_path_buf())
     } else {
-        BaseDirs::new().map(|x| x.config_dir().to_path_buf())
+        BaseDirs::new().map(|x| x.config_dir().join("Pahkat").to_path_buf())
     }
 }
 

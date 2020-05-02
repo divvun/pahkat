@@ -57,7 +57,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Name: "noui"; Description: "Install without UI";  Flags: unchecked
 
 [Files]
-Source: ".\target\debug\{#PahkatSvcExe}"; DestDir: "{app}"; Flags:
+Source: ".\pahkat-rpc\target\debug\{#PahkatSvcExe}"; DestDir: "{app}"; Flags:
 ;Source: ".\Pahkat\bin\x86\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs uninsrestartdelete
 
 [Run]

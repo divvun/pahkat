@@ -1,5 +1,4 @@
 use pahkat_rpc::server::cli;
-use std::path::Path;
 use structopt::StructOpt;
 
 #[tokio::main]

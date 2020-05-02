@@ -1,12 +1,11 @@
-use anyhow::{anyhow, Result};
-use log::{error, info, warn};
+use anyhow::Result;
+use log::{info, warn};
 use std::time::Duration;
 use std::{
     ffi::{OsStr, OsString},
     path::Path,
 };
 use tokio::sync::mpsc;
-
 use windows_service::Error::Winapi;
 use windows_service::{
     define_windows_service,
@@ -73,8 +72,6 @@ pub async fn uninstall_service() -> Result<()> {
             }
         }
     }
-
-    Ok(())
 }
 
 pub async fn stop_service() -> Result<()> {
@@ -110,7 +107,7 @@ pub async fn stop_service() -> Result<()> {
             }
         };
         // Wait for service to stop
-        tokio::time::delay_for(Duration::from_secs(1));
+        tokio::time::delay_for(Duration::from_secs(1)).await;
     }
 
     Ok(())
@@ -124,7 +121,7 @@ pub async fn start_service() -> Result<()> {
     let service = service_manager.open_service(OsString::from(SERVICE_NAME), service_access)?;
 
     loop {
-        let mut service_status = service.query_status()?;
+        let service_status = service.query_status()?;
         if service_status.current_state == ServiceState::Running
             || service_status.current_state == ServiceState::StartPending
         {
@@ -137,7 +134,7 @@ pub async fn start_service() -> Result<()> {
         }
 
         // Wait for service to start
-        tokio::time::delay_for(Duration::from_secs(1));
+        tokio::time::delay_for(Duration::from_secs(1)).await;
     }
 
     Ok(())
@@ -155,7 +152,7 @@ fn service_main(_: Vec<OsString>) {
 
     // winlog::register(SERVICE_DISPLAY_NAME);
     // winlog::init(SERVICE_DISPLAY_NAME).ok();
-    super::setup_logger("service");
+    super::setup_logger("service").unwrap();
 
     // Create the runtime
     let mut rt = Runtime::new().unwrap();
@@ -167,7 +164,7 @@ fn service_main(_: Vec<OsString>) {
 
 async fn service_runner() -> Result<()> {
     // shutdown channel & event handler to shut down service
-    let (mut shutdown_tx, mut shutdown_rx) = mpsc::unbounded_channel();
+    let (shutdown_tx, shutdown_rx) = mpsc::unbounded_channel();
 
     let event_handler = move |control_event| -> ServiceControlHandlerResult {
         match control_event {

@@ -3,15 +3,19 @@
 pub mod client;
 pub mod server;
 
+use futures::stream::{StreamExt, TryStreamExt};
+use log::{info, warn};
+use pahkat_client::{
+    config::RepoRecord, package_store::InstallTarget, PackageAction, PackageActionType, PackageKey,
+    PackageStatus, PackageStore, PackageTransaction,
+};
+use parity_tokio_ipc::{Endpoint, SecurityAttributes};
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
-
-use futures::stream::{StreamExt, TryStreamExt};
-use parity_tokio_ipc::{Endpoint, SecurityAttributes};
 use tokio::io::{AsyncRead, AsyncWrite};
 #[cfg(unix)]
 use tokio::signal::unix::{signal, SignalKind};
@@ -20,11 +24,6 @@ use tokio::sync::mpsc;
 use tonic::transport::server::Connected;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
 use url::Url;
-
-use pahkat_client::{
-    config::RepoRecord, package_store::InstallTarget, PackageAction, PackageActionType, PackageKey,
-    PackageStore, PackageTransaction,
-};
 
 mod pb {
     tonic::include_proto!("/pahkat");
@@ -594,13 +593,21 @@ fn create_background_update_service(
 
         'main: loop {
             interval.tick().await;
+
+            time::delay_for(Duration::from_secs(10)).await;
+            let _ = store.refresh_repos().await;
+
             log::info!("Running update check…");
-            //crate::server::windows::initiate_self_update();
+            // if server::check_and_initiate_self_update(store.clone())
+            //     .await
+            //     .unwrap_or_default()
+            // {
+            //     continue;
+            // }
 
             // Currently installed packages:
             log::debug!("Iterating through all known packages...");
             let updates = {
-                let _ = store.refresh_repos().await;
                 let repos = store.repos();
                 let repos = repos.read().unwrap();
 
@@ -612,7 +619,7 @@ fn create_background_update_service(
 
                     for (key, value) in statuses.into_iter() {
                         log::debug!(" - {:?}: {:?}", &key, &value);
-                        if let Ok(pahkat_client::PackageStatus::RequiresUpdate) = value {
+                        if let Ok(PackageStatus::RequiresUpdate) = value {
                             updates.push((
                                 pahkat_client::PackageKey {
                                     repository_url: url.clone(),
