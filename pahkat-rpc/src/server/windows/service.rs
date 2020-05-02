@@ -61,6 +61,11 @@ pub async fn uninstall_service() -> Result<()> {
             }?;
 
         match service.delete() {
+            // Service is being deleted already
+            Err(Winapi(e)) if e.raw_os_error() == Some(1072) => {
+                warn!("Service already being deleted");
+                return Ok(());
+            }
             // Service can't accept control commands, try again
             Err(Winapi(e)) if e.raw_os_error() == Some(1061) => {
                 warn!("Service can't accept control commands, trying again");

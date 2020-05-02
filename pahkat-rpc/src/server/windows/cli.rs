@@ -53,7 +53,7 @@ async fn self_update(service_executable: &Path) -> Result<()> {
     let config = pahkat_client::Config::load(path, pahkat_client::Permission::ReadOnly)?;
     let store = Arc::new(pahkat_client::WindowsPackageStore::new(config).await);
 
-    let pahkat_service_key = super::ensure_pahkat_service_key(store.config());
+    let (_, pahkat_service_key) = crate::server::ensure_pahkat_service_key(store.config());
 
     let _ = store.refresh_repos().await;
 

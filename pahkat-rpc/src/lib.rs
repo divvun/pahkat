@@ -4,7 +4,7 @@ pub mod client;
 pub mod server;
 
 use futures::stream::{StreamExt, TryStreamExt};
-use log::{info, warn};
+use log::{error, info, warn};
 use pahkat_client::{
     config::RepoRecord, package_store::InstallTarget, PackageAction, PackageActionType, PackageKey,
     PackageStatus, PackageStore, PackageTransaction,
@@ -598,11 +598,24 @@ fn create_background_update_service(
             let _ = store.refresh_repos().await;
 
             log::info!("Running update check…");
-            // if server::check_and_initiate_self_update(store.clone())
-            //     .await
-            //     .unwrap_or_default()
-            // {
-            //     continue;
+            // match server::check_for_self_update(store.clone()) {
+            //     Ok(server::SelfUpdateStatus::Recheck) | Ok(server::SelfUpdateStatus::Required) => {
+            //         {
+            //             let _guard = current_transaction.lock().await;
+            //             let _ = store.refresh_repos().await;
+            //         }
+
+            //         if server::check_and_initiate_self_update(store.clone())
+            //             .await
+            //             .unwrap_or_default()
+            //         {
+            //             // Wait some time for the impending shutdown
+            //             time::delay_for(Duration::from_secs(10)).await;
+            //             continue;
+            //         }
+            //     }
+            //     Err(e) => error!("self update error {:?}", e),
+            //     _ => {}
             // }
 
             // Currently installed packages:
