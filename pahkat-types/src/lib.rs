@@ -13,11 +13,6 @@ pub type DependencyMap = std::collections::BTreeMap<String, String>;
 
 pub use payload::AsDownloadUrl;
 
-#[inline(always)]
-pub(crate) fn is_false(x: &bool) -> bool {
-    !x
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

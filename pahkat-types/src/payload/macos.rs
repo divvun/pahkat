@@ -6,6 +6,16 @@ use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 
 #[derive(
+    Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord
+)]
+#[serde(rename_all = "lowercase")]
+pub enum RebootSpec {
+    Install,
+    Uninstall,
+    Update,
+}
+
+#[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
 pub struct Package {
@@ -18,12 +28,9 @@ pub struct Package {
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     #[builder(default)]
     pub targets: BTreeSet<InstallTarget>,
-    #[serde(default, skip_serializing_if = "crate::is_false")]
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     #[builder(default)]
-    pub requires_reboot: bool,
-    #[serde(default, skip_serializing_if = "crate::is_false")]
-    #[builder(default)]
-    pub requires_uninstall_reboot: bool,
+    pub requires_reboot: BTreeSet<RebootSpec>,
     pub size: u64,
     pub installed_size: u64,
 }

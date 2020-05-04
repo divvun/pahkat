@@ -284,7 +284,8 @@ impl pb::pahkat_server::Pahkat for Rpc {
 
                         yield pb::TransactionResponse {
                             value: Some(Value::TransactionStarted(TransactionStarted {
-                                actions: transaction.actions().iter().cloned().map(|x| x.into()).collect()
+                                actions: transaction.actions().iter().cloned().map(|x| x.into()).collect(),
+                                is_reboot_required: transaction.is_reboot_required(),
                             }))
                         };
 

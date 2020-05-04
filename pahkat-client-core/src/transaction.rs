@@ -235,6 +235,14 @@ pub struct ResolvedAction {
     pub target: Target,
 }
 
+impl ResolvedAction {
+    fn is_reboot_required(&self) -> bool {
+        match self {
+            
+        }
+    }
+}
+
 pub struct PackageTransaction {
     store: Arc<dyn PackageStore>,
     actions: Arc<Vec<ResolvedAction>>,
@@ -335,6 +343,10 @@ impl PackageTransaction {
 
     pub fn validate(&self) -> bool {
         true
+    }
+
+    pub fn is_reboot_required(&self) -> bool {
+
     }
 
     pub fn process(

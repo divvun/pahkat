@@ -118,8 +118,10 @@ message TransactionResponse {
     }
     message TransactionStarted {
         repeated ResolvedAction actions = 1;
+        bool is_reboot_required = 2;
     }
-    message TransactionComplete {}
+    message TransactionComplete {
+    }
 
     oneof value {
         TransactionStarted transaction_started = 1;

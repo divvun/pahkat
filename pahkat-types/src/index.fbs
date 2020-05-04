@@ -9,8 +9,9 @@ namespace pahkat;
 enum WindowsExecutableFlag: uint8 { // (bit_flags) {
     TargetSystem = 0,
     TargetUser = 1,
-    RequiresReboot = 6,
-    RequiresUninstallReboot = 7
+    RequiresRebootOnUpdate = 32,
+    RequiresRebootOnUninstall = 64,
+    RequiresRebootOnInstall = 128
 }
 
 enum WindowsExecutableKind: uint8 {
@@ -36,8 +37,9 @@ table WindowsExecutable {
 enum MacOSPackageFlag: uint8 { // (bit_flags) {
     TargetSystem = 0,
     TargetUser = 1,
-    RequiresReboot = 6,
-    RequiresUninstallReboot = 7
+    RequiresRebootOnUpdate = 32,
+    RequiresRebootOnUninstall = 64,
+    RequiresRebootOnInstall = 128
 }
 
 table MacOSPackage {

@@ -148,10 +148,24 @@ fn create_payload_windows_exe<'a>(
         .as_ref()
         .map(|x| builder.create_string(x.as_str()));
 
+    use crate::fbs::pahkat::WindowsExecutableFlag;
+    use pahkat_types::payload::windows::RebootSpec;
+
+    let mut flags = 0u8;
+    if payload.requires_reboot.contains(&RebootSpec::Install) {
+        flags |= WindowsExecutableFlag::RequiresRebootOnInstall as u8;
+    }
+    if payload.requires_reboot.contains(&RebootSpec::Update) {
+        flags |= WindowsExecutableFlag::RequiresRebootOnUpdate as u8;
+    }
+    if payload.requires_reboot.contains(&RebootSpec::Install) {
+        flags |= WindowsExecutableFlag::RequiresRebootOnUninstall as u8;
+    }
+
     let args = crate::fbs::pahkat::WindowsExecutableArgs {
         url,
         product_code,
-        flags: 0,
+        flags,
         kind,
         size: payload.size,
         installed_size: payload.installed_size,
@@ -170,13 +184,17 @@ fn create_payload_macos_pkg<'a>(
     let pkg_id = builder.create_string(payload.pkg_id.as_str());
 
     use crate::fbs::pahkat::MacOSPackageFlag;
+    use pahkat_types::payload::macos::RebootSpec;
 
     let mut flags = 0u8;
-    if payload.requires_reboot {
-        flags |= MacOSPackageFlag::RequiresReboot as u8;
+    if payload.requires_reboot.contains(&RebootSpec::Install) {
+        flags |= MacOSPackageFlag::RequiresRebootOnInstall as u8;
     }
-    if payload.requires_uninstall_reboot {
-        flags |= MacOSPackageFlag::RequiresUninstallReboot as u8;
+    if payload.requires_reboot.contains(&RebootSpec::Update) {
+        flags |= MacOSPackageFlag::RequiresRebootOnUpdate as u8;
+    }
+    if payload.requires_reboot.contains(&RebootSpec::Install) {
+        flags |= MacOSPackageFlag::RequiresRebootOnUninstall as u8;
     }
 
     use pahkat_types::payload::macos::InstallTarget;
