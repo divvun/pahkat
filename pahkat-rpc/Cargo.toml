@@ -7,7 +7,6 @@ edition = "2018"
 [lib]
 crate-type = ["staticlib", "cdylib", "rlib"]
 
-
 [dependencies]
 pahkat-client = { path = "../pahkat-client-core" }
 tonic = { git = "https://github.com/bbqsrc/tonic", branch = "master", features = ["prost"] }

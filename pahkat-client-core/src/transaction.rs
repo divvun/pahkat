@@ -237,9 +237,7 @@ pub struct ResolvedAction {
 
 impl ResolvedAction {
     fn is_reboot_required(&self) -> bool {
-        match self {
-            
-        }
+        false
     }
 }
 
@@ -346,7 +344,7 @@ impl PackageTransaction {
     }
 
     pub fn is_reboot_required(&self) -> bool {
-
+        false
     }
 
     pub fn process(

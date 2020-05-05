@@ -228,10 +228,28 @@ impl pb::pahkat_server::Pahkat for Rpc {
             let mut has_requested = false;
             let mut has_cancelled = false;
 
-            while let Ok(Some(request)) = request.message().await {
-                let value = match request.value {
-                    Some(v) => v,
-                    None => return,
+            futures::pin_mut!(request);
+            let (escape_catch_tx, _) = tokio::sync::broadcast::channel(1);
+
+            'listener: loop {
+                let escape_catch_tx = escape_catch_tx.clone();
+                let mut rx = escape_catch_tx.subscribe();
+
+                let request = tokio::select! {
+                    request = request.message() => request,
+                    _ = rx.recv() => break 'listener
+                };
+
+                let value = match request {
+                    Ok(Some(v)) => match v.value {
+                        Some(v) => v,
+                        None => return
+                    }
+                    Err(err) => {
+                        log::error!("{:?}", err);
+                        return;
+                    }
+                    Ok(None) => return,
                 };
 
                 let request = match value {
@@ -326,6 +344,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
                                 }
                             }
                         }
+                        log::trace!("Ending download stream");
 
                         let (canceler, mut tx_stream) = transaction.process();
                         let mut is_completed = false;
@@ -367,6 +386,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
                                             error: format!("{}", err),
                                         }))
                                     };
+
                                     return;
                                 }
                                 TransactionEvent::Complete => {
@@ -377,6 +397,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
                                 }
                             }
                         }
+                        log::trace!("Ending inner transaction stream");
 
                         if !is_completed {
                             yield pb::TransactionResponse {
@@ -386,6 +407,9 @@ impl pb::pahkat_server::Pahkat for Rpc {
                                 }))
                             };
                         }
+                        
+                        log::trace!("Ending transaction stream");
+                        return;
                     };
 
                     futures::pin_mut!(stream);
@@ -398,8 +422,19 @@ impl pb::pahkat_server::Pahkat for Rpc {
                             }
                         }
                     }
+                    log::trace!("Ending outer stream loop");
+                    
+                    // HACK: this lets us escape the stream.
+                    match escape_catch_tx.send(()) {
+                        Ok(_) => {},
+                        Err(err) => {
+                            log::error!("{:?}", err);
+                        }
+                    }
                 });
             }
+
+            log::trace!("Ended entire listener loop");
         });
 
         Ok(Response::new(Box::pin(rx) as Self::ProcessTransactionStream))
@@ -791,7 +826,7 @@ pub async fn start(
     let current_transaction = Arc::new(tokio::sync::Mutex::new(()));
 
     // Create the background updater
-    create_background_update_service(Arc::clone(&store), Arc::clone(&current_transaction));
+    // create_background_update_service(Arc::clone(&store), Arc::clone(&current_transaction));
 
     // Notifications
     let (notifications, mut notif_rx) = broadcast::channel(5);

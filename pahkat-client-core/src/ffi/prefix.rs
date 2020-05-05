@@ -190,7 +190,6 @@ pub extern "C" fn pahkat_prefix_transaction_new(
 
     #[marshal(cursed::StrMarshaler::<'_>)] actions: &str,
 ) -> Result<Box<PackageTransaction>, Box<dyn Error>> {
-    eprintln!("{:?}", &actions);
     let actions: Vec<PackageAction> = serde_json::from_str(actions)?;
     PackageTransaction::new(handle as _, actions.clone())
         .map(|x| Box::new(x))

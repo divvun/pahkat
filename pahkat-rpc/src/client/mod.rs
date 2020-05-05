@@ -229,7 +229,9 @@ pub extern "C" fn pahkat_rpc_repo_indexes(
 
     let response = block_on(async move {
         let mut client = client.write().await;
-        client.repository_indexes(request).await
+        let hold_on = client.repository_indexes(request).await;
+
+        hold_on
     })?;
 
     let response: pb::RepositoryIndexesResponse = response.into_inner();
@@ -280,7 +282,7 @@ pub extern "C" fn pahkat_rpc_process_transaction(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
 
     #[marshal(JsonRefMarshaler)]
-    actions: Vec<pahkat_client::PackageAction>,
+    actions: Vec<pb::PackageAction>,
 
     callback: extern "C" fn(cursed::Slice<u8>),
 ) -> Result<(), Box<dyn Error>> {
@@ -299,7 +301,7 @@ pub extern "C" fn pahkat_rpc_process_transaction(
         let mut stream = stream.into_inner();
     
         while let Ok(Some(message)) = stream.message().await {
-            let cb_response: CallbackTransactionResponse = message.value.unwrap().into();
+            let cb_response = message.value.unwrap();
             let s = serde_json::to_string(&cb_response).unwrap();
             let bytes = s.as_bytes();
 
@@ -311,50 +313,51 @@ pub extern "C" fn pahkat_rpc_process_transaction(
             };
         }
     });
-
+    
     tx.send(pb::TransactionRequest {
         value: Some(pb::transaction_request::Value::Transaction(
-            pb::transaction_request::Transaction { actions: actions.into_iter().map(|x| x.into()).collect() },
+            pb::transaction_request::Transaction { actions },
         )),
     })?;
 
     // Ok(pahkat_rpc_cancel_callback)
+
     Ok(())
 }
 
-#[derive(Debug, Clone, Serialize)]
-struct CallbackTransactionResponse {
-    #[serde(rename = "type")]
-    ty: &'static str,
+// #[derive(Debug, Clone, Serialize)]
+// struct CallbackTransactionResponse {
+//     #[serde(rename = "type")]
+//     ty: &'static str,
 
-    #[serde(flatten)]
-    value: pb::transaction_response::Value,
-}
+//     #[serde(flatten)]
+//     value: pb::transaction_response::Value,
+// }
 
-impl CallbackTransactionResponse {
-    fn new(ty: &'static str, value: pb::transaction_response::Value) -> CallbackTransactionResponse {
-        CallbackTransactionResponse {
-            ty, value
-        }
-    }
-}
+// impl CallbackTransactionResponse {
+//     fn new(ty: &'static str, value: pb::transaction_response::Value) -> CallbackTransactionResponse {
+//         CallbackTransactionResponse {
+//             ty, value
+//         }
+//     }
+// }
 
-impl From<pb::transaction_response::Value> for CallbackTransactionResponse {
-    fn from(response: pb::transaction_response::Value) -> CallbackTransactionResponse {
-        use pb::transaction_response::Value::*;
+// impl From<pb::transaction_response::Value> for CallbackTransactionResponse {
+//     fn from(response: pb::transaction_response::Value) -> CallbackTransactionResponse {
+//         use pb::transaction_response::Value::*;
 
-        match response {
-            TransactionStarted(_) => Self::new("TransactionStarted", response),
-            TransactionError(_) => Self::new("TransactionError", response),
-            TransactionComplete(_) => Self::new("TransactionComplete", response),
-            TransactionProgress(_) => Self::new("TransactionProgress", response),
-            DownloadProgress(_) => Self::new("DownloadProgress", response),
-            DownloadComplete(_) => Self::new("DownloadComplete", response),
-            InstallStarted(_) => Self::new("InstallStarted", response),
-            UninstallStarted(_) => Self::new("UninstallStarted", response),
-        }
-    }
-}
+//         match response {
+//             TransactionStarted(_) => Self::new("TransactionStarted", response),
+//             TransactionError(_) => Self::new("TransactionError", response),
+//             TransactionComplete(_) => Self::new("TransactionComplete", response),
+//             TransactionProgress(_) => Self::new("TransactionProgress", response),
+//             DownloadProgress(_) => Self::new("DownloadProgress", response),
+//             DownloadComplete(_) => Self::new("DownloadComplete", response),
+//             InstallStarted(_) => Self::new("InstallStarted", response),
+//             UninstallStarted(_) => Self::new("UninstallStarted", response),
+//         }
+//     }
+// }
 
 static CURRENT_CANCEL_TX: Lazy<std::sync::Mutex<std::cell::RefCell<Option<
     tokio::sync::mpsc::UnboundedSender<pb::TransactionRequest>
@@ -364,6 +367,7 @@ static BASIC_RUNTIME: Lazy<std::sync::RwLock<tokio::runtime::Runtime>> = Lazy::n
     std::sync::RwLock::new(
         tokio::runtime::Builder::new()
             .threaded_scheduler()
+            // .basic_scheduler()
             .enable_all()
             .build()
             .expect("failed to build tokio runtime"),
