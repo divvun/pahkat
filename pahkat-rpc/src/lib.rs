@@ -918,15 +918,15 @@ pub async fn start(
     Server::builder()
         .add_service(pb::pahkat_server::PahkatServer::new(rpc))
         .serve_with_incoming_shutdown(
-            incoming,
+            endpoint.incoming(),
             shutdown_handler(shutdown_rx, Arc::clone(&current_transaction)),
         )
         .await?;
 
     // drop(endpoint);
 
-    // log::info!("Cleaning up Unix socket at path: {}", &path.display());
-    // std::fs::remove_file(&path)?;
+    log::info!("Cleaning up Unix socket at path: {}", &path.display());
+    std::fs::remove_file(&path)?;
 
     log::info!("Shutdown complete!");
     Ok(())

@@ -225,6 +225,7 @@ fn create_payload_tarball_pkg<'a>(
     payload: &pahkat_types::payload::tarball::Package,
     builder: &mut FlatBufferBuilder<'a>,
 ) -> butte::WIPOffset<butte::UnionWIPOffset> {
+    println!("Tarball: {}", &payload.url);
     let url = builder.create_string(payload.url.as_str());
     let args = crate::fbs::pahkat::TarballPackageArgs {
         url,
