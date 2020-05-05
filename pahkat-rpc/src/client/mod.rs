@@ -236,13 +236,28 @@ pub extern "C" fn pahkat_rpc_repo_indexes(
     Ok(response)
 }
 
-// #[cthulhu::invoke]
-// pub extern "C" fn pahkat_rpc_status(
-//     #[marshal(cursed::ArcRefMarshaler::<PahkatClient>)]
-//     handle: &Arc<PahkatClient>
-// ) {
+#[cthulhu::invoke]
+pub extern "C" fn pahkat_rpc_status(
+    #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)]
+    client: Arc<RwLock<PahkatClient>>,
+    #[marshal(cursed::StrMarshaler::<'_>)]
+    raw_package_key: &str,
+    target: u8,
+) -> i32 {
+    let request = Request::new(pb::StatusRequest {
+        package_id: raw_package_key.to_string(),
+        target: target as u32
+    });
 
-// }
+    block_on(async move {
+        let mut client = client.write().await;
+        let response = match client.status(request).await {
+            Ok(v) => v,
+            Err(_) => return 0
+        };
+        response.into_inner().value
+    })
+}
 
 #[no_mangle]
 extern "C" fn pahkat_rpc_cancel_callback() {
@@ -268,7 +283,6 @@ pub extern "C" fn pahkat_rpc_process_transaction(
     actions: Vec<pahkat_client::PackageAction>,
 
     callback: extern "C" fn(cursed::Slice<u8>),
-// ) -> Result<extern "C" fn(), Box<dyn Error>> {
 ) -> Result<(), Box<dyn Error>> {
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
