@@ -130,7 +130,7 @@ jobs:
     steps:
       - uses: actions/checkout@v1
       - name: Get Package Version
-        run: echo ::set-env name=PACKAGE_VERSION::$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | select(.name == "kbdgen") | .version')
+        run: echo ::set-env name=PACKAGE_VERSION::$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | select(.name == "pahkat-repomgr") | .version')
       - name: Download Linux Binary
         uses: actions/download-artifact@v1
         with:
