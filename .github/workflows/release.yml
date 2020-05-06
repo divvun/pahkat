@@ -7,7 +7,7 @@ on:
     types: release
 
 env:
-  RUST_VERSION: nightly-2020-03-12
+  RUST_VERSION: stable
 
   CARGO_INCREMENTAL: 0
   RUSTUP_MAX_RETRIES: 10
@@ -18,7 +18,7 @@ jobs:
   build:
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
 
@@ -91,8 +91,15 @@ jobs:
         path: target
         key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
+    - name: Update
+      uses: actions-rs/cargo@v1
+      with:
+        command: update
+        
     - name: Build
       uses: actions-rs/cargo@v1
+      env:
+        RUSTC_BOOTSTRAP: 1
       with:
         command: build
         args: --bin repomgr --release
