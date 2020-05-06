@@ -3,9 +3,12 @@ syntax = "proto3";
 package pahkat;
 
 message NotificationResponse {
-    oneof value {
-        string message = 1;
+    enum ValueType {
+        REBOOT_REQUIRED = 0;
+        REPOSITORIES_CHANGED = 1;
     }
+
+    ValueType value = 1;
 }
 
 message SelfUpdateRequest {

@@ -125,7 +125,8 @@ impl From<pahkat_client::repo::LoadedRepository> for pb::LoadedRepository {
 
 #[derive(Debug, Clone)]
 enum Notification {
-    Test,
+    RebootRequired,
+    RepositoriesChanged,
 }
 
 type Result<T> = std::result::Result<Response<T>, Status>;
@@ -155,10 +156,14 @@ impl pb::pahkat_server::Pahkat for Rpc {
             while let response = rx.recv().await {
                 match response {
                     Ok(response) => {
+                        use pb::notification_response::ValueType;
                         match response {
-                            Notification::Test => {
-                                yield pb::NotificationResponse { value: Some(pb::notification_response::Value::Message("hello".into())) };
-                            },
+                            Notification::RebootRequired => {
+                                yield pb::NotificationResponse { value: ValueType::RebootRequired as i32 };
+                            }
+                            Notification::RepositoriesChanged => {
+                                yield pb::NotificationResponse { value: ValueType::RepositoriesChanged as i32 };
+                            }
                         }
                     },
                     Err(err) => {
@@ -479,6 +484,8 @@ impl pb::pahkat_server::Pahkat for Rpc {
             .await
             .map_err(|e| Status::failed_precondition(format!("{}", e)))?;
 
+        let _ = self.notifications.send(Notification::RepositoriesChanged);
+
         let mut config = config.read().unwrap();
         let mut repos = config.repos();
 
@@ -525,6 +532,8 @@ impl pb::pahkat_server::Pahkat for Rpc {
             .force_refresh_repos()
             .await
             .map_err(|e| Status::failed_precondition(format!("{}", e)))?;
+            
+        let _ = self.notifications.send(Notification::RepositoriesChanged);
 
         let mut config = config.read().unwrap();
         let mut repos = config.repos();
