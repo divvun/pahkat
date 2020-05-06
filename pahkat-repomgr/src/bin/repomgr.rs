@@ -4,6 +4,7 @@ use structopt::StructOpt;
 use url::Url;
 
 use pahkat_repomgr::{package, repo, Request};
+use pahkat_types::package::Version;
 
 #[derive(Debug, StructOpt)]
 #[structopt()]
@@ -82,6 +83,39 @@ impl PackageInitCommand {
 }
 
 #[derive(Debug, StructOpt)]
+struct PackageUpdateCommand {
+    id: Option<String>,
+
+    #[structopt(short = "-r", long, parse(from_os_str))]
+    repo_path: Option<PathBuf>,
+
+    #[structopt(short, long)]
+    platform: Option<String>,
+
+    #[structopt(short, long)]
+    channel: Option<String>,
+
+    #[structopt(short, long)]
+    url: Option<url::Url>,
+
+    #[structopt(short, long)]
+    version: Option<Version>,
+}
+
+impl PackageUpdateCommand {
+    fn to_partial<'a>(&'a self) -> package::update::PartialRequest<'a> {
+        package::update::PartialRequest::builder()
+            .id(self.id.as_ref().map(|x| &**x))
+            .platform(self.platform.as_ref().map(|x| &**x))
+            .version(self.version.as_ref().map(|x| &*x))
+            .url(self.url.as_ref().map(|x| &*x))
+            .repo_path(self.repo_path.as_ref().map(|x| &**x))
+            .channel(self.channel.as_ref().map(|x| Some(&**x)).or(Some(None)))
+            .build()
+    }
+}
+
+#[derive(Debug, StructOpt)]
 enum RepoCommand {
     Init(RepoInitCommand),
     Index(RepoIndexCommand),
@@ -90,6 +124,7 @@ enum RepoCommand {
 #[derive(Debug, StructOpt)]
 enum PackageCommand {
     Init(PackageInitCommand),
+    Update(PackageUpdateCommand),
 }
 
 #[derive(Debug, StructOpt)]
@@ -119,6 +154,10 @@ fn main() -> anyhow::Result<()> {
             PackageCommand::Init(init) => {
                 let req = package::init::Request::new_from_user_input(init.to_partial())?;
                 package::init::init(req)?;
+            }
+            PackageCommand::Update(update) => {
+                let req = package::update::Request::new_from_user_input(update.to_partial())?;
+                package::update::update(req)?;
             }
         },
     }

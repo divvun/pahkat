@@ -123,6 +123,13 @@ impl PartialOrd for Version {
     }
 }
 
+impl FromStr for Version {
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Version::new(s)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
