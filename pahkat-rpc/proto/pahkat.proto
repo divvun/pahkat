@@ -167,16 +167,15 @@ message SetRepoRequest {
 }
 
 message SetRepoResponse {
-    bool is_success = 1;
+    map<string, RepoRecord> records = 1;
     string error = 2;
 }
 
-message GetRepoRecordRequest {
-    string url = 1;
+message GetRepoRecordsRequest {
 }
 
-message GetRepoRecordResponse {
-    RepoRecord settings = 1;
+message GetRepoRecordsResponse {
+    map<string, RepoRecord> records = 1;
     string error = 2;
 }
 
@@ -185,7 +184,7 @@ message RemoveRepoRequest {
 }
 
 message RemoveRepoResponse {
-    bool is_success = 1;
+    map<string, RepoRecord> records = 1;
     string error = 2;
 }
 
@@ -206,6 +205,6 @@ service Pahkat {
 
     // CRUD for repositories
     rpc SetRepo(SetRepoRequest) returns (SetRepoResponse) {}
-    rpc GetRepoRecord(GetRepoRecordRequest) returns (GetRepoRecordResponse) {}
+    rpc GetRepoRecords(GetRepoRecordsRequest) returns (GetRepoRecordsResponse) {}
     rpc RemoveRepo(RemoveRepoRequest) returns (RemoveRepoResponse) {}
 }
