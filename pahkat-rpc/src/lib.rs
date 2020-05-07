@@ -19,6 +19,8 @@ use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncWrite};
 #[cfg(unix)]
 use tokio::signal::unix::{signal, SignalKind};
+#[cfg(unix)]
+use tokio::net::UnixListener;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tonic::transport::server::Connected;
@@ -622,9 +624,11 @@ fn endpoint(path: &Path) -> std::result::Result<UnixListener, anyhow::Error> {
         }
     };
 
-    tokio::net::UnixListener::bind(&path).unwrap()
+    Ok(tokio::net::UnixListener::bind(&path).unwrap())
 }
 
+#[cfg(windows)]
+#[inline(always)]
 fn endpoint(path: &Path) -> std::result::Result<Endpoint, anyhow::Error> {
     Ok(Endpoint::new(path.to_str().unwrap().to_string()))
 }
@@ -770,23 +774,46 @@ fn create_background_update_service(
     });
 }
 
-// #[cfg(unix)]
-// fn shutdown_handler() -> impl Future {
-//     async move {
-//         tokio::select! {
-//             _ = sigint_listener => {
-//                 log::info!("SIGINT received; gracefully shutting down.");
-//             },
-//             _ = sigterm_listener => {
-//                 log::info!("SIGTERM received; gracefully shutting down.");
-//             }
-//             _ = sigquit_listener => {
-//                 log::info!("SIGQUIT received; gracefully shutting down.");
-//             }
-//         };
-//         ()
-//     }
-// }
+#[cfg(unix)]
+fn shutdown_handler(
+    mut shutdown_rx: mpsc::UnboundedReceiver<()>,
+    current_transaction: Arc<tokio::sync::Mutex<()>>,
+) -> anyhow::Result<Pin<Box<dyn std::future::Future<Output = ()>>>, anyhow::Error> {
+
+    let sigint_listener = signal(SignalKind::interrupt())?.into_future();
+    let sigterm_listener = signal(SignalKind::terminate())?.into_future();
+    let sigquit_listener = signal(SignalKind::quit())?.into_future();
+
+    // SIGUSR1 and SIGUSR2 do nothing, just swallow events.
+    let _sigusr1_listener = signal(SignalKind::user_defined1())?.into_future();
+    let _sigusr2_listener = signal(SignalKind::user_defined2())?.into_future();
+
+    Ok(Box::pin(async move {
+        log::debug!("Created signal listeners for: SIGINT, SIGTERM, SIGQUIT, SIGUSR1, SIGUSR2.");
+
+        tokio::select! {
+            _ = shutdown_rx.recv() => {
+                log::info!("Shutdown signal received; gracefully shutting down.");
+            }
+            _ = sigint_listener => {
+                log::info!("SIGINT received; gracefully shutting down.");
+            }
+            _ = sigterm_listener => {
+                log::info!("SIGTERM received; gracefully shutting down.");
+            }
+            _ = sigquit_listener => {
+                log::info!("SIGQUIT received; gracefully shutting down.");
+            }
+        };
+
+        log::info!("Attempting to attain transaction lock...");
+        current_transaction.lock().await;
+        log::info!("Lock attained!");
+        ()
+    }))
+}
+
+#[cfg(windows)]
 fn shutdown_handler(
     mut shutdown_rx: mpsc::UnboundedReceiver<()>,
     current_transaction: Arc<tokio::sync::Mutex<()>>,
@@ -810,30 +837,22 @@ fn shutdown_handler(
     }
 }
 
+
+#[cfg(unix)]
 pub async fn start(
     path: &Path,
     config_path: Option<&Path>,
     shutdown_rx: mpsc::UnboundedReceiver<()>,
 ) -> std::result::Result<(), anyhow::Error> {
-    let endpoint = endpoint(path)?;
+    let mut endpoint = endpoint(path)?;
 
     // let incoming = endpoint.incoming().map(|x| match x {
     //     Ok(v) => {
-    //         log::debug!("PEER: {:?}", &v.peer_cred());
+    //         // log::debug!("PEER: {:?}", &v.peer_cred());
     //         Ok(v)
     //     }
     //     Err(e) => Err(e),
     // }); //.expect("failed to open new socket");
-
-    // let sigint_listener = signal(SignalKind::interrupt())?.into_future();
-    // let sigterm_listener = signal(SignalKind::terminate())?.into_future();
-    // let sigquit_listener = signal(SignalKind::quit())?.into_future();
-
-    // // SIGUSR1 and SIGUSR2 do nothing, just swallow events.
-    // let _sigusr1_listener = signal(SignalKind::user_defined1())?.into_future();
-    // let _sigusr2_listener = signal(SignalKind::user_defined2())?.into_future();
-
-    // log::debug!("Created signal listeners for: SIGINT, SIGTERM, SIGQUIT, SIGUSR1, SIGUSR2.");
 
     let store = store(config_path).await?;
     log::debug!("Created store.");
@@ -855,7 +874,51 @@ pub async fn start(
     Server::builder()
         .add_service(pb::pahkat_server::PahkatServer::new(rpc))
         .serve_with_incoming_shutdown(
-            endpoint.incoming().unwrap(),
+            endpoint.incoming().map_ok(StreamBox),
+            shutdown_handler(shutdown_rx, Arc::clone(&current_transaction))?,
+        )
+        .await?;
+
+    // drop(endpoint);
+
+    log::info!("Cleaning up Unix socket at path: {}", &path.display());
+    std::fs::remove_file(&path)?;
+
+    log::info!("Shutdown complete!");
+    Ok(())
+}
+
+#[cfg(windows)]
+pub async fn start(
+    path: &Path,
+    config_path: Option<&Path>,
+    shutdown_rx: mpsc::UnboundedReceiver<()>,
+) -> std::result::Result<(), anyhow::Error> {
+    let mut endpoint = endpoint(path)?;
+
+    let incoming = endpoint.incoming()?;
+
+    let store = store(config_path).await?;
+    log::debug!("Created store.");
+
+    let current_transaction = Arc::new(tokio::sync::Mutex::new(()));
+
+    // Create the background updater
+    // create_background_update_service(Arc::clone(&store), Arc::clone(&current_transaction));
+
+    // Notifications
+    let (notifications, mut notif_rx) = broadcast::channel(5);
+
+    let rpc = Rpc {
+        store: Arc::clone(&store),
+        notifications,
+        current_transaction: Arc::clone(&current_transaction),
+    };
+
+    Server::builder()
+        .add_service(pb::pahkat_server::PahkatServer::new(rpc))
+        .serve_with_incoming_shutdown(
+            incoming,
             shutdown_handler(shutdown_rx, Arc::clone(&current_transaction)),
         )
         .await?;
@@ -867,4 +930,37 @@ pub async fn start(
 
     log::info!("Shutdown complete!");
     Ok(())
+}
+
+#[derive(Debug)]
+pub struct StreamBox<T: AsyncRead + AsyncWrite>(pub T);
+
+impl<T: AsyncRead + AsyncWrite> Connected for StreamBox<T> {}
+
+impl<T: AsyncRead + AsyncWrite + Unpin> AsyncRead for StreamBox<T> {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<std::io::Result<usize>> {
+        Pin::new(&mut self.0).poll_read(cx, buf)
+    }
+}
+
+impl<T: AsyncRead + AsyncWrite + Unpin> AsyncWrite for StreamBox<T> {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<std::io::Result<usize>> {
+        Pin::new(&mut self.0).poll_write(cx, buf)
+    }
+
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.0).poll_flush(cx)
+    }
+
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.0).poll_shutdown(cx)
+    }
 }

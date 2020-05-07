@@ -9,7 +9,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dependencies]
 pahkat-client = { path = "../pahkat-client-core" }
-tonic = { git = "https://github.com/bbqsrc/tonic", branch = "master", features = ["prost"] }
+tonic = { git = "https://github.com/bbqsrc/tonic", features = ["prost"] }
 bytes = "0.5.4"
 prost = "0.6"
 tokio = { version = "0.2", features = ["rt-threaded", "rt-util", "time", "stream", "fs", "macros", "uds", "sync", "blocking", "signal"] }
@@ -31,11 +31,12 @@ structopt = "0.3.14"
 serde_json = "1.0.51"
 serde = "1.0.106"
 url = "2.1.1"
-windows-service = { git = "https://github.com/mullvad/windows-service-rs" }
-winlog = "0.2.6"
-flexi_logger = "0.15.2"
 chrono = "0.4.11"
 lazy_static = "1.4.0"
+
+[target.'cfg(target_os="windows")'.dependencies]
+windows-service = { git = "https://github.com/mullvad/windows-service-rs" }
+winlog = "0.2.6"
 
 [build-dependencies]
 tonic-build = "0.2.0"

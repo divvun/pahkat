@@ -199,13 +199,7 @@ service Pahkat {
     rpc RepositoryIndexes(RepositoryIndexesRequest) returns (RepositoryIndexesResponse) {}
     rpc ProcessTransaction(stream TransactionRequest) returns (stream TransactionResponse) {}
     rpc Strings(StringsRequest) returns (StringsResponse) {}
-
-    // rpc Refresh(RefreshRequest) returns (RefreshResponse) {}
-    // rpc ClearCache(ClearCacheRequest) returns (ClearCacheResponse) {}
     
-    // Config
-    // autoupdate settings
-
     // CRUD for repositories
     rpc SetRepo(SetRepoRequest) returns (SetRepoResponse) {}
     rpc GetRepoRecords(GetRepoRecordsRequest) returns (GetRepoRecordsResponse) {}
