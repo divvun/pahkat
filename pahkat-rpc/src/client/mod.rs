@@ -277,6 +277,100 @@ extern "C" fn pahkat_rpc_cancel_callback() {
     }
 }
 
+#[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
+pub extern "C" fn pahkat_rpc_get_repo_records(
+    #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
+) -> Result<pb::GetRepoRecordsResponse, Box<dyn Error>> {
+    let request = Request::new(pb::GetRepoRecordsRequest {});
+    
+    block_on(async move {
+        let mut client = client.write().await;
+        let response = client.get_repo_records(request).await.box_err()?;
+        Ok(response.into_inner())
+    })
+}
+
+#[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
+pub extern "C" fn pahkat_rpc_set_repo(
+    #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)]
+    client: Arc<RwLock<PahkatClient>>,
+    #[marshal(cursed::StrMarshaler::<'_>)]
+    repo_url: &str,
+    #[marshal(JsonRefMarshaler)]
+    settings: pb::RepoRecord,
+) -> Result<pb::SetRepoResponse, Box<dyn Error>> {
+    let request = Request::new(pb::SetRepoRequest {
+        url: repo_url.to_string(),
+        settings: Some(settings),
+    });
+    
+    block_on(async move {
+        let mut client = client.write().await;
+        let response = client.set_repo(request).await.box_err()?;
+        Ok(response.into_inner())
+    })
+}
+
+#[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
+pub extern "C" fn pahkat_rpc_remove_repo(
+    #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)]
+    client: Arc<RwLock<PahkatClient>>,
+    #[marshal(cursed::StrMarshaler::<'_>)]
+    repo_url: &str,
+) -> Result<pb::RemoveRepoResponse, Box<dyn Error>> {
+    let request = Request::new(pb::RemoveRepoRequest {
+        url: repo_url.to_string(),
+    });
+    
+    block_on(async move {
+        let mut client = client.write().await;
+        let response = client.remove_repo(request).await.box_err()?;
+        Ok(response.into_inner())
+    })
+}
+
+#[cthulhu::invoke]
+pub extern "C" fn pahkat_rpc_notifications(
+    #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
+    callback: extern "C" fn(i32),
+) {
+    let request = Request::new(pb::NotificationsRequest {});
+
+    spawn(async move {
+        let mut stream = {
+            let mut client = client.write().await;
+            let stream = client.notifications(request).await.unwrap();
+            stream.into_inner()
+        };
+    
+        while let Ok(Some(message)) = stream.message().await {
+            unsafe {
+                (callback)(message.value as i32);
+            };
+        }
+    });
+}
+
+#[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
+pub extern "C" fn pahkat_rpc_strings(
+    #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
+    #[marshal(cursed::StrMarshaler::<'_>)]
+    language_tag: &str,
+) -> Result<pb::StringsResponse, Box<dyn Error>> {
+    let request = Request::new(pb::StringsRequest {
+        language: language_tag.to_string(),
+    });
+
+    let response = block_on(async move {
+        let mut client = client.write().await;
+        let response = client.strings(request).await.box_err()?;
+        Ok(response.into_inner())
+    });
+
+    response
+}
+
+
 #[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
 pub extern "C" fn pahkat_rpc_process_transaction(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
@@ -294,11 +388,11 @@ pub extern "C" fn pahkat_rpc_process_transaction(
     let request = Request::new(rx);
 
     spawn(async move {
-        let mut client = client.write().await;
-
-        let stream = client.process_transaction(request).await.unwrap();
-    
-        let mut stream = stream.into_inner();
+        let mut stream = {
+            let mut client = client.write().await;
+            let stream = client.process_transaction(request).await.unwrap();
+            stream.into_inner()
+        };
     
         while let Ok(Some(message)) = stream.message().await {
             let cb_response = message.value.unwrap();
@@ -386,4 +480,20 @@ where
     F::Output: Send
 {
     BASIC_RUNTIME.write().unwrap().spawn(future)
+}
+
+
+trait BoxError {
+    type Item;
+
+    fn box_err(self) -> Result<Self::Item, Box<dyn Error>>;
+}
+
+impl<T, E: std::error::Error + 'static> BoxError for Result<T, E> {
+    type Item = T;
+
+    #[inline(always)]
+    fn box_err(self) -> Result<Self::Item, Box<dyn Error>> {
+        self.map_err(|e| Box::new(e) as _)
+    }
 }
