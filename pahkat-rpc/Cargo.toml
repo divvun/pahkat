@@ -9,7 +9,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dependencies]
 pahkat-client = { path = "../pahkat-client-core" }
-tonic = { git = "https://github.com/bbqsrc/tonic", features = ["prost"] }
+tonic = { version = "0.2", features = ["prost"] }
 bytes = "0.5.4"
 prost = "0.6"
 tokio = { version = "0.2", features = ["rt-threaded", "rt-util", "time", "stream", "fs", "macros", "uds", "sync", "blocking", "signal"] }

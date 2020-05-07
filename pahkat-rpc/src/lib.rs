@@ -627,12 +627,6 @@ fn endpoint(path: &Path) -> std::result::Result<UnixListener, anyhow::Error> {
     Ok(tokio::net::UnixListener::bind(&path).unwrap())
 }
 
-#[cfg(windows)]
-#[inline(always)]
-fn endpoint(path: &Path) -> std::result::Result<Endpoint, anyhow::Error> {
-    Ok(Endpoint::new(path.to_str().unwrap().to_string()))
-}
-
 fn create_background_update_service(
     store: Arc<dyn PackageStore>,
     current_transaction: Arc<tokio::sync::Mutex<()>>,
@@ -775,6 +769,45 @@ fn create_background_update_service(
 }
 
 #[cfg(unix)]
+pub async fn start(
+    path: &Path,
+    config_path: Option<&Path>,
+    shutdown_rx: mpsc::UnboundedReceiver<()>,
+) -> std::result::Result<(), anyhow::Error> {
+    let mut endpoint = endpoint(path)?;
+    let store = store(config_path).await?;
+    log::debug!("Created store.");
+
+    let current_transaction = Arc::new(tokio::sync::Mutex::new(()));
+
+    // Create the background updater
+    create_background_update_service(Arc::clone(&store), Arc::clone(&current_transaction));
+
+    // Notifications
+    let (notifications, mut notif_rx) = broadcast::channel(5);
+
+    let rpc = Rpc {
+        store: Arc::clone(&store),
+        notifications,
+        current_transaction: Arc::clone(&current_transaction),
+    };
+
+    Server::builder()
+        .add_service(pb::pahkat_server::PahkatServer::new(rpc))
+        .serve_with_incoming_shutdown(
+            endpoint.incoming().map_ok(StreamBox),
+            shutdown_handler(shutdown_rx, Arc::clone(&current_transaction))?,
+        )
+        .await?;
+
+    log::info!("Cleaning up Unix socket at path: {}", &path.display());
+    std::fs::remove_file(&path)?;
+
+    log::info!("Shutdown complete!");
+    Ok(())
+}
+
+#[cfg(unix)]
 fn shutdown_handler(
     mut shutdown_rx: mpsc::UnboundedReceiver<()>,
     current_transaction: Arc<tokio::sync::Mutex<()>>,
@@ -814,6 +847,45 @@ fn shutdown_handler(
 }
 
 #[cfg(windows)]
+pub async fn start(
+    path: &Path,
+    config_path: Option<&Path>,
+    shutdown_rx: mpsc::UnboundedReceiver<()>,
+) -> std::result::Result<(), anyhow::Error> {
+    let mut endpoint = Endpoint::new(path.to_str().unwrap().to_string());
+
+    let incoming = endpoint.incoming()?;
+
+    let store = store(config_path).await?;
+    log::debug!("Created store.");
+
+    let current_transaction = Arc::new(tokio::sync::Mutex::new(()));
+
+    // Create the background updater
+    create_background_update_service(Arc::clone(&store), Arc::clone(&current_transaction));
+
+    // Notifications
+    let (notifications, mut notif_rx) = broadcast::channel(5);
+
+    let rpc = Rpc {
+        store: Arc::clone(&store),
+        notifications,
+        current_transaction: Arc::clone(&current_transaction),
+    };
+
+    Server::builder()
+        .add_service(pb::pahkat_server::PahkatServer::new(rpc))
+        .serve_with_incoming_shutdown(
+            incoming.map_ok(StreamBox),
+            shutdown_handler(shutdown_rx, Arc::clone(&current_transaction)),
+        )
+        .await?;
+
+    log::info!("Shutdown complete!");
+    Ok(())
+}
+
+#[cfg(windows)]
 fn shutdown_handler(
     mut shutdown_rx: mpsc::UnboundedReceiver<()>,
     current_transaction: Arc<tokio::sync::Mutex<()>>,
@@ -835,101 +907,6 @@ fn shutdown_handler(
         log::info!("Lock attained!");
         ()
     }
-}
-
-
-#[cfg(unix)]
-pub async fn start(
-    path: &Path,
-    config_path: Option<&Path>,
-    shutdown_rx: mpsc::UnboundedReceiver<()>,
-) -> std::result::Result<(), anyhow::Error> {
-    let mut endpoint = endpoint(path)?;
-
-    // let incoming = endpoint.incoming().map(|x| match x {
-    //     Ok(v) => {
-    //         // log::debug!("PEER: {:?}", &v.peer_cred());
-    //         Ok(v)
-    //     }
-    //     Err(e) => Err(e),
-    // }); //.expect("failed to open new socket");
-
-    let store = store(config_path).await?;
-    log::debug!("Created store.");
-
-    let current_transaction = Arc::new(tokio::sync::Mutex::new(()));
-
-    // Create the background updater
-    // create_background_update_service(Arc::clone(&store), Arc::clone(&current_transaction));
-
-    // Notifications
-    let (notifications, mut notif_rx) = broadcast::channel(5);
-
-    let rpc = Rpc {
-        store: Arc::clone(&store),
-        notifications,
-        current_transaction: Arc::clone(&current_transaction),
-    };
-
-    Server::builder()
-        .add_service(pb::pahkat_server::PahkatServer::new(rpc))
-        .serve_with_incoming_shutdown(
-            endpoint.incoming().map_ok(StreamBox),
-            shutdown_handler(shutdown_rx, Arc::clone(&current_transaction))?,
-        )
-        .await?;
-
-    // drop(endpoint);
-
-    log::info!("Cleaning up Unix socket at path: {}", &path.display());
-    std::fs::remove_file(&path)?;
-
-    log::info!("Shutdown complete!");
-    Ok(())
-}
-
-#[cfg(windows)]
-pub async fn start(
-    path: &Path,
-    config_path: Option<&Path>,
-    shutdown_rx: mpsc::UnboundedReceiver<()>,
-) -> std::result::Result<(), anyhow::Error> {
-    let mut endpoint = endpoint(path)?;
-
-    let incoming = endpoint.incoming()?;
-
-    let store = store(config_path).await?;
-    log::debug!("Created store.");
-
-    let current_transaction = Arc::new(tokio::sync::Mutex::new(()));
-
-    // Create the background updater
-    // create_background_update_service(Arc::clone(&store), Arc::clone(&current_transaction));
-
-    // Notifications
-    let (notifications, mut notif_rx) = broadcast::channel(5);
-
-    let rpc = Rpc {
-        store: Arc::clone(&store),
-        notifications,
-        current_transaction: Arc::clone(&current_transaction),
-    };
-
-    Server::builder()
-        .add_service(pb::pahkat_server::PahkatServer::new(rpc))
-        .serve_with_incoming_shutdown(
-            endpoint.incoming(),
-            shutdown_handler(shutdown_rx, Arc::clone(&current_transaction)),
-        )
-        .await?;
-
-    // drop(endpoint);
-
-    log::info!("Cleaning up Unix socket at path: {}", &path.display());
-    std::fs::remove_file(&path)?;
-
-    log::info!("Shutdown complete!");
-    Ok(())
 }
 
 #[derive(Debug)]
