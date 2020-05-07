@@ -502,7 +502,38 @@ pub(crate) async fn strings<'p>(
     repo_urls: Vec<Url>,
     language: String
 ) -> HashMap<Url, crate::package_store::LocalizedStrings> {
-    Default::default()
+    let futures = repo_urls
+        .into_iter()
+        .map(|url| {
+            let strings_url = url
+                .join("strings/").unwrap()
+                .join(&format!("{}.toml", language))
+                .unwrap();
+            (url, strings_url)
+        })
+        .map(|(url, strings_url)| async move {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            tokio::spawn(async move {
+                let response = match reqwest::get(strings_url).await {
+                    Ok(v) => match v.text().await {
+                        Ok(v) => match toml::from_str(&v) {
+                            Ok(v) => Some(v),
+                            Err(_) => None,
+                        },
+                        Err(_) => None,
+                    },
+                    Err(_) => None,
+                };
+                tx.send(response).unwrap();
+            });
+            let result = rx.await.unwrap();
+
+            (url, result)
+        })
+        .collect::<Vec<_>>();
+    let results = futures::future::join_all(futures).await;
+
+    results.into_iter().filter_map(|(k, v)| v.map(|v| (k, v))).collect::<HashMap<_, _>>()
 }
 
 pub(crate) fn find_package_by_key<'p>(
@@ -590,7 +621,7 @@ pub(crate) async fn refresh_repos(
             config
                 .repos()
                 .keys()
-                .fold(crossbeam_queue::SegQueue::new(), |mut acc, cur| {
+                .fold(crossbeam_queue::SegQueue::new(), |acc, cur| {
                     acc.push(cur.clone());
                     acc
                 });
