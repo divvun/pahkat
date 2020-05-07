@@ -372,6 +372,13 @@ impl PackageStore for PrefixPackageStore {
     fn clear_cache(&self) {
         crate::repo::clear_cache(&self.config)
     }
+
+    fn strings(&self, language: String) -> crate::package_store::Future<HashMap<Url, crate::package_store::LocalizedStrings>> {
+        let repos = self.repos.read().unwrap();
+        let urls = repos.keys().cloned().collect::<Vec<_>>();
+
+        Box::pin(crate::repo::strings(urls, language))
+    }
 }
 
 #[derive(Debug)]
