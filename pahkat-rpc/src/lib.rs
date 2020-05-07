@@ -624,7 +624,14 @@ fn endpoint(path: &Path) -> std::result::Result<UnixListener, anyhow::Error> {
         }
     };
 
-    Ok(tokio::net::UnixListener::bind(&path).unwrap())
+    if cfg!(feature = "launchd") {
+        use std::os::unix::io::FromRawFd;
+        let fds = raunch::activate_socket("pahkat")?;
+        let std_listener = unsafe { std::os::unix::net::UnixListener::from_raw_fd(fds[0]) };
+        Ok(tokio::net::UnixListener::from_std(std_listener).unwrap())
+    } else {
+        Ok(tokio::net::UnixListener::bind(&path).unwrap())
+    }
 }
 
 fn create_background_update_service(
