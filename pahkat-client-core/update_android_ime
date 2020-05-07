@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+
+# Exit on error
+set -e
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+REPO_ROOT=$DIR/..
+cd $DIR
+
+GIELLA_DIR=$1
+
+function print_help {
+    echo "Usage: ./update_android_ime path/to/giella-ime"
+}
+
+if [ $# -ne 1 ]; then
+    echo "No giella directory provided";
+    print_help
+
+    exit -1
+elif ! [[ -d "${GIELLA_DIR}" ]] ; then
+    echo "$GIELLA_DIR is not a directory";
+
+    print_help
+    exit -1
+fi
+
+LZMA_API_STATIC=1
+
+# Clean the build
+echo "##### Clean cargo build #####"
+cargo clean
+
+echo "##### Build aarch64-linux-android #####"
+cargo ndk --platform 21 --target aarch64-linux-android -- build --features prefix,ffi
+
+echo "##### Copying aarch64-linux-android pahkat client into giella-ime #####"
+cp $REPO_ROOT/target/aarch64-linux-android/debug/libpahkat_client.so $GIELLA_DIR/app/src/main/jniLibs/arm64-v8a/
+
+echo "##### Build  armv7-linux-androideabi #####"
+cargo ndk --platform 21 --target armv7-linux-androideabi -- build --features prefix,ffi
+
+echo "##### Copying armv7-linux-androideabi pahkat client into giella-ime #####"
+cp $REPO_ROOT/target/armv7-linux-androideabi/debug/libpahkat_client.so $GIELLA_DIR/app/src/main/jniLibs/armeabi-v7a/
+
+echo "##### Done #####"
+
