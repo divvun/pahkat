@@ -200,7 +200,7 @@ pub extern "C" fn pahkat_prefix_transaction_new(
 pub extern "C" fn pahkat_prefix_transaction_actions(
     #[marshal(cursed::BoxRefMarshaler::<PackageTransaction>)] 
     handle: &PackageTransaction,
-) -> Vec<PackageAction> {
+) -> Vec<crate::transaction::ResolvedAction> {
     handle.actions().to_vec()
 }
 

@@ -227,7 +227,7 @@ pub enum TransactionEvent {
 
 use pahkat_types::{payload::Target, package::{Descriptor, Release}};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResolvedAction {
     pub action: PackageAction,
     pub descriptor: Descriptor,
