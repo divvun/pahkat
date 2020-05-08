@@ -18,9 +18,9 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncWrite};
 #[cfg(unix)]
-use tokio::signal::unix::{signal, SignalKind};
-#[cfg(unix)]
 use tokio::net::UnixListener;
+#[cfg(unix)]
+use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tonic::transport::server::Connected;
@@ -258,8 +258,8 @@ impl pb::pahkat_server::Pahkat for Rpc {
                 let value = match request {
                     Ok(Some(v)) => match v.value {
                         Some(v) => v,
-                        None => return
-                    }
+                        None => return,
+                    },
                     Err(err) => {
                         log::error!("{:?}", err);
                         return;
@@ -422,7 +422,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
                                 }))
                             };
                         }
-                        
+
                         log::trace!("Ending transaction stream");
                         return;
                     };
@@ -438,10 +438,10 @@ impl pb::pahkat_server::Pahkat for Rpc {
                         }
                     }
                     log::trace!("Ending outer stream loop");
-                    
+
                     // HACK: this lets us escape the stream.
                     match escape_catch_tx.send(()) {
-                        Ok(_) => {},
+                        Ok(_) => {}
                         Err(err) => {
                             log::error!("{:?}", err);
                         }
@@ -492,7 +492,10 @@ impl pb::pahkat_server::Pahkat for Rpc {
         let mut repos = config.repos();
 
         Ok(tonic::Response::new(pb::SetRepoResponse {
-            records: repos.iter().map(|(k, v)| (k.to_string(), v.to_owned().into())).collect(),
+            records: repos
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_owned().into()))
+                .collect(),
             error: "".into(),
         }))
     }
@@ -504,9 +507,12 @@ impl pb::pahkat_server::Pahkat for Rpc {
         let config = self.store.config();
         let config = config.read().unwrap();
         let repos = config.repos();
-        
+
         Ok(tonic::Response::new(pb::GetRepoRecordsResponse {
-            records: repos.iter().map(|(k, v)| (k.to_string(), v.to_owned().into())).collect(),
+            records: repos
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_owned().into()))
+                .collect(),
             error: "".into(),
         }))
     }
@@ -534,14 +540,17 @@ impl pb::pahkat_server::Pahkat for Rpc {
             .force_refresh_repos()
             .await
             .map_err(|e| Status::failed_precondition(format!("{}", e)))?;
-            
+
         let _ = self.notifications.send(Notification::RepositoriesChanged);
 
         let mut config = config.read().unwrap();
         let mut repos = config.repos();
 
         Ok(tonic::Response::new(pb::RemoveRepoResponse {
-            records: repos.iter().map(|(k, v)| (k.to_string(), v.to_owned().into())).collect(),
+            records: repos
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_owned().into()))
+                .collect(),
             error: "".into(),
         }))
     }
@@ -601,35 +610,35 @@ async fn store(config_path: Option<&Path>) -> anyhow::Result<Arc<dyn PackageStor
 #[cfg(unix)]
 #[inline(always)]
 fn endpoint(path: &Path) -> std::result::Result<UnixListener, anyhow::Error> {
-    use std::os::unix::fs::FileTypeExt;
-
-    match std::fs::metadata(path) {
-        Ok(v) => {
-            log::warn!(
-                "Unexpected file found at Unix socket path: {}",
-                &path.display()
-            );
-            if v.file_type().is_socket() {
-                std::fs::remove_file(&path)?;
-                log::warn!("Deleted stale socket.");
-            } else {
-                log::error!("File is not a Unix socket, refusing to clean up automatically.");
-                anyhow::bail!("Unexpected file at desired Unix socket path ({}) cannot be automatically cleaned up.", &path.display());
-            }
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => {
-            log::error!("{}", &e);
-            return Err(e.into());
-        }
-    };
-
     if cfg!(feature = "launchd") {
         use std::os::unix::io::FromRawFd;
         let fds = raunch::activate_socket("pahkat")?;
         let std_listener = unsafe { std::os::unix::net::UnixListener::from_raw_fd(fds[0]) };
         Ok(tokio::net::UnixListener::from_std(std_listener).unwrap())
     } else {
+        use std::os::unix::fs::FileTypeExt;
+
+        match std::fs::metadata(path) {
+            Ok(v) => {
+                log::warn!(
+                    "Unexpected file found at Unix socket path: {}",
+                    &path.display()
+                );
+                if v.file_type().is_socket() {
+                    std::fs::remove_file(&path)?;
+                    log::warn!("Deleted stale socket.");
+                } else {
+                    log::error!("File is not a Unix socket, refusing to clean up automatically.");
+                    anyhow::bail!("Unexpected file at desired Unix socket path ({}) cannot be automatically cleaned up.", &path.display());
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                log::error!("{}", &e);
+                return Err(e.into());
+            }
+        };
+
         Ok(tokio::net::UnixListener::bind(&path).unwrap())
     }
 }
@@ -819,7 +828,6 @@ fn shutdown_handler(
     mut shutdown_rx: mpsc::UnboundedReceiver<()>,
     current_transaction: Arc<tokio::sync::Mutex<()>>,
 ) -> anyhow::Result<Pin<Box<dyn std::future::Future<Output = ()>>>, anyhow::Error> {
-
     let sigint_listener = signal(SignalKind::interrupt())?.into_future();
     let sigterm_listener = signal(SignalKind::terminate())?.into_future();
     let sigquit_listener = signal(SignalKind::quit())?.into_future();
