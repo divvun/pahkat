@@ -286,6 +286,10 @@ impl PackageTransaction {
         Arc::clone(&self.actions)
     }
 
+    pub fn is_reboot_required(&self) -> bool {
+        self.is_reboot_required
+    }
+
     pub fn process(
         &self,
     ) -> (
