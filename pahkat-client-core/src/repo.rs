@@ -23,7 +23,7 @@ use crate::defaults;
 use crate::fbs::PackagesExt;
 use crate::package_store::PackageStore;
 use crate::transaction::{PackageDependencyError, PackageStatus, PackageStatusError};
-use pahkat_types::package::{Package, Release, Version};
+use pahkat_types::package::{Package, Release, Version, Descriptor};
 use pahkat_types::payload::Target;
 
 #[derive(Debug, Clone, Error)]
@@ -455,14 +455,11 @@ pub(crate) fn download_file_path(config: &Config, url: &url::Url) -> std::path::
     )
 }
 
-pub(crate) fn all_statuses<'a, P>(
-    store: &P,
+pub(crate) fn all_statuses<'a>(
+    store: &dyn PackageStore,
     repo_url: &Url,
     target: crate::package_store::InstallTarget,
-) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>>
-where
-    P: PackageStore,
-{
+) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>> {
     log::debug!(
         "Getting all statuses for: {:?}, target: {:?}",
         repo_url,
@@ -573,14 +570,11 @@ pub(crate) fn find_package_by_key<'p>(
     })
 }
 
-pub(crate) fn find_package_by_id<P>(
-    store: &P,
+pub(crate) fn find_package_by_id(
+    store: &dyn PackageStore,
     package_id: &str,
     repos: &HashMap<Url, LoadedRepository>,
-) -> Option<(PackageKey, Package)>
-where
-    P: PackageStore,
-{
+) -> Option<(PackageKey, Package)> {
     match PackageKey::try_from(package_id) {
         Ok(k) => return store.find_package_by_key(&k).map(|pkg| (k, pkg)),
         Err(_) => {}
@@ -671,142 +665,145 @@ pub(crate) async fn refresh_repos(
 }
 
 pub(crate) fn clear_cache(config: &Arc<RwLock<Config>>) {
-    // for record in config.repos().iter() {
-    //     match LoadedRepository::clear_cache(
-    //         &record.url,
-    //         record.channel.clone(),
-    //         &config.repo_cache_dir(),
-    //     ) {
-    //         Err(e) => {
-    //             log::error!("{:?}", e);
-    //         }
-    //         Ok(_) => {}
-    //     };
-    // }
     // todo!()
 }
 
-fn recurse_package_dependencies(
-    store: &Arc<dyn PackageStore>,
-    package: &Descriptor,
-    candidates: &mut HashMap<PackageKey, Package>,
-) -> Result<(), PackageDependencyError> {
-    // for (package_key, _version) in package.dependencies.iter() {
-    //     // Package key may be a short, relative package id, or a fully qualified
-    //     // URL to a package in a linked repo
-
-    //     let result = store.find_package_by_id(package_key);
-
-    //     match result {
-    //         Some((key, package)) => {
-    //             if candidates.contains_key(&key) {
-    //                 continue;
-    //             }
-
-    //             recurse_package_dependencies(store, &package, candidates)?;
-    //             candidates.insert(key, package);
-    //         }
-    //         None => {
-    //             return Err(PackageDependencyError::PackageNotFound(
-    //                 package_key.to_string(),
-    //             ))
-    //         }
-    //     };
-    // }
-
-    Ok(())
-    // todo!()
-}
-use pahkat_types::package::Descriptor;
-
-pub(crate) fn find_package_dependencies(
-    store: &Arc<dyn PackageStore>,
-    _key: &PackageKey,
-    package: &Descriptor,
-    _target: &crate::package_store::InstallTarget,
-) -> Result<Vec<(PackageKey, Package)>, PackageDependencyError> {
-    let mut candidates = HashMap::new();
-    recurse_package_dependencies(store, package, &mut candidates)?;
-    Ok(candidates.into_iter().map(|(k, v)| (k, v)).collect())
-    // for (package_id, version) in package.dependencies.iter() {
-    //     // avoid circular references by keeping
-    //     // track of package ids that have already been processed
-    //     if resolved.contains(package_id) {
-    //         continue;
-    //     }
-    //     resolved.push(package_id.clone());
-
-    //     match self.find_package_by_id(package_id.as_str()) {
-    //         Some((ref key, ref package)) => {
-    //             // add all the dependencies of the dependency
-    //             // to the list result first
-    //             for dependency in
-    //                 self.find_package_dependencies_impl(key, package, target, level + 1, resolved)?
-    //             {
-    //                 push_if_not_exists(dependency, &mut result);
-    //             }
-
-    //             // make sure the version requirement is correct
-    //             // TODO: equality isn't how version comparisons work.
-    //             // if package.version.as_str() != version {
-    //             //     return Err(PackageDependencyError::VersionNotFound);
-    //             // }
-
-    //             match self.status(key, &target) {
-    //                 Err(error) => return Err(PackageDependencyError::PackageStatusError(error)),
-    //                 Ok(status) => match status {
-    //                     PackageStatus::UpToDate => {}
-    //                     _ => {
-    //                         let dependency = PackageDependency {
-    //                             id: key.clone(),
-    //                             package: package.clone(),
-    //                             version: version.clone(),
-    //                             status,
-    //                         };
-    //                         push_if_not_exists(dependency, &mut result);
-    //                     }
-    //                 },
-    //             }
-    //         }
-    //         _ => {
-    //             // the given package id does not exist
-    //             return Err(PackageDependencyError::PackageNotFound);
-    //         }
-    //     }
-    // }
-
-    // return Ok(result);
+#[derive(Debug, Clone)]
+pub struct PackageCandidate {
+    pub package_key: PackageKey,
+    pub descriptor: Descriptor,
+    pub release: Release,
+    pub target: Target,
+    pub status: PackageStatus,
+    pub is_reboot_required: bool,
 }
 
-// use crate::repo::repository::RepoDownloadError;
+#[derive(Debug, thiserror::Error)]
+pub enum PackageCandidateError {
+    #[error("Could not resolve package status for package key: `{0}`")]
+    Status(PackageKey, #[source] PackageStatusError),
 
-// #[must_use]
-// fn recurse_repo(
-//     url: Url,
-//     repos: Arc<HashMap<Url, LoadedRepository>>,
-//     config: Arc<Config>,
-// ) -> Pin<Box<dyn std::future::Future<Output = Result<(), RepoDownloadError>>>> {
-//     if repos.contains_key(&url) {
-//         return Box::pin(async { Ok(()) });
-//     }
+    #[error("Could not resolve payload for package key: `{0}`")]
+    Payload(PackageKey, #[source] PayloadError),
 
-//     Box::pin(async move {
-//         let cache_dir = config.settings().repo_cache_dir();
-//         let channel = config.repos().get(&url).and_then(|r| r.channel.clone());
+    #[error("Could not resolve identifier to package key: `{0}`")]
+    UnresolvedId(String),
 
-//         match LoadedRepository::from_cache_or_url(url, channel, cache_dir).await {
-//             Ok(repo) => {
-//                 for url in repo.info().repository.linked_repositories.iter() {
-//                     recurse_repo(url.clone(), Arc::clone(&repos), Arc::clone(&config)).await?;
-//                 }
+    #[error("Attempting to uninstall package required by installation set: `{0}`")]
+    UninstallConflict(PackageKey),
+}
 
-//                 repos.insert(url.clone(), repo);
-//                 Ok(())
-//             }
-//             Err(e) => {
-//                 log::error!("{:?}", e);
-//                 Err(e)
-//             }
-//         }
-//     })
-// }
+use crate::package_store::InstallTarget;
+
+fn resolve_package_candidate(
+    store: &dyn PackageStore,
+    package_key: &PackageKey,
+    install_target: &[InstallTarget],
+    repos: &HashMap<Url, LoadedRepository>,
+) -> Result<PackageCandidate, PackageCandidateError> {
+    let query = crate::repo::ReleaseQuery::new(package_key, &repos);
+
+    let status = install_target.iter().fold(None, |acc, cur| {
+        match acc {
+            Some(Ok(v)) => Some(Ok(v)),
+            _ => {
+                Some(store.status(&package_key, *cur)
+                    .map_err(|e| PackageCandidateError::Status(package_key.to_owned(), e)))
+            }
+        }
+    }).unwrap_or_else(|| Err(PackageCandidateError::UnresolvedId(package_key.to_string())))?;
+
+    let (target, release, descriptor) = resolve_payload(package_key, &query, &*repos)
+        .map_err(|e| PackageCandidateError::Payload(package_key.to_owned(), e))?;
+
+    use crate::transaction::PackageStatus;
+    use pahkat_types::payload::Payload;
+
+    let is_reboot_required = match &target.payload {
+        Payload::TarballPackage(_) => false,
+        Payload::MacOSPackage(pkg) => {
+            use pahkat_types::payload::macos::RebootSpec;
+            match status {
+                PackageStatus::NotInstalled => pkg.requires_reboot.contains(&RebootSpec::Install),
+                PackageStatus::RequiresUpdate => pkg.requires_reboot.contains(&RebootSpec::Update),
+                _ => false,
+            }
+        }
+        Payload::WindowsExecutable(pkg) => {
+            use pahkat_types::payload::windows::RebootSpec;
+            match status {
+                PackageStatus::NotInstalled => pkg.requires_reboot.contains(&RebootSpec::Install),
+                PackageStatus::RequiresUpdate => pkg.requires_reboot.contains(&RebootSpec::Update),
+                _ => false,
+            }
+        },
+        _ => false
+    };
+
+    Ok(PackageCandidate {
+        package_key: package_key.to_owned(),
+        descriptor,
+        release,
+        target,
+        status,
+        is_reboot_required,
+    })
+}
+
+fn recurse_package_set(
+    store: &dyn PackageStore,
+    package_candidate: &PackageCandidate,
+    install_target: &[InstallTarget],
+    repos: &HashMap<Url, LoadedRepository>,
+    set: &mut HashMap<PackageKey, PackageCandidate>
+) -> Result<(), PackageCandidateError> {
+    package_candidate.target.dependencies.keys().try_fold((), |_, key| {
+        let key = if !key.starts_with("https://") && !key.starts_with("http://") {
+            store.find_package_by_id(key).map(|x| x.0)
+                .ok_or_else(|| PackageCandidateError::UnresolvedId(key.to_string()))?
+        } else {
+            PackageKey::try_from(&**key).map_err(|_| PackageCandidateError::UnresolvedId(key.to_string()))?
+        };
+
+        if set.contains_key(&key) {
+            return Ok(());
+        }
+
+        let candidate = resolve_package_candidate(store, &key, install_target, repos)?;
+        set.insert(key, candidate);
+        Ok(())
+    })
+}
+
+pub(crate) fn resolve_package_set(
+    store: &dyn PackageStore,
+    install_candidates: &[PackageKey],
+    install_target: &[InstallTarget],
+) -> Result<Vec<PackageCandidate>, PackageCandidateError> {
+    let repos = store.repos();
+    let repos = repos.read().unwrap();
+
+    // Resolve initial package set
+    let mut candidate_set = install_candidates.iter().map(|key| {
+        resolve_package_candidate(store, &key, install_target, &*repos).map(|v| (key.to_owned(), v))
+    }).collect::<Result<HashMap<_, _>, _>>()?;
+
+    // Iterate all dependencies until we achieve victory
+    let values = candidate_set.values().cloned().collect::<Vec<_>>();
+
+    values.iter().try_fold((), |_, candidate| {
+        recurse_package_set(store, candidate, install_target, &*repos, &mut candidate_set)
+    })?;
+
+    // Take our candidate set and resolve it down to a mutation set
+    Ok(candidate_set
+        .into_iter()
+        .filter_map(|(key, candidate)| {
+            if candidate.status == PackageStatus::UpToDate {
+                None
+            } else {
+                Some(candidate)
+            }
+        })
+        .collect())
+}

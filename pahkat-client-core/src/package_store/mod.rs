@@ -46,7 +46,7 @@ pub enum ProgressEvent<P: Debug, C: Debug, E: Debug> {
 
 pub type DownloadEvent = ProgressEvent<(u64, u64), PathBuf, crate::download::DownloadError>;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(rename_all = "lowercase")]
 #[non_exhaustive]
 pub enum InstallTarget {

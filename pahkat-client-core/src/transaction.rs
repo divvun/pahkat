@@ -167,29 +167,6 @@ impl PackageActionType {
     }
 }
 
-fn process_install_action(
-    store: &Arc<dyn PackageStore>,
-    package: &Descriptor,
-    action: &PackageAction,
-    new_actions: &mut Vec<ResolvedAction>,
-) -> Result<(), PackageTransactionError> {
-    let dependencies =
-        match crate::repo::find_package_dependencies(store, &action.id, package, &action.target) {
-            Ok(d) => d,
-            Err(e) => return Err(PackageTransactionError::Deps(e)),
-        };
-
-    // for dependency in dependencies.into_iter() {
-    //     if !new_actions.iter().any(|x| x.id == dependency.0) {
-    //         // TODO: validate that it is allowed for user installations
-    //         let new_action = PackageAction::install(dependency.0, action.target.clone());
-    //         new_actions.push(new_action);
-    //     }
-    // }
-
-    Ok(())
-}
-
 use self::install::InstallError;
 use self::uninstall::UninstallError;
 
@@ -235,116 +212,78 @@ pub struct ResolvedAction {
     pub target: Target,
 }
 
-impl ResolvedAction {
-    fn is_reboot_required(&self) -> bool {
-        false
-    }
-}
-
 pub struct PackageTransaction {
     store: Arc<dyn PackageStore>,
     actions: Arc<Vec<ResolvedAction>>,
+    is_reboot_required: bool,
 }
+
+use crate::repo::PackageCandidateError;
 
 impl PackageTransaction {
     pub fn new(
         store: Arc<dyn PackageStore>,
         actions: Vec<PackageAction>,
-    ) -> Result<PackageTransaction, PackageTransactionError> {
-        let mut new_actions: Vec<ResolvedAction> = vec![];
-
+    ) -> Result<PackageTransaction, PackageCandidateError> {
         log::debug!("New transaction with actions: {:#?}", &actions);
 
         let repos = store.repos();
         let repos = repos.read().unwrap();
 
-        // Collate all dependencies
-        for action in actions.into_iter() {
-            let package_key = &action.id;
-            let query = crate::repo::ReleaseQuery::new(package_key, &*repos);
+        // Get mutation set (for install actions)
+        let install_actions = actions.iter()
+            .filter(|a| a.action == PackageActionType::Install)
+            .collect::<Vec<_>>();
+        let install_target = install_actions
+            .iter()
+            .map(|a| a.target)
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        let install_keys = install_actions
+            .iter()
+            .map(|a| a.id.clone())
+            .collect::<Vec<_>>();
+        let install_set = crate::repo::resolve_package_set(&*store, &*install_keys, &*install_target)?;
 
-            let (target, release, descriptor) = crate::repo::resolve_payload(package_key, &query, &*repos)?;
+        let is_reboot_required = install_set.iter().any(|x| x.is_reboot_required);
 
-            // let package = store
-            //     .find_package_by_key(&package_key)
-            //     .ok_or_else(|| PackageTransactionError::NoPackage(package_key.to_string()))?;
+        // Create a list of resolved actions to be processed.
+        let new_actions = install_set.into_iter().map(|candidate| {
+            let key = candidate.package_key;
 
-            if action.is_install() {
-                // Add all sub-dependencies
-                process_install_action(&store, &descriptor, &action, &mut new_actions)?;
+            ResolvedAction {
+                descriptor: candidate.descriptor,
+                release: candidate.release,
+                target: candidate.target,
+                action: actions.iter().find(|x| &x.id == &key).cloned().unwrap_or_else(|| {
+                    PackageAction {
+                        id: key,
+                        action: PackageActionType::Install,
+                        target: InstallTarget::System,
+                    }
+                }),
             }
-
-            // if let Some(found_action) = new_actions.iter().find(|x| x.id == action.id) {
-            //     if found_action.action != action.action {
-            //         return Err(PackageTransactionError::ActionContradiction(
-            //             action.id.to_string(),
-            //         ));
-            //     }
-            // } else {
-            //     new_actions.push(action);
-            // }
-        }
-
-        // Check for contradictions
-        let mut installs = HashSet::new();
-        let mut uninstalls = HashSet::new();
-
-        for record in new_actions.iter() {
-            if record.action.is_install() {
-                installs.insert(&record.action.id);
-            } else {
-                uninstalls.insert(&record.action.id);
+        }).collect::<Vec<_>>();
+        
+        // Check for uninstall actions that contradict this set
+        for action in actions.iter().filter(|x| x.action == PackageActionType::Uninstall) {
+            if new_actions.iter().any(|x| x.action.id == action.id) {
+                return Err(PackageCandidateError::UninstallConflict(action.id.clone()));
             }
         }
-
-        // An intersection with more than 0 items is a contradiction.
-        let contradictions = installs.intersection(&uninstalls).collect::<HashSet<_>>();
-        if contradictions.len() > 0 {
-            return Err(PackageTransactionError::ActionContradiction(format!(
-                "{:?}",
-                contradictions
-            )));
-        }
-
-        // Check if packages need to even be installed or uninstalled
-        // let new_actions: Vec<ResolvedAction> = new_actions
-        //     .into_iter()
-        //     .try_fold(Vec::<ResolvedAction>::new(), |mut out, record| {
-        //         let status = store
-        //             .status(&record.action.id, record.action.target)
-        //             .map_err(|err| PackageTransactionError::InvalidStatus(err))?;
-
-        //         let is_valid = if record.action.is_install() {
-        //             status != PackageStatus::UpToDate
-        //         } else {
-        //             status == PackageStatus::UpToDate || status == PackageStatus::RequiresUpdate
-        //         };
-
-        //         if is_valid {
-        //             out.push(record);
-        //         }
-
-        //         Ok(out)
-        //     })?;
 
         log::debug!("Processed actions: {:#?}", &new_actions);
 
         Ok(PackageTransaction {
             store,
             actions: Arc::new(new_actions),
+            is_reboot_required,
         })
     }
 
     pub fn actions(&self) -> Arc<Vec<ResolvedAction>> {
         Arc::clone(&self.actions)
-    }
-
-    pub fn validate(&self) -> bool {
-        true
-    }
-
-    pub fn is_reboot_required(&self) -> bool {
-        false
     }
 
     pub fn process(
@@ -395,8 +334,6 @@ impl PackageTransaction {
 
             yield TransactionEvent::Complete;
         };
-
-        log::debug!("Sure are!");
 
         (canceler, Box::pin(valve.wrap(stream)))
     }
