@@ -17,7 +17,7 @@ use crate::package_store::{ImportError, InstallTarget};
 use crate::repo::{PackageQuery, RepoDownloadError};
 use crate::transaction::{
     install::InstallError, install::ProcessError, uninstall::UninstallError, PackageStatus,
-    PackageStatusError, ResolvedDescriptor
+    PackageStatusError, ResolvedDescriptor, ResolvedPackageQuery,
 };
 use crate::Config;
 use crate::{repo::PayloadError, LoadedRepository, PackageKey, PackageStore};
