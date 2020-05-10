@@ -316,7 +316,6 @@ fn create_releases<'d, 'a>(
             let (version_type, version) = match &release.version {
                 // Version::Opaque => 1u8,
                 Version::Semantic(v) => (2u8, v.to_string()),
-                Version::Timestamp(v) => (3u8, v.to_string()),
                 _ => panic!(),
             };
             let version = *release_keys

@@ -1,11 +1,5 @@
 namespace pahkat;
 
-// union Version {
-//     Opaque:string,
-//     Semantic:string,
-//     Timestamp:string
-// }
-
 enum WindowsExecutableFlag: uint8 { // (bit_flags) {
     TargetSystem = 0,
     TargetUser = 1,
@@ -75,7 +69,7 @@ table Target {
 table Release {
     // TODO: temporary workaround
     version_type: uint8;
-    version: string (required);//Version;
+    version: string (required);
     target: [Target];
     channel: string;
     authors: [string];
@@ -84,13 +78,13 @@ table Release {
 }
 
 table Descriptor {
-    id: string (required); // Reference to parent.package_keys
+    id: string (required);
     release: [Release];
-    name_keys: [string]; // Reference to parent.known_languages
+    name_keys: [string];
     name_values: [string];
-    description_keys: [string]; // Reference to parent.known_languages
+    description_keys: [string];
     description_values: [string];
-    tags: [string]; // Reference to parent.known_tags
+    tags: [string];
 }
 
 table Synthetic {
