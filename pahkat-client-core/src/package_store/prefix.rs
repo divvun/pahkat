@@ -19,7 +19,7 @@ use crate::transaction::{
 };
 use crate::{
     cmp, download::Download, download::DownloadManager, package_store::ImportError,
-    repo::LoadedRepository, transaction::PackageStatus, transaction::PackageStatusError, Config,
+    repo::{PackageQuery, LoadedRepository}, transaction::{ResolvedDescriptor, PackageStatus}, transaction::PackageStatusError, Config,
     PackageKey, PackageStore,
 };
 
@@ -378,6 +378,12 @@ impl PackageStore for PrefixPackageStore {
         let urls = repos.keys().cloned().collect::<Vec<_>>();
 
         Box::pin(crate::repo::strings(urls, language))
+    }
+
+    fn resolve_package_query(&self, query: PackageQuery, install_target: &[InstallTarget]) -> ResolvedPackageQuery {
+        let repos = self.repos();
+        let repos = repos.read().unwrap();
+        crate::repo::resolve_package_query(self, &query, install_target, &*repos)
     }
 }
 

@@ -52,7 +52,7 @@ impl ConfigPath {
     pub fn join<S: AsRef<str>>(&self, item: S) -> ConfigPath {
         let mut url = self.as_url().to_owned();
         log::trace!("{:?}", url);
-        url.path_segments_mut().unwrap().push(item.as_ref());
+        url.path_segments_mut().unwrap().pop_if_empty().push(item.as_ref());
         log::trace!("{:?}", url);
         ConfigPath::from_url(url).unwrap()
     }

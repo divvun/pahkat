@@ -16,6 +16,24 @@ pub enum Payload {
     TarballPackage(tarball::Package),
 }
 
+impl Payload {
+    pub fn size(&self) -> u64 {
+        match self {
+            Payload::WindowsExecutable(x) => x.size,
+            Payload::MacOSPackage(x) => x.size,
+            Payload::TarballPackage(x) => x.size,
+        }
+    }
+
+    pub fn installed_size(&self) -> u64 {
+        match self {
+            Payload::WindowsExecutable(x) => x.installed_size,
+            Payload::MacOSPackage(x) => x.installed_size,
+            Payload::TarballPackage(x) => x.installed_size,
+        }
+    }
+}
+
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]

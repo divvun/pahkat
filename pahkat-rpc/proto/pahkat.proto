@@ -6,6 +6,7 @@ message NotificationResponse {
     enum ValueType {
         REBOOT_REQUIRED = 0;
         REPOSITORIES_CHANGED = 1;
+        RPC_STOPPING = 2;
     }
 
     ValueType value = 1;
@@ -191,6 +192,15 @@ message RemoveRepoResponse {
     string error = 2;
 }
 
+// There was no time to do this properly.
+message JsonRequest {
+    string json = 1;
+}
+
+message JsonResponse {
+    string json = 1;
+}
+
 service Pahkat {
     rpc Notifications(NotificationsRequest) returns (stream NotificationResponse) {}
 
@@ -199,6 +209,7 @@ service Pahkat {
     rpc RepositoryIndexes(RepositoryIndexesRequest) returns (RepositoryIndexesResponse) {}
     rpc ProcessTransaction(stream TransactionRequest) returns (stream TransactionResponse) {}
     rpc Strings(StringsRequest) returns (StringsResponse) {}
+    rpc ResolvePackageQuery(JsonRequest) returns (JsonResponse) {}
     
     // CRUD for repositories
     rpc SetRepo(SetRepoRequest) returns (SetRepoResponse) {}

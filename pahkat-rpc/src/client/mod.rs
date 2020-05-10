@@ -370,6 +370,24 @@ pub extern "C" fn pahkat_rpc_strings(
     response
 }
 
+#[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
+pub extern "C" fn pahkat_rpc_resolve_package_query(
+    #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
+    #[marshal(cursed::StrMarshaler::<'_>)]
+    package_query: &str,
+) -> Result<Vec<pahkat_client::transaction::ResolvedDescriptor>, Box<dyn Error>> {
+    let request = Request::new(pb::JsonRequest {
+        json: package_query.to_string(),
+    });
+
+    let response: Result<pb::JsonResponse, Box<dyn Error>> = block_on(async move {
+        let mut client = client.write().await;
+        let response = client.resolve_package_query(request).await.box_err()?;
+        Ok(response.into_inner())
+    });
+
+    serde_json::from_str(&response?.json).box_err()
+}
 
 #[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
 pub extern "C" fn pahkat_rpc_process_transaction(

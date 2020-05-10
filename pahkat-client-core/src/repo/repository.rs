@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
+use pahkat_types::PackageKey;
 use crate::pahkat_fbs;
 
 #[derive(Debug, thiserror::Error)]
@@ -28,7 +29,6 @@ pub struct LoadedRepositoryMeta {
 pub struct LoadedRepository {
     pub info: pahkat_types::repo::Index,
     pub packages: Box<[u8]>,
-    // strings: pahkat_types::strings::
     pub meta: LoadedRepositoryMeta,
 }
 
@@ -100,5 +100,9 @@ impl LoadedRepository {
 
     pub fn meta(&self) -> &LoadedRepositoryMeta {
         &self.meta
+    }
+
+    pub fn package_key(&self, descriptor: &pahkat_types::package::Descriptor) -> PackageKey {
+        PackageKey::new_unchecked(self.info.repository.url.to_owned(), descriptor.package.id.clone(), None)
     }
 }

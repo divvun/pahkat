@@ -37,7 +37,7 @@ impl PackageKey {
         self
     }
 
-    pub(crate) fn unchecked_new(
+    pub fn new_unchecked(
         repository_url: Url,
         id: String,
         args: Option<PackageKeyParams>,

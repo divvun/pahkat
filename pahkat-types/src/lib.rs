@@ -2,6 +2,7 @@ pub mod package;
 pub mod payload;
 pub mod repo;
 pub mod synth;
+pub mod package_key;
 
 /// Will be replaced with a validating Map in the future.
 ///
@@ -12,6 +13,7 @@ pub type LangTagMap<T> = std::collections::BTreeMap<String, T>;
 pub type DependencyMap = std::collections::BTreeMap<String, String>;
 
 pub use payload::AsDownloadUrl;
+pub use package_key::PackageKey;
 
 #[cfg(test)]
 mod tests {

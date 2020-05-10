@@ -1,11 +1,12 @@
 use std::fmt;
 use std::sync::Arc;
-
-use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
+use serde::{Deserialize, Serialize};
+use url::Url;
+
 use crate::package_store::PackageStore;
-use crate::PackageKey;
+use pahkat_types::PackageKey;
 
 pub mod install;
 pub mod uninstall;
@@ -219,6 +220,58 @@ pub struct PackageTransaction {
 }
 
 use crate::repo::PackageCandidateError;
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedRelease {
+    pub version: pahkat_types::package::Version,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub authors: Vec<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub license: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub license_url: Option<Url>,
+
+    pub target: pahkat_types::payload::Target,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+pub struct ResolvedDescriptor {
+    pub key: PackageKey,
+    pub status: PackageStatus,
+
+    pub tags: Vec<String>,
+    pub name: pahkat_types::LangTagMap<String>,
+    pub description: pahkat_types::LangTagMap<String>,
+    pub release: ResolvedRelease,
+}
+
+impl ResolvedRelease {
+    pub fn new(release: Release, target: Target) -> ResolvedRelease {
+        ResolvedRelease {
+            version: release.version,
+            channel: release.channel,
+            authors: release.authors,
+            license: release.license,
+            license_url: release.license_url,
+            target,
+        }
+    }
+}
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedPackageQuery {
+    pub descriptors: Vec<ResolvedDescriptor>,
+    pub size: u64,
+    pub installed_size: u64,
+    pub status: PackageStatus,
+}
 
 impl PackageTransaction {
     pub fn new(

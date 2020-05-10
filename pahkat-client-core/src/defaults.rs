@@ -7,7 +7,11 @@ use url::Url;
 pub fn config_path() -> Option<PathBuf> {
     if cfg!(windows) && whoami::username() == "SYSTEM" {
         // TODO: Do not hardcode this.
-        Some(Path::new(r"C:\ProgramData\Pahkat\config").to_path_buf())
+        return Some(Path::new(r"C:\ProgramData\Pahkat\config").to_path_buf());
+    }
+    
+    if cfg!(target_os = "macos") && whoami::username() == "root" {
+        Some(Path::new(r"/Library/Preferences/Pahkat").to_path_buf())
     } else {
         BaseDirs::new().map(|x| x.config_dir().join("Pahkat").to_path_buf())
     }
@@ -18,18 +22,27 @@ pub fn config_path() -> Option<PathBuf> {
 fn raw_cache_dir() -> Option<PathBuf> {
     if cfg!(windows) && whoami::username() == "SYSTEM" {
         // TODO: Do not hardcode this.
-        Some(Path::new(r"C:\ProgramData\Pahkat\cache").to_path_buf())
+        return Some(Path::new(r"C:\ProgramData\Pahkat\cache").to_path_buf());
+    }
+    
+    if cfg!(target_os = "macos") && whoami::username() == "root" {
+        Some(Path::new(r"/Library/Caches/Pahkat").to_path_buf())
     } else {
-        BaseDirs::new().map(|x| x.cache_dir().to_path_buf())
+        let dir = BaseDirs::new().map(|x| x.cache_dir().components().as_path().to_path_buf())?;
+        std::fs::create_dir_all(&dir).ok()?;
+        dir.canonicalize().ok()
     }
 }
 
 #[inline(always)]
-#[cfg(windows)]
 pub fn log_path() -> Option<PathBuf> {
-    if whoami::username() == "SYSTEM" {
+    if cfg!(windows) && whoami::username() == "SYSTEM" {
         // TODO: Do not hardcode this.
-        Some(Path::new(r"C:\ProgramData\Pahkat\log").to_path_buf())
+        return Some(Path::new(r"C:\ProgramData\Pahkat\log").to_path_buf())
+    }
+    
+    if cfg!(target_os = "macos") && whoami::username() == "root" {
+        Some(Path::new(r"/Library/Logs/Pahkat").to_path_buf())
     } else {
         None
     }

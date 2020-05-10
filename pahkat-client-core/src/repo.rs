@@ -1,28 +1,27 @@
-mod package_key;
 mod repository;
 
-pub use package_key::PackageKey;
+pub use pahkat_types::PackageKey;
 pub use repository::{LoadedRepository, RepoDownloadError};
 
 use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 use std::path::Path;
-use std::pin::Pin;
 use std::sync::{Arc, RwLock};
 
-use dashmap::DashMap;
-use futures::future::{Future, FutureExt};
+use futures::future::FutureExt;
+use futures::stream::StreamExt;
 use hashbrown::HashMap;
 use sha2::digest::Digest;
 use sha2::Sha256;
 use thiserror::Error;
 use url::Url;
 
+use crate::package_store::DownloadEvent;
 use crate::config::Config;
 use crate::defaults;
 use crate::fbs::PackagesExt;
 use crate::package_store::PackageStore;
-use crate::transaction::{PackageDependencyError, PackageStatus, PackageStatusError};
+use crate::transaction::{ResolvedDescriptor, ResolvedPackageQuery, PackageStatus, PackageStatusError};
 use pahkat_types::package::{Package, Release, Version, Descriptor};
 use pahkat_types::payload::Target;
 
@@ -273,6 +272,100 @@ pub(crate) fn resolve_package<'a>(
     Ok(descriptor)
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct PackageQuery {
+    pub keys: Option<Vec<PackageKey>>,
+    pub tags: Option<Vec<String>>,
+    pub channel: Option<String>,
+}
+
+pub(crate) fn resolve_package_query<'a>(
+    store: &dyn PackageStore,
+    query: &PackageQuery,
+    install_target: &[InstallTarget],
+    repos: &'a HashMap<Url, LoadedRepository>,
+) -> ResolvedPackageQuery {
+    log::debug!("resolve_package_query {:?} {:?}", query, install_target);
+
+    use crate::fbs::DescriptorExt;
+
+    // Only supports tags right now
+    if let Some(tags) = query.tags.as_ref() {
+        log::debug!("In tags");
+        let descriptors: Vec<ResolvedDescriptor> = repos.values()
+            .flat_map(|repo| {
+                let repo_url = repo.info().repository.url.clone();
+
+                log::debug!("Repo: {:?}", repo_url);
+
+                // Collect all matching descriptors into one list
+                repo.packages().packages().unwrap().iter()
+                    .map(|(_, pkg)| pkg)
+                    .filter(|pkg| {
+                        let pkg_tags = pkg.tags().unwrap().unwrap();
+                        pkg_tags.iter().any(|x| {
+                            let t = x.unwrap().to_string();
+                            log::debug!("Tag: {:?}", t);
+                            tags.contains(&t)
+                        })
+                    })
+                    .filter_map(move |pkg| {
+                        let key = PackageKey::new_unchecked(repo_url.clone(), pkg.id().unwrap().to_string(), None);
+                        let status = install_target.iter().fold(None, |acc, cur| {
+                            match acc {
+                                Some(v) if v != PackageStatus::NotInstalled => Some(v),
+                                _ => store.status(&key, *cur).ok(),
+                            }
+                        })?;
+
+                        let descriptor = Descriptor::try_from(&pkg).ok()?;
+
+                        ReleaseQuery::new(&key, repos)
+                            .iter(&descriptor)
+                            .next()
+                            .map(|x| ResolvedDescriptor {
+                                key: key.clone(),
+                                status,
+                                tags: descriptor.package.tags.clone(),
+                                name: descriptor.name.clone(),
+                                description: descriptor.description.clone(),
+                                release: crate::transaction::ResolvedRelease::new(x.release.clone(), x.target.clone())
+                            })
+                    }).collect::<Vec<_>>()
+            }).collect();
+        let status = descriptors.iter().fold(PackageStatus::UpToDate, |acc, cur| {
+            match (acc, cur.status) {
+                // If currently requires update, nothing trumps this state
+                (PackageStatus::RequiresUpdate, _) => acc,
+                // Only requires update trumps NotInstalled
+                (PackageStatus::NotInstalled, PackageStatus::RequiresUpdate) => cur.status,
+                (PackageStatus::NotInstalled, PackageStatus::UpToDate) => PackageStatus::RequiresUpdate,
+                (PackageStatus::UpToDate, PackageStatus::NotInstalled) => PackageStatus::RequiresUpdate,
+                // Everything trumps UpToDate
+                (PackageStatus::UpToDate, v) => v,
+                _ => cur.status,
+            }
+        });
+        let size = descriptors.iter().fold(0, |acc, cur| acc + cur.release.target.payload.size());
+        let installed_size = descriptors.iter().fold(0, |acc, cur| acc + cur.release.target.payload.installed_size());
+
+        return ResolvedPackageQuery {
+            descriptors,
+            size,
+            installed_size,
+            status,
+        };
+    }
+
+    // Everyone else gets an empty vec.
+    ResolvedPackageQuery {
+        descriptors: vec![],
+        size: 0,
+        installed_size: 0,
+        status: PackageStatus::UpToDate,
+    }
+}
+
 pub(crate) fn resolve_payload<'a>(
     package_key: &PackageKey,
     query: &ReleaseQuery<'a>,
@@ -315,64 +408,6 @@ pub(crate) fn import<'a>(
     std::fs::copy(installer_path, &output_path)?;
     Ok(output_path)
 }
-
-use crate::package_store::DownloadEvent;
-use futures::stream::StreamExt;
-
-// pub(crate) fn download<'a>(
-//     config: &Arc<RwLock<Config>>,
-//     package_key: &PackageKey,
-//     query: &ReleaseQuery<'a>,
-//     repos: &HashMap<Url, LoadedRepository>,
-//     progress: Box<dyn Fn(u64, u64) -> bool + Send + 'static>,
-// ) -> Result<std::path::PathBuf, crate::download::DownloadError> {
-//     log::trace!("Downloading {} {:?}", package_key, &query);
-//     use pahkat_types::AsDownloadUrl;
-
-//     let (target, _, _) = match resolve_payload(package_key, &query, repos) {
-//         Ok(v) => v,
-//         Err(e) => {
-//             return {
-//                 log::error!(
-//                     "Failed to resolve: {} {:?} {:?}",
-//                     &package_key,
-//                     &query,
-//                     &repos
-//                 );
-//                 Err(crate::download::DownloadError::Payload(e))
-//             }
-//         }
-//     };
-
-//     let url = target.payload.as_download_url();
-
-//     let config = config.read().unwrap();
-//     let settings = config.settings();
-//     let dm = crate::download::DownloadManager::new(
-//         settings.download_cache_dir().to_path_buf(),
-//         settings.max_concurrent_downloads(),
-//     );
-
-//     let output_path = crate::repo::download_dir(&*config, url);
-//     crate::block_on(async move {
-//         let mut dl = dm.download(url, output_path).await?;
-
-//         while let Some(event) = dl.next().await {
-//             match event {
-//                 DownloadEvent::Error(e) => return Err(e),
-//                 DownloadEvent::Complete(p) => return Ok(p),
-//                 DownloadEvent::Progress((cur, total)) => {
-//                     if !(progress)(cur, total) {
-//                         break;
-//                     }
-//                 }
-//             }
-//         }
-
-//         Err(crate::download::DownloadError::UserCancelled)
-//     })
-// }
-
 #[must_use]
 pub(crate) fn download<'a>(
     config: &Arc<RwLock<Config>>,
@@ -482,7 +517,7 @@ pub(crate) fn all_statuses<'a>(
 
         for id in packages.keys() {
             let key =
-                PackageKey::unchecked_new(repo.info().repository.url.clone(), id.to_string(), None);
+                PackageKey::new_unchecked(repo.info().repository.url.clone(), id.to_string(), None);
             let status = store.status(&key, target);
             log::trace!("Package: {:?}, status: {:?}", &id, &status);
             map.insert(id.to_string(), status);
@@ -591,7 +626,7 @@ pub(crate) fn find_package_by_id(
         };
 
         packages.get(package_id).map(|x| {
-            let key = PackageKey::unchecked_new(
+            let key = PackageKey::new_unchecked(
                 repo.info().repository.url.clone(),
                 package_id.to_string(),
                 None,
@@ -705,7 +740,7 @@ fn resolve_package_candidate(
 
     let status = install_target.iter().fold(None, |acc, cur| {
         match acc {
-            Some(Ok(v)) => Some(Ok(v)),
+            Some(Ok(v)) if v != PackageStatus::NotInstalled => Some(Ok(v)),
             _ => {
                 Some(store.status(&package_key, *cur)
                     .map_err(|e| PackageCandidateError::Status(package_key.to_owned(), e)))
@@ -716,7 +751,6 @@ fn resolve_package_candidate(
     let (target, release, descriptor) = resolve_payload(package_key, &query, &*repos)
         .map_err(|e| PackageCandidateError::Payload(package_key.to_owned(), e))?;
 
-    use crate::transaction::PackageStatus;
     use pahkat_types::payload::Payload;
 
     let is_reboot_required = match &target.payload {

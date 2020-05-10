@@ -17,9 +17,9 @@ use url::Url;
 
 use super::{PackageStore, SharedRepos, SharedStoreConfig};
 use crate::package_store::{ImportError, InstallTarget, LocalizedStrings};
-use crate::repo::RepoDownloadError;
+use crate::repo::{PackageQuery, RepoDownloadError};
 use crate::transaction::{install::InstallError, install::ProcessError, uninstall::UninstallError};
-use crate::transaction::{PackageStatus, PackageStatusError};
+use crate::transaction::{PackageStatus, PackageStatusError, ResolvedDescriptor, ResolvedPackageQuery};
 use crate::{cmp, Config, PackageKey};
 
 #[cfg(target_os = "macos")]
@@ -194,6 +194,12 @@ impl PackageStore for MacOSPackageStore {
         let urls = repos.keys().cloned().collect::<Vec<_>>();
 
         Box::pin(crate::repo::strings(urls, language))
+    }
+
+    fn resolve_package_query(&self, query: PackageQuery, install_target: &[InstallTarget]) -> ResolvedPackageQuery {
+        let repos = self.repos();
+        let repos = repos.read().unwrap();
+        crate::repo::resolve_package_query(self, &query, install_target, &*repos)
     }
 }
 

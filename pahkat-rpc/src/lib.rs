@@ -41,6 +41,7 @@ impl From<RepoRecord> for pb::RepoRecord {
 
 impl From<pb::PackageAction> for PackageAction {
     fn from(input: pb::PackageAction) -> PackageAction {
+        log::trace!("pb PackageAction to PackageAction: {:?}", &input);
         PackageAction {
             id: PackageKey::try_from(&*input.id).unwrap(),
             action: PackageActionType::from_u8(input.action as u8),
@@ -129,6 +130,7 @@ impl From<pahkat_client::repo::LoadedRepository> for pb::LoadedRepository {
 enum Notification {
     RebootRequired,
     RepositoriesChanged,
+    RpcStopping,
 }
 
 type Result<T> = std::result::Result<Response<T>, Status>;
@@ -165,6 +167,10 @@ impl pb::pahkat_server::Pahkat for Rpc {
                             }
                             Notification::RepositoriesChanged => {
                                 yield pb::NotificationResponse { value: ValueType::RepositoriesChanged as i32 };
+                            }
+                            Notification::RpcStopping => {
+                                yield pb::NotificationResponse { value: ValueType::RpcStopping as i32 };
+                                break;
                             }
                         }
                     },
@@ -233,7 +239,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
         &self,
         request: Request<tonic::Streaming<pb::TransactionRequest>>,
     ) -> Result<Self::ProcessTransactionStream> {
-        let mut request = request.into_inner();
+        let request = request.into_inner();
         let store: Arc<dyn PackageStore> = Arc::clone(&self.store as _);
         let current_transaction = Arc::clone(&self.current_transaction);
 
@@ -294,8 +300,24 @@ impl pb::pahkat_server::Pahkat for Rpc {
                     .collect::<Vec<_>>();
                 println!("{:?}", &actions);
 
-                let transaction =
-                    PackageTransaction::new(Arc::clone(&store) as _, actions).unwrap(); // .map_err(|e| Status::failed_precondition(format!("{}", e)))?;
+                let transaction = match PackageTransaction::new(Arc::clone(&store) as _, actions) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        let response = pb::TransactionResponse {
+                            value: Some(pb::transaction_response::Value::TransactionError(pb::transaction_response::TransactionError {
+                                package_id: "".to_string(),
+                                error: format!("{}", e)
+                            }))
+                        };
+                        match tx.send(Ok(response)) {
+                            Ok(_) => {}
+                            Err(err) => {
+                                log::error!("{:?}", err);
+                            }
+                        }
+                        break 'listener;
+                    }
+                };
 
                 let store = Arc::clone(&store);
                 let current_transaction = Arc::clone(&current_transaction);
@@ -554,6 +576,19 @@ impl pb::pahkat_server::Pahkat for Rpc {
             error: "".into(),
         }))
     }
+
+    async fn resolve_package_query(&self, request: Request<pb::JsonRequest>) -> Result<pb::JsonResponse> {
+        log::debug!("Received resolve_package_query request: {:?}", &request);
+        let json = request.into_inner().json;
+        let query: pahkat_client::repo::PackageQuery = serde_json::from_str(&json)
+            .map_err(|e| Status::failed_precondition(format!("{}", e)))?;
+
+        let results = self.store.resolve_package_query(query, &[InstallTarget::System, InstallTarget::User]);
+        log::debug!("resolve_package_query results: {:?}", &results);
+        Ok(tonic::Response::new(pb::JsonResponse {
+            json: serde_json::to_string(&results).unwrap(),
+        }))
+    }
 }
 
 use std::path::Path;
@@ -579,6 +614,8 @@ async fn store(config_path: Option<&Path>) -> anyhow::Result<Arc<dyn PackageStor
         Some(v) => pahkat_client::Config::load(&v, pahkat_client::Permission::ReadWrite)?,
         None => pahkat_client::Config::load_default()?,
     };
+    log::debug!("{:?}", &config);
+
     let store = pahkat_client::MacOSPackageStore::new(config).await;
     let store = Arc::new(store);
 
@@ -607,40 +644,52 @@ async fn store(config_path: Option<&Path>) -> anyhow::Result<Arc<dyn PackageStor
     Ok(store)
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(feature = "launchd")))]
 #[inline(always)]
 fn endpoint(path: &Path) -> std::result::Result<UnixListener, anyhow::Error> {
-    if cfg!(feature = "launchd") {
-        use std::os::unix::io::FromRawFd;
-        let fds = raunch::activate_socket("pahkat")?;
-        let std_listener = unsafe { std::os::unix::net::UnixListener::from_raw_fd(fds[0]) };
-        Ok(tokio::net::UnixListener::from_std(std_listener).unwrap())
-    } else {
-        use std::os::unix::fs::FileTypeExt;
+    use std::os::unix::fs::FileTypeExt;
 
-        match std::fs::metadata(path) {
-            Ok(v) => {
-                log::warn!(
-                    "Unexpected file found at Unix socket path: {}",
-                    &path.display()
-                );
-                if v.file_type().is_socket() {
-                    std::fs::remove_file(&path)?;
-                    log::warn!("Deleted stale socket.");
-                } else {
-                    log::error!("File is not a Unix socket, refusing to clean up automatically.");
-                    anyhow::bail!("Unexpected file at desired Unix socket path ({}) cannot be automatically cleaned up.", &path.display());
-                }
+    match std::fs::metadata(path) {
+        Ok(v) => {
+            log::warn!(
+                "Unexpected file found at Unix socket path: {}",
+                &path.display()
+            );
+            if v.file_type().is_socket() {
+                std::fs::remove_file(&path)?;
+                log::warn!("Deleted stale socket.");
+            } else {
+                log::error!("File is not a Unix socket, refusing to clean up automatically.");
+                anyhow::bail!("Unexpected file at desired Unix socket path ({}) cannot be automatically cleaned up.", &path.display());
             }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => {
-                log::error!("{}", &e);
-                return Err(e.into());
-            }
-        };
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            log::error!("{}", &e);
+            return Err(e.into());
+        }
+    };
 
-        Ok(tokio::net::UnixListener::bind(&path).unwrap())
-    }
+    use std::os::unix::fs::PermissionsExt;
+
+    let socket = tokio::net::UnixListener::bind(&path).unwrap();
+    let mut meta = std::fs::metadata(&path)?;
+    let mut permissions = meta.permissions();
+    permissions.set_mode(0o777);
+    std::fs::set_permissions(&path, permissions)?;
+
+    // log::trace!("UDS mode: {:o}", permissions.mode());
+
+    Ok(socket)
+}
+
+#[cfg(all(unix, feature = "launchd"))]
+#[inline(always)]
+fn endpoint(path: &Path) -> std::result::Result<UnixListener, anyhow::Error> {
+    use std::os::unix::io::FromRawFd;
+    let fds = raunch::activate_socket("pahkat")?;
+    let std_listener = unsafe { std::os::unix::net::UnixListener::from_raw_fd(fds[0]) };
+    Ok(tokio::net::UnixListener::from_std(std_listener).unwrap())
 }
 
 fn create_background_update_service(
@@ -699,7 +748,7 @@ fn create_background_update_service(
                         log::debug!(" - {:?}: {:?}", &key, &value);
                         if let Ok(PackageStatus::RequiresUpdate) = value {
                             updates.push((
-                                pahkat_client::PackageKey {
+                                pahkat_client::types::PackageKey {
                                     repository_url: url.clone(),
                                     id: key,
                                     query: Default::default(),
@@ -804,7 +853,7 @@ pub async fn start(
 
     let rpc = Rpc {
         store: Arc::clone(&store),
-        notifications,
+        notifications: notifications.clone(),
         current_transaction: Arc::clone(&current_transaction),
     };
 
@@ -812,7 +861,7 @@ pub async fn start(
         .add_service(pb::pahkat_server::PahkatServer::new(rpc))
         .serve_with_incoming_shutdown(
             endpoint.incoming().map_ok(StreamBox),
-            shutdown_handler(shutdown_rx, Arc::clone(&current_transaction))?,
+            shutdown_handler(shutdown_rx, notifications, Arc::clone(&current_transaction))?,
         )
         .await?;
 
@@ -826,6 +875,7 @@ pub async fn start(
 #[cfg(unix)]
 fn shutdown_handler(
     mut shutdown_rx: mpsc::UnboundedReceiver<()>,
+    mut broadcast_tx: broadcast::Sender<Notification>,
     current_transaction: Arc<tokio::sync::Mutex<()>>,
 ) -> anyhow::Result<Pin<Box<dyn std::future::Future<Output = ()>>>, anyhow::Error> {
     let sigint_listener = signal(SignalKind::interrupt())?.into_future();
@@ -857,6 +907,8 @@ fn shutdown_handler(
         log::info!("Attempting to attain transaction lock...");
         current_transaction.lock().await;
         log::info!("Lock attained!");
+
+        let _ = broadcast_tx.send(Notification::RpcStopping);
         ()
     }))
 }
@@ -884,7 +936,7 @@ pub async fn start(
 
     let rpc = Rpc {
         store: Arc::clone(&store),
-        notifications,
+        notifications: notifications.clone(),
         current_transaction: Arc::clone(&current_transaction),
     };
 
@@ -892,7 +944,7 @@ pub async fn start(
         .add_service(pb::pahkat_server::PahkatServer::new(rpc))
         .serve_with_incoming_shutdown(
             incoming.map_ok(StreamBox),
-            shutdown_handler(shutdown_rx, Arc::clone(&current_transaction)),
+            shutdown_handler(shutdown_rx, notifications, Arc::clone(&current_transaction)),
         )
         .await?;
 
@@ -903,6 +955,7 @@ pub async fn start(
 #[cfg(windows)]
 fn shutdown_handler(
     mut shutdown_rx: mpsc::UnboundedReceiver<()>,
+    mut broadcast_tx: broadcast::Sender<Notification>,
     current_transaction: Arc<tokio::sync::Mutex<()>>,
 ) -> impl std::future::Future<Output = ()> {
     let ctrl_c = tokio::signal::ctrl_c();
@@ -920,6 +973,8 @@ fn shutdown_handler(
         log::info!("Attempting to attain transaction lock...");
         current_transaction.lock().await;
         log::info!("Lock attained!");
+
+        let _ = broadcast_tx.send(Notification::RpcStopping);
         ()
     }
 }

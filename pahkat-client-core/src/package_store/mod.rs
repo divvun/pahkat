@@ -17,9 +17,9 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::config::Config;
-use crate::repo::RepoDownloadError;
+use crate::repo::{PackageQuery, RepoDownloadError};
 use crate::transaction::{install::InstallError, uninstall::UninstallError};
-use crate::transaction::{PackageStatus, PackageStatusError};
+use crate::transaction::{PackageStatus, PackageStatusError, ResolvedDescriptor, ResolvedPackageQuery};
 use crate::{LoadedRepository, PackageKey};
 
 pub type SharedStoreConfig = Arc<RwLock<Config>>;
@@ -138,4 +138,8 @@ pub trait PackageStore: Send + Sync {
     }
 
     fn strings(&self, language: String) -> Future<HashMap<Url, LocalizedStrings>>;
+
+    // #[export::experimental]
+    fn resolve_package_query(&self, query: PackageQuery, install_target: &[InstallTarget]) -> ResolvedPackageQuery;
+
 }

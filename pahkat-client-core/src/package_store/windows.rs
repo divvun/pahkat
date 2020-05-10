@@ -14,10 +14,10 @@ use winreg::enums::*;
 use winreg::RegKey;
 
 use crate::package_store::{ImportError, InstallTarget};
-use crate::repo::RepoDownloadError;
+use crate::repo::{PackageQuery, RepoDownloadError};
 use crate::transaction::{
     install::InstallError, install::ProcessError, uninstall::UninstallError, PackageStatus,
-    PackageStatusError,
+    PackageStatusError, ResolvedDescriptor
 };
 use crate::Config;
 use crate::{repo::PayloadError, LoadedRepository, PackageKey, PackageStore};
@@ -302,6 +302,12 @@ impl PackageStore for WindowsPackageStore {
         let urls = repos.keys().cloned().collect::<Vec<_>>();
 
         Box::pin(crate::repo::strings(urls, language))
+    }
+
+    fn resolve_package_query(&self, query: PackageQuery, install_target: &[InstallTarget]) -> ResolvedPackageQuery {
+        let repos = self.repos();
+        let repos = repos.read().unwrap();
+        crate::repo::resolve_package_query(self, &query, install_target, &*repos)
     }
 }
 
