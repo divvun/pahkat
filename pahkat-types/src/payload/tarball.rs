@@ -6,8 +6,7 @@ use typed_builder::TypedBuilder;
 )]
 #[serde(transparent)]
 #[repr(transparent)]
-#[doc(hidden)]
-pub struct PayloadType(String);
+struct PayloadType(String);
 
 impl Default for PayloadType {
     fn default() -> Self {
@@ -20,7 +19,7 @@ impl Default for PayloadType {
 )]
 #[cfg_attr(feature = "structopt", derive(structopt::StructOpt))]
 pub struct Package {
-    #[builder(default)]
+    #[builder(default, setter(skip))]
     #[serde(rename = "type")]
     #[cfg_attr(feature = "structopt", structopt(skip))]
     _type: PayloadType,
