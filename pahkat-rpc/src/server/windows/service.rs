@@ -194,6 +194,7 @@ async fn service_runner() -> Result<()> {
         exit_code: ServiceExitCode::Win32(0),
         checkpoint: 0,
         wait_hint: Duration::default(),
+        process_id: None,
     })?;
 
     log::debug!("i'm running");
@@ -208,6 +209,7 @@ async fn service_runner() -> Result<()> {
         exit_code: ServiceExitCode::Win32(0),
         checkpoint: 0,
         wait_hint: Duration::default(),
+        process_id: None,
     })?;
 
     Ok(())
