@@ -225,7 +225,6 @@ pub extern "C" fn pahkat_rpc_slice_free(slice: cursed::Slice<u8>) {
 pub extern "C" fn pahkat_rpc_repo_indexes(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
 ) -> Result<pb::RepositoryIndexesResponse, Box<dyn Error>> {
-    eprintln!("pahkat_rpc_repo_indexes");
     let request = Request::new(pb::RepositoryIndexesRequest {});
 
     let response = block_on(async move {
