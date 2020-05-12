@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macOS-latest]
+        os: [ubuntu-latest, windows-latest]
 
     steps:
     - name: Checkout repository
@@ -146,10 +146,10 @@ jobs:
         uses: actions/download-artifact@v1
         with:
           name: repomgr-windows-latest
-      - name: Download macOS Binary
-        uses: actions/download-artifact@v1
-        with:
-          name: repomgr-macOS-latest
+      # - name: Download macOS Binary
+      #   uses: actions/download-artifact@v1
+      #   with:
+      #     name: repomgr-macOS-latest
 
       - name: Create Release
         id: create_release
@@ -179,12 +179,12 @@ jobs:
           asset_path: ./repomgr-windows-latest/pahkat-repomgr.exe
           asset_name: pahkat-repomgr${{ env.PACKAGE_VERSION }}_windows_amd64.exe
           asset_content_type: application/octet-stream
-      - name: Upload artifact macOS
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./repomgr-macOS-latest/repomgr.tar.xz
-          asset_name: pahkat_repomgr_${{ env.PACKAGE_VERSION }}_macos_amd64.tar.xz
-          asset_content_type: application/octet-stream
+      # - name: Upload artifact macOS
+      #   uses: actions/upload-release-asset@v1
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   with:
+      #     upload_url: ${{ steps.create_release.outputs.upload_url }}
+      #     asset_path: ./repomgr-macOS-latest/repomgr.tar.xz
+      #     asset_name: pahkat_repomgr_${{ env.PACKAGE_VERSION }}_macos_amd64.tar.xz
+      #     asset_content_type: application/octet-stream
