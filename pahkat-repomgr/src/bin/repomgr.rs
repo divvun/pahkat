@@ -89,14 +89,14 @@ struct PackageUpdateCommand {
     #[structopt(short = "-r", long, parse(from_os_str))]
     repo_path: Option<PathBuf>,
 
+    #[structopt(short = "-i", long, parse(from_os_str))]
+    payload_path: Option<PathBuf>,
+
     #[structopt(short, long)]
     platform: Option<String>,
 
     #[structopt(short, long)]
     channel: Option<String>,
-
-    #[structopt(short, long)]
-    url: Option<url::Url>,
 
     #[structopt(short, long)]
     version: Option<Version>,
@@ -108,9 +108,9 @@ impl PackageUpdateCommand {
             .id(self.id.as_ref().map(|x| &**x))
             .platform(self.platform.as_ref().map(|x| &**x))
             .version(self.version.as_ref().map(|x| &*x))
-            .url(self.url.as_ref().map(|x| &*x))
+            .payload_path(self.payload_path.as_ref().map(|x| &**x))
             .repo_path(self.repo_path.as_ref().map(|x| &**x))
-            .channel(self.channel.as_ref().map(|x| Some(&**x)).or(Some(None)))
+            .channel(self.channel.as_ref().map(|x| &**x))
             .build()
     }
 }

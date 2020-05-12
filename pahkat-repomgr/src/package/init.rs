@@ -52,8 +52,8 @@ pub enum FindRepoError {
 }
 
 fn open_repo(path: &Path) -> Option<pahkat_types::repo::Repository> {
-    let file = dbg!(fs::read_to_string(path.join("index.toml"))).ok()?;
-    let repo: pahkat_types::repo::Repository = dbg!(toml::from_str(&file)).ok()?;
+    let file = fs::read_to_string(path.join("index.toml")).ok()?;
+    let repo: pahkat_types::repo::Repository = toml::from_str(&file).ok()?;
     Some(repo)
 }
 
