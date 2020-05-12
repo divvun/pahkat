@@ -136,8 +136,7 @@ pub async fn run() -> anyhow::Result<()> {
 
             let response = client.strings(request).await?;
             println!("{:?}", response);
-        } // Args::SetRepos
-          // Args::Refresh
+        }
     }
     Ok(())
 }
@@ -221,10 +220,12 @@ pub extern "C" fn pahkat_rpc_free(ptr: *const RwLock<PahkatClient>) {
 pub extern "C" fn pahkat_rpc_slice_free(slice: cursed::Slice<u8>) {
     unsafe { let _ = cursed::VecMarshaler::from_foreign(slice); }
 }
+
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_rpc_repo_indexes(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
 ) -> Result<pb::RepositoryIndexesResponse, Box<dyn Error>> {
+    eprintln!("pahkat_rpc_repo_indexes");
     let request = Request::new(pb::RepositoryIndexesRequest {});
 
     let response = block_on(async move {
@@ -234,7 +235,7 @@ pub extern "C" fn pahkat_rpc_repo_indexes(
         hold_on
     })?;
 
-    let response: pb::RepositoryIndexesResponse = response.into_inner();
+    let response = response.into_inner();
     Ok(response)
 }
 
@@ -375,7 +376,7 @@ pub extern "C" fn pahkat_rpc_resolve_package_query(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
     #[marshal(cursed::StrMarshaler::<'_>)]
     package_query: &str,
-) -> Result<Vec<pahkat_client::transaction::ResolvedDescriptor>, Box<dyn Error>> {
+) -> Result<pahkat_client::transaction::ResolvedPackageQuery, Box<dyn Error>> {
     let request = Request::new(pb::JsonRequest {
         json: package_query.to_string(),
     });
@@ -437,40 +438,6 @@ pub extern "C" fn pahkat_rpc_process_transaction(
     Ok(())
 }
 
-// #[derive(Debug, Clone, Serialize)]
-// struct CallbackTransactionResponse {
-//     #[serde(rename = "type")]
-//     ty: &'static str,
-
-//     #[serde(flatten)]
-//     value: pb::transaction_response::Value,
-// }
-
-// impl CallbackTransactionResponse {
-//     fn new(ty: &'static str, value: pb::transaction_response::Value) -> CallbackTransactionResponse {
-//         CallbackTransactionResponse {
-//             ty, value
-//         }
-//     }
-// }
-
-// impl From<pb::transaction_response::Value> for CallbackTransactionResponse {
-//     fn from(response: pb::transaction_response::Value) -> CallbackTransactionResponse {
-//         use pb::transaction_response::Value::*;
-
-//         match response {
-//             TransactionStarted(_) => Self::new("TransactionStarted", response),
-//             TransactionError(_) => Self::new("TransactionError", response),
-//             TransactionComplete(_) => Self::new("TransactionComplete", response),
-//             TransactionProgress(_) => Self::new("TransactionProgress", response),
-//             DownloadProgress(_) => Self::new("DownloadProgress", response),
-//             DownloadComplete(_) => Self::new("DownloadComplete", response),
-//             InstallStarted(_) => Self::new("InstallStarted", response),
-//             UninstallStarted(_) => Self::new("UninstallStarted", response),
-//         }
-//     }
-// }
-
 static CURRENT_CANCEL_TX: Lazy<std::sync::Mutex<std::cell::RefCell<Option<
     tokio::sync::mpsc::UnboundedSender<pb::TransactionRequest>
 >>>> = Lazy::new(|| std::sync::Mutex::new(std::cell::RefCell::new(None)));
@@ -488,7 +455,9 @@ static BASIC_RUNTIME: Lazy<std::sync::RwLock<tokio::runtime::Runtime>> = Lazy::n
 
 #[inline(always)]
 fn block_on<F: std::future::Future>(future: F) -> F::Output {
-    BASIC_RUNTIME.write().unwrap().block_on(future)
+    let rt = BASIC_RUNTIME.read().unwrap();
+    let handle = rt.handle();
+    handle.block_on(future)
 }
 
 #[inline(always)]
@@ -497,7 +466,9 @@ where
     F: std::future::Future + Send + 'static,
     F::Output: Send
 {
-    BASIC_RUNTIME.write().unwrap().spawn(future)
+    let rt = BASIC_RUNTIME.read().unwrap();
+    let handle = rt.handle();
+    handle.spawn(future)
 }
 
 
