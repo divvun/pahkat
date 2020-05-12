@@ -131,13 +131,12 @@ enum PackageCommand {
 enum Command {
     Repo(RepoCommand),
     Package(PackageCommand),
+    Payload(pahkat_types::payload::Payload),
 }
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
-
     let args = Args::from_args();
-    println!("{:?}", args);
 
     match args.command {
         Command::Repo(repo) => match repo {
@@ -160,6 +159,9 @@ fn main() -> anyhow::Result<()> {
                 package::update::update(req)?;
             }
         },
+        Command::Payload(payload) => {
+            println!("{}", toml::to_string_pretty(&payload)?);
+        }
     }
 
     Ok(())

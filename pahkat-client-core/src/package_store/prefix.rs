@@ -15,7 +15,7 @@ use xz2::read::XzDecoder;
 use super::InstallTarget;
 use crate::repo::RepoDownloadError;
 use crate::transaction::{
-    install::InstallError, uninstall::UninstallError, PackageDependencyError,
+    install::InstallError, uninstall::UninstallError, PackageDependencyError, ResolvedPackageQuery,
 };
 use crate::{
     cmp, download::Download, download::DownloadManager, package_store::ImportError,

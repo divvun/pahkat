@@ -133,8 +133,8 @@ pub async fn start_service() -> Result<()> {
             break;
         }
 
-        if let Err(e) = service.start(&[OsStr::new("shitty types")]) {
-            dbg!(e);
+        if let Err(e) = service.start(&[OsStr::new("")]) {
+            log::error!("{:?}", e);
             break;
         }
 

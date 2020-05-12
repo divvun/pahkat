@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
+use super::parse_set;
 
 #[derive(
     Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord
@@ -15,33 +16,74 @@ pub enum RebootSpec {
     Update,
 }
 
+#[derive(thiserror::Error, Debug)]
+#[error("Not a valid string for type")]
+pub struct FromStrError;
+
+impl FromStr for RebootSpec {
+    type Err = FromStrError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "install" => Ok(RebootSpec::Install),
+            "uninstall" => Ok(RebootSpec::Uninstall),
+            "update" => Ok(RebootSpec::Update),
+            _ => Err(FromStrError),
+        }
+    }
+}
+
+#[derive(
+    Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord
+)]
+#[serde(transparent)]
+#[repr(transparent)]
+#[doc(hidden)]
+pub struct PayloadType(String);
+
+impl Default for PayloadType {
+    fn default() -> Self {
+        PayloadType("WindowsExecutable".into())
+    }
+}
+
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
+#[cfg_attr(feature = "structopt", derive(structopt::StructOpt))]
 pub struct Executable {
-    #[builder(default = "WindowsExecutable".into())]
+    #[builder(default)]
     #[serde(rename = "type")]
-    _type: String,
+    #[cfg_attr(feature = "structopt", structopt(skip))]
+    _type: PayloadType,
 
+    #[cfg_attr(feature = "structopt", structopt(short, long))]
     pub url: url::Url,
+    #[cfg_attr(feature = "structopt", structopt(short, long))]
     pub product_code: String,
+    #[cfg_attr(feature = "structopt", structopt(short, long))]
     pub size: u64,
+    #[cfg_attr(feature = "structopt", structopt(short, long))]
     pub installed_size: u64,
 
     /// The type of installer (msi, nsis, etc)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[builder(default)]
+    #[cfg_attr(feature = "structopt", structopt(short, long))]
     pub kind: Option<String>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[builder(default)]
+    #[cfg_attr(feature = "structopt", structopt(short = "I", long))]
     pub args: Option<String>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[builder(default)]
+    #[cfg_attr(feature = "structopt", structopt(short = "U", long))]
     pub uninstall_args: Option<String>,
 
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    #[cfg_attr(feature = "structopt", structopt(default_value = "", short, long, parse(try_from_str = parse_set)))]
     #[builder(default)]
     pub requires_reboot: BTreeSet<RebootSpec>,
 }

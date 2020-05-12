@@ -2,16 +2,28 @@ pub mod macos;
 pub mod tarball;
 pub mod windows;
 
+use std::collections::BTreeSet;
+use std::convert::TryFrom;
+use std::str::FromStr;
+
 use crate::DependencyMap;
 use serde::{Deserialize, Serialize};
-use std::convert::TryFrom;
 use typed_builder::TypedBuilder;
+
+pub(crate) fn parse_set<T: FromStr + Ord>(s: &str) -> Result<BTreeSet<T>, T::Err> {
+    if s == "" {
+        return Ok(BTreeSet::new());
+    }
+    s.split(",").map(|x| T::from_str(x.trim())).collect::<Result<BTreeSet<T>, _>>()
+} 
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[serde(untagged)] // #[serde(tag = "_type")]
 #[non_exhaustive]
+#[cfg_attr(feature = "structopt", derive(structopt::StructOpt))]
 pub enum Payload {
     WindowsExecutable(windows::Executable),
+    #[cfg_attr(feature = "structopt", structopt(name = "macos-package"))]
     MacOSPackage(macos::Package),
     TarballPackage(tarball::Package),
 }
