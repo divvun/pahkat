@@ -53,7 +53,6 @@ impl DownloadManager {
         &self,
         url: &Url,
         dest_path: P,
-        // progress: Option<F>,
     ) -> Result<
         std::pin::Pin<
             Box<dyn futures::stream::Stream<Item = DownloadEvent> + Send + Sync + 'static>,
@@ -213,6 +212,9 @@ impl DownloadManager {
             };
             yield DownloadEvent::Complete(dest_file_path);
         };
+
+        // Stop the stream overwhelming receivers.
+        let stream = tokio::time::throttle(std::time::Duration::from_millis(750), stream);
 
         Ok(Box::pin(stream))
     }
