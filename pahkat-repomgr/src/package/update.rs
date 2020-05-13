@@ -179,7 +179,7 @@ impl<'a> crate::Request for Request<'a> {
             platform,
             version,
             payload: Cow::Owned(payload),
-            url: None,
+            url: partial.url.map(|x| Cow::Borrowed(x)),
         })
     }
 }
@@ -201,22 +201,30 @@ pub enum Error {
 
 pub fn update<'a>(request: Request<'a>) -> anyhow::Result<()> {
     use std::ops::Deref;
-    println!("{:?}", request);
+    log::debug!("{:?}", request);
 
     let pkg_dir = find_repo(&request.repo_path)?
         .join("packages")
         .join(&*request.id);
 
     let pkg_path = pkg_dir.join("index.toml");
+    log::debug!("Loading {}", pkg_path.display());
+    
     let pkg_file = std::fs::read_to_string(&pkg_path)?;
     let mut descriptor: pahkat_types::package::Descriptor = toml::from_str(&pkg_file)?;
+
+    log::debug!("Loaded {}", pkg_path.display());
 
     let channel = request.channel.as_ref().map(|x| x.deref().to_string());
 
     // Check if a release exists that meets this criteria
     let mut release = match descriptor.release.iter_mut().find(|x| &x.version == &*request.version && x.channel == channel) {
-        Some(release) => release,
+        Some(release) => {
+            log::info!("Found release!");
+            release
+        },
         None => {
+            log::info!("No release; creating.");
             // Insert new releases at front
             descriptor.release.insert(0, pahkat_types::package::Release::builder()
                 .channel(channel)
@@ -229,10 +237,12 @@ pub fn update<'a>(request: Request<'a>) -> anyhow::Result<()> {
     // Check if a target exists that meets this criteria
     let mut target = match release.target.iter_mut().find(|x| x.platform == request.platform) {
         Some(target) => {
+            log::info!("Found target!");
             target.payload = request.payload.deref().clone();
             target
         }
         None => {
+            log::info!("No target; creating.");
             release.target.insert(0, pahkat_types::payload::Target::builder()
                 .platform(request.platform.to_string())
                 .payload(request.payload.deref().clone()).build());
@@ -241,6 +251,7 @@ pub fn update<'a>(request: Request<'a>) -> anyhow::Result<()> {
     };
 
     if let Some(url) = request.url {
+        log::info!("Setting URL to {}", &url);
         target.payload.set_url(url.into_owned());
     }
 
@@ -248,6 +259,7 @@ pub fn update<'a>(request: Request<'a>) -> anyhow::Result<()> {
     let data =
         toml::to_string_pretty(&descriptor).map_err(|e| Error::SerializeToml(pkg_path.clone(), e))?;
     fs::write(&pkg_path, data).map_err(|e| Error::WriteToml(pkg_path.to_path_buf(), e))?;
+    log::info!("Wrote descriptor to {}", pkg_path.display());
 
     Ok(())
 }
