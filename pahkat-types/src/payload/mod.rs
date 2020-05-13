@@ -44,6 +44,14 @@ impl Payload {
             Payload::TarballPackage(x) => x.installed_size,
         }
     }
+
+    pub fn set_url(&mut self, url: url::Url) {
+        match self {
+            Payload::WindowsExecutable(x) => { x.url = url; },
+            Payload::MacOSPackage(x) => { x.url = url; },
+            Payload::TarballPackage(x) => { x.url = url; },
+        }
+    }
 }
 
 #[derive(

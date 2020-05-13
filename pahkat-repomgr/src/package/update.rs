@@ -15,6 +15,7 @@ pub struct Request<'a> {
     pub channel: Option<Cow<'a, str>>,
     pub version: Cow<'a, Version>,
     pub payload: Cow<'a, pahkat_types::payload::Payload>,
+    pub url: Option<Cow<'a, url::Url>>,
 }
 
 #[non_exhaustive]
@@ -32,6 +33,8 @@ pub struct PartialRequest<'a> {
     pub version: Option<&'a Version>,
     #[builder(default)]
     pub payload_path: Option<&'a Path>,
+    #[builder(default)]
+    pub url: Option<&'a url::Url>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -176,6 +179,7 @@ impl<'a> crate::Request for Request<'a> {
             platform,
             version,
             payload: Cow::Owned(payload),
+            url: None,
         })
     }
 }
@@ -235,6 +239,10 @@ pub fn update<'a>(request: Request<'a>) -> anyhow::Result<()> {
             release.target.first_mut().unwrap()
         } 
     };
+
+    if let Some(url) = request.url {
+        target.payload.set_url(url.into_owned());
+    }
 
     // Write the toml
     let data =

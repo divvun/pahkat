@@ -100,6 +100,9 @@ struct PackageUpdateCommand {
 
     #[structopt(short, long)]
     version: Option<Version>,
+
+    #[structopt(short, long)]
+    url: Option<url::Url>,
 }
 
 impl PackageUpdateCommand {
@@ -111,6 +114,7 @@ impl PackageUpdateCommand {
             .payload_path(self.payload_path.as_ref().map(|x| &**x))
             .repo_path(self.repo_path.as_ref().map(|x| &**x))
             .channel(self.channel.as_ref().map(|x| &**x))
+            .url(self.url.as_ref())
             .build()
     }
 }
