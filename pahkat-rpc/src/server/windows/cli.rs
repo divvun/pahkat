@@ -2,16 +2,14 @@ use super::service;
 use anyhow::{anyhow, Result};
 use log::{error, info, warn};
 use pahkat_client::{package_store::InstallTarget, PackageStore};
-use std::fs::OpenOptions;
 use std::process::Command;
 use std::sync::Arc;
 use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
+use std::fs::OpenOptions;
 use structopt::StructOpt;
-
-const SELF_UPDATE_TIMEOUT: u64 = 30;
 
 #[derive(Debug, StructOpt)]
 pub enum ServiceOpts {
@@ -80,8 +78,7 @@ pub async fn run_service_command(opts: &ServiceOpts) -> Result<()> {
         }
         ServiceOpts::SelfUpdate { service_executable } => {
             super::setup_logger("self-update").unwrap();
-            info!("I'm a self updater!");
-            self_update(&service_executable).await?;
+            super::self_update(&service_executable).await?;
         }
     };
 

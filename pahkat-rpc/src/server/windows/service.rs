@@ -169,7 +169,7 @@ fn service_main(_: Vec<OsString>) {
 
 async fn service_runner() -> Result<()> {
     // shutdown channel & event handler to shut down service
-    let (shutdown_tx, shutdown_rx) = mpsc::channel(1);
+    let (shutdown_tx, shutdown_rx) = mpsc::unbounded_channel();
 
     let event_handler = move |control_event| -> ServiceControlHandlerResult {
         match control_event {

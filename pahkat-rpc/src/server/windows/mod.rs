@@ -2,9 +2,19 @@ pub mod cli;
 pub mod service;
 
 use anyhow::Result;
-use pahkat_client::{config::RepoRecord, PackageKey};
 use std::process::Command;
+use std::{
+    path::{Path, PathBuf},
+    time::Duration,
+};
+use std::fs::OpenOptions;
 
+use pahkat_client::{
+    config::RepoRecord, package_store::InstallTarget, PackageAction, PackageActionType, PackageKey,
+    PackageStatus, PackageStore, PackageTransaction, Config,
+};
+
+const SELF_UPDATE_TIMEOUT: u64 = 30;
 const UPDATER_FILE_NAME: &str = "pahkat-updater.exe";
 
 pub fn setup_logger(name: &str) -> Result<(), fern::InitError> {
@@ -51,9 +61,18 @@ pub fn initiate_self_update() -> Result<()> {
     Ok(())
 }
 
-async fn self_update(service_executable: &Path) -> Result<()> {
-    log::info!("shutting down running service");
+pub(crate) async fn self_update(service_executable: &Path) -> std::result::Result<(), anyhow::Error> {
+    log::info!("Running self-update");
 
+    let store = super::selfupdate::package_store().await;
+    let _ = store.refresh_repos().await;
+
+    if !super::selfupdate::requires_update(&*store) {
+        log::warn!("no update required");
+        return Ok(());
+    }
+
+    log::info!("shutting down running service");
     if let Err(e) = service::stop_service().await {
         // Whatever, this fails often while the service is shutting down
         log::warn!("stop service error: {:?}", e);
@@ -61,36 +80,28 @@ async fn self_update(service_executable: &Path) -> Result<()> {
 
     log::info!("waiting for write access to executable");
 
-    tokio::time::timeout(Duration::from_secs(SELF_UPDATE_TIMEOUT), async {
+    tokio::time::timeout(std::time::Duration::from_secs(SELF_UPDATE_TIMEOUT), async {
         while let Err(e) = OpenOptions::new()
             .write(true)
             .create(true)
             .open(&service_executable)
         {
             log::info!("err {:?}", e);
-            tokio::time::delay_for(Duration::from_secs(1)).await;
+            tokio::time::delay_for(std::time::Duration::from_secs(1)).await;
         }
     })
     .await?;
 
     log::info!("Beginning update check");
 
-    let store = super::selfupdate::package_store().await;
-    let _ = store.refresh_repos().await;
-
-    if !super::selfupdate::requires_update() {
-        log::warn!("no update required");
-        return Ok(());
-    }
-
     // Expect the package to be downloaded already
-    match store.install(super::selfupdate::UPDATER_KEY, InstallTarget::System) {
+    match store.install(&super::selfupdate::UPDATER_KEY, InstallTarget::System) {
         Ok(_) => {
             log::info!("Self-updated successfully.");
         },
         Err(e) => {
             log::error!("Error during self-update installation: {:?}", e);
-            return Err(e);
+            return Err(e.into());
         }
     }
 

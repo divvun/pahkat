@@ -14,7 +14,8 @@ pub static UPDATER_KEY: Lazy<PackageKey> = Lazy::new(||
     PackageKey::try_from("https://pahkat.uit.no/divvun-installer/packages/divvun-installer").unwrap());
 
 #[cfg(feature = "windows")]
-async fn package_store() -> Box<dyn PackageStore> {
+pub(crate) async fn package_store() -> Box<dyn PackageStore> {
+    use pahkat_client::{Config, WindowsPackageStore};
     let mut config = Config::read_only();
     config.repos_mut().insert(UPDATER_KEY.repository_url.clone(), RepoRecord {
         channel: Some(UPDATER_DEFAULT_CHANNEL.to_string())
@@ -24,7 +25,7 @@ async fn package_store() -> Box<dyn PackageStore> {
 }
 
 #[cfg(feature = "macos")]
-async fn package_store() -> Box<dyn PackageStore> {
+pub(crate) async fn package_store() -> Box<dyn PackageStore> {
     use pahkat_client::{Config, MacOSPackageStore};
     let mut config = Config::read_only();
 
@@ -35,7 +36,7 @@ async fn package_store() -> Box<dyn PackageStore> {
     Box::new(MacOSPackageStore::new(config).await)
 }
 
-fn requires_update(store: &dyn PackageStore) -> bool {
+pub(crate) fn requires_update(store: &dyn PackageStore) -> bool {
     let is_requiring_update = match store.status(&UPDATER_KEY, InstallTarget::System) {
         Ok(status) => match status {
             PackageStatus::NotInstalled => {
@@ -56,9 +57,9 @@ fn requires_update(store: &dyn PackageStore) -> bool {
 
 #[cfg(windows)]
 pub async fn install(store: &dyn PackageStore) -> Result<(), Box<dyn Error>> {
-    windows::initiate_self_update()?;
+    super::windows::initiate_self_update()?;
     // Wait some time for the impending shutdown
-    time::delay_for(Duration::from_secs(10)).await;
+    tokio::time::delay_for(std::time::Duration::from_secs(10)).await;
     Ok(())
 }
 
