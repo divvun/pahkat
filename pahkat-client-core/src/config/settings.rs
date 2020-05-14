@@ -63,7 +63,15 @@ pub struct Settings {
 }
 
 impl Settings {
-    fn new(
+    pub fn read_only() -> Settings {
+        Settings {
+            path: PathBuf::from("/dev/null"),
+            data: SettingsData::default(),
+            permission: Permission::ReadOnly,
+        }
+    }
+
+    pub fn new(
         path: PathBuf,
         data: SettingsData,
         permission: Permission,

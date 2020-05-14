@@ -61,6 +61,13 @@ pub enum Permission {
 }
 
 impl Config {
+    pub fn read_only() -> Config {
+        Config {
+            repos: Repos::read_only(),
+            settings: Settings::read_only(),
+        }
+    }
+
     #[cfg(not(target_os = "android"))]
     pub fn load_default() -> Result<Config, Error> {
         let path = defaults::config_path().ok_or(Error::NoDefaultConfigPath)?;

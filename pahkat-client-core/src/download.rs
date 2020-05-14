@@ -213,10 +213,20 @@ impl DownloadManager {
             yield DownloadEvent::Complete(dest_file_path);
         };
 
-        // Stop the stream overwhelming receivers.
-        let stream = tokio::time::throttle(std::time::Duration::from_millis(750), stream);
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        tokio::spawn(async move {
+            use futures::stream::StreamExt;
+            futures::pin_mut!(stream);
 
-        Ok(Box::pin(stream))
+            while let Some(result) = stream.next().await {
+                tx.send(result).unwrap();
+            }
+        });
+
+        // Stop the stream overwhelming receivers.
+        let rx = tokio::time::throttle(std::time::Duration::from_millis(750), rx);
+
+        Ok(Box::pin(rx))
     }
 }
 

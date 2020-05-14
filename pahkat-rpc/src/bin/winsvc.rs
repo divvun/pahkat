@@ -1,13 +1,18 @@
-use pahkat_rpc::server::cli;
 use structopt::StructOpt;
+
+#[derive(Debug, StructOpt)]
+pub enum Opts {
+    #[cfg(windows)]
+    Service(crate::server::windows::cli::ServiceOpts),
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let opt = cli::Opts::from_args();
+    let opt = Opts::from_args();
 
     match opt {
         #[cfg(windows)]
-        cli::Opts::Service(ref opts) => {
+        Opts::Service(ref opts) => {
             pahkat_rpc::server::windows::cli::run_service_command(opts).await?;
             return Ok(());
         }

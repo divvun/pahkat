@@ -79,6 +79,14 @@ impl std::ops::DerefMut for Repos {
 }
 
 impl Repos {
+    pub fn read_only() -> Repos {
+        Repos {
+            path: PathBuf::from("/dev/null"),
+            data: ReposData::default(),
+            permission: Permission::ReadOnly,
+        }
+    }
+
     pub fn create<P: AsRef<Path>>(path: P) -> Result<Repos, FileError> {
         let data = ReposData::create(path.as_ref())?;
 
