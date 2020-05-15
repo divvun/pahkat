@@ -34,8 +34,6 @@ url = { version = "2.1.1", features = ["serde"] }
 libc = "0.2.69"
 lazy_static = "1.4.0"
 maplit = "1.0"
-dirs = "2.0.2"
-directories = "2.0.2"
 chrono = "0.4.11"
 hashbrown = { version = "0.7.1", features = ["serde"] }
 is_executable = "0.1.2"
@@ -57,6 +55,8 @@ anyhow = "1.0.28"
 workqueue = "0.1.0"
 crossbeam-queue = "0.2.1"
 whoami = "0.8.1"
+pathos = "0.1.0"
+iref = "1.1.5"
 
     # MacOS-specific
     [target.'cfg(target_os="macos")'.dependencies]

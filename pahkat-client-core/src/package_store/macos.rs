@@ -318,7 +318,7 @@ fn get_package_info(
 ) -> Result<MacOSPackageExportPlist, ProcessError> {
     use std::io::Cursor;
 
-    let home_dir = dirs::home_dir().expect("Always find home directory");
+    let home_dir = pathos::user::home_dir();
     let mut args = vec!["--export-plist", bundle_id];
     if let InstallTarget::User = target {
         args.push("--volume");
@@ -474,7 +474,7 @@ fn uninstall_macos_package(bundle_id: &str, target: InstallTarget) -> Result<(),
 }
 
 fn forget_pkg_id(bundle_id: &str, target: InstallTarget) -> Result<(), ProcessError> {
-    let home_dir = dirs::home_dir().expect("Always find home directory");
+    let home_dir = pathos::user::home_dir();
     let mut args = vec!["--forget", bundle_id];
     if let InstallTarget::User = target {
         args.push("--volume");

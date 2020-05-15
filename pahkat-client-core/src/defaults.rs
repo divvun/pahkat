@@ -1,95 +1,60 @@
 use crate::config::ConfigPath;
-use directories::BaseDirs;
 use std::path::{Path, PathBuf};
 use url::Url;
 
+const APP_PATH: &str = "Pahkat";
+
 #[cfg(not(target_os = "android"))]
-pub fn config_path() -> Option<PathBuf> {
+pub fn config_path() -> PathBuf {
     if cfg!(windows) && whoami::username() == "SYSTEM" {
-        // TODO: Do not hardcode this.
-        return Some(Path::new(r"C:\ProgramData\Pahkat\config").to_path_buf());
+        return pathos::system::app_config_dir(APP_PATH)
     }
     
     if cfg!(target_os = "macos") && whoami::username() == "root" {
-        Some(Path::new(r"/Library/Preferences/Pahkat").to_path_buf())
-    } else {
-        BaseDirs::new().map(|x| x.config_dir().join("Pahkat").to_path_buf())
+        return pathos::system::app_config_dir(APP_PATH)
     }
+    
+    pathos::user::app_config_dir(APP_PATH)
 }
 
 #[inline(always)]
 #[cfg(not(target_os = "android"))]
-fn raw_cache_dir() -> Option<PathBuf> {
+fn raw_cache_dir() -> PathBuf {
     if cfg!(windows) && whoami::username() == "SYSTEM" {
-        // TODO: Do not hardcode this.
-        return Some(Path::new(r"C:\ProgramData\Pahkat\cache").to_path_buf());
+        return pathos::system::app_cache_dir(APP_PATH)
     }
     
     if cfg!(target_os = "macos") && whoami::username() == "root" {
-        Some(Path::new(r"/Library/Caches/Pahkat").to_path_buf())
-    } else {
-        let dir = BaseDirs::new().map(|x| x.cache_dir().components().as_path().to_path_buf())?;
-        std::fs::create_dir_all(&dir).ok()?;
-        dir.canonicalize().ok()
+        return pathos::system::app_cache_dir(APP_PATH)
     }
+
+    pathos::user::app_cache_dir(APP_PATH)
 }
 
 #[inline(always)]
-pub fn log_path() -> Option<PathBuf> {
+pub fn log_path() -> PathBuf {
     if cfg!(windows) && whoami::username() == "SYSTEM" {
-        // TODO: Do not hardcode this.
-        return Some(Path::new(r"C:\ProgramData\Pahkat\log").to_path_buf())
+        return pathos::system::app_log_dir(APP_PATH)
     }
     
     if cfg!(target_os = "macos") && whoami::username() == "root" {
-        Some(Path::new(r"/Library/Logs/Pahkat").to_path_buf())
-    } else {
-        None
+        return pathos::system::app_log_dir(APP_PATH)
     }
+
+    return pathos::user::app_log_dir(APP_PATH)
 }
 
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub fn cache_dir() -> ConfigPath {
-    ConfigPath::File(Url::from_directory_path(&raw_cache_dir().unwrap()).unwrap())
+    ConfigPath(pathos::user::iri::app_cache_dir(APP_PATH))
 }
 
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub fn tmp_dir() -> ConfigPath {
-    let url = Url::from_file_path(&raw_cache_dir().unwrap().join("tmp")).unwrap();
-    ConfigPath::File(url)
-}
-
-#[cfg(target_os = "ios")]
-pub fn cache_dir() -> ConfigPath {
-    let url = Url::parse("container:/Library/Caches/Pahkat").unwrap();
-    ConfigPath::Container(url)
-}
-
-#[cfg(target_os = "ios")]
-pub fn tmp_dir() -> ConfigPath {
-    let url = Url::parse("container:/Library/Caches/Pahkat/tmp").unwrap();
-    ConfigPath::Container(url)
-}
-
-#[cfg(target_os = "android")]
-pub fn cache_dir() -> ConfigPath {
-    let url = Url::parse("container:/cache/Pahkat").unwrap();
-    ConfigPath::Container(url)
-}
-
-#[cfg(target_os = "android")]
-pub fn tmp_dir() -> ConfigPath {
-    let url = Url::from_directory_path(std::env::temp_dir()).unwrap();
-    ConfigPath::File(url)
+    ConfigPath(pathos::user::iri::app_temporary_dir(APP_PATH))
 }
 
 #[cfg(target_os = "macos")]
 pub fn uninstall_path() -> PathBuf {
-    BaseDirs::new()
-        .expect("base directories must be known")
-        .data_dir()
-        .join("Pahkat")
-        .join("uninstall")
+    pathos::user::app_data_dir(APP_PATH).join("uninstall")
 }
 
 macro_rules! platform {

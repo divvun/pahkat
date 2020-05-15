@@ -70,7 +70,7 @@ impl Config {
 
     #[cfg(not(target_os = "android"))]
     pub fn load_default() -> Result<Config, Error> {
-        let path = defaults::config_path().ok_or(Error::NoDefaultConfigPath)?;
+        let path = defaults::config_path();
         Self::load(path, Permission::ReadWrite)
     }
 
