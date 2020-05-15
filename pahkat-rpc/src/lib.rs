@@ -503,10 +503,10 @@ impl pb::pahkat_server::Pahkat for Rpc {
                 .map_err(|e| Status::failed_precondition(format!("{}", e)))?;
         }
 
-        self.store
-            .force_refresh_repos()
-            .await
-            .map_err(|e| Status::failed_precondition(format!("{}", e)))?;
+        let errors = match self.store.force_refresh_repos().await {
+            Ok(_) => HashMap::new(),
+            Err(e) => e.into_iter().collect(),
+        };
 
         let _ = self.notifications.send(Notification::RepositoriesChanged);
 
@@ -518,7 +518,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_owned().into()))
                 .collect(),
-            error: "".into(),
+            errors: errors.iter().map(|(k, v)| (k.to_string(), format!("{:?}", v))).collect(),
         }))
     }
 
@@ -526,16 +526,21 @@ impl pb::pahkat_server::Pahkat for Rpc {
         &self,
         _request: tonic::Request<pb::GetRepoRecordsRequest>,
     ) -> Result<pb::GetRepoRecordsResponse> {
-        let config = self.store.config();
-        let config = config.read().unwrap();
-        let repos = config.repos();
-
-        Ok(tonic::Response::new(pb::GetRepoRecordsResponse {
-            records: repos
+        let records = {
+            let config = self.store.config();
+            let config = config.read().unwrap();
+            config.repos()
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_owned().into()))
-                .collect(),
-            error: "".into(),
+                .collect()
+        };
+
+        let errors = self.store.errors();
+        let errors = errors.read().unwrap();
+
+        Ok(tonic::Response::new(pb::GetRepoRecordsResponse {
+            records,
+            errors: errors.iter().map(|(k, v)| (k.to_string(), format!("{:?}", v))).collect(),
         }))
     }
 
@@ -558,10 +563,10 @@ impl pb::pahkat_server::Pahkat for Rpc {
                 .map_err(|e| Status::failed_precondition(format!("{}", e)))?
         };
 
-        self.store
-            .force_refresh_repos()
-            .await
-            .map_err(|e| Status::failed_precondition(format!("{}", e)))?;
+        let errors = match self.store.force_refresh_repos().await {
+            Ok(_) => HashMap::new(),
+            Err(e) => e.into_iter().collect(),
+        };
 
         let _ = self.notifications.send(Notification::RepositoriesChanged);
 
@@ -573,7 +578,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_owned().into()))
                 .collect(),
-            error: "".into(),
+            errors: errors.iter().map(|(k, v)| (k.to_string(), format!("{:?}", v))).collect(),
         }))
     }
 

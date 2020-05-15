@@ -165,6 +165,10 @@ impl PackageStore for PrefixPackageStore {
     fn repos(&self) -> super::SharedRepos {
         Arc::clone(&self.repos)
     }
+    
+    fn errors(&self) -> super::SharedRepoErrors {
+        Arc::clone(&self.errors)
+    }
 
     fn config(&self) -> super::SharedStoreConfig {
         Arc::clone(&self.config)
@@ -359,13 +363,21 @@ impl PackageStore for PrefixPackageStore {
         crate::repo::find_package_by_id(self, package_id, &*repos)
     }
 
-    fn refresh_repos(&self) -> crate::package_store::Future<Result<(), RepoDownloadError>> {
+    fn refresh_repos(&self) -> crate::package_store::Future<Result<(), HashMap<Url, RepoDownloadError>>> {
         let config = self.config().read().unwrap().clone();
         let repos = self.repos();
+        let errors = self.errors();
+        
         Box::pin(async move {
-            let result = crate::repo::refresh_repos(config).await?;
+            let (result, errors) = crate::repo::refresh_repos(config).await;
             *repos.write().unwrap() = result;
-            Ok(())
+            *errors.write().unwrap() = errors.clone();
+
+            if errors.is_empty() {
+                Ok(())
+            } else {
+                Err(errors)
+            }
         })
     }
 

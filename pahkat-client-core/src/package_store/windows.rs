@@ -31,11 +31,12 @@ const DISPLAY_VERSION: &'static str = "DisplayVersion";
 const QUIET_UNINSTALL_STRING: &'static str = "QuietUninstallString";
 
 use super::LocalizedStrings;
-use crate::package_store::{SharedRepos, SharedStoreConfig};
+use super::{SharedRepos, SharedRepoErrors, SharedStoreConfig};
 
 #[derive(Debug)]
 pub struct WindowsPackageStore {
     repos: SharedRepos,
+    errors: SharedRepoErrors,
     config: SharedStoreConfig,
 }
 
@@ -54,6 +55,10 @@ fn uninstall_regkey(installer: &windows::Executable) -> Option<RegKey> {
 impl PackageStore for WindowsPackageStore {
     fn config(&self) -> SharedStoreConfig {
         Arc::clone(&self.config)
+    }
+
+    fn errors(&self) -> super::SharedRepoErrors {
+        Arc::clone(&self.errors)
     }
 
     fn repos(&self) -> SharedRepos {
@@ -266,13 +271,17 @@ impl PackageStore for WindowsPackageStore {
         crate::repo::find_package_by_id(self, package_id, &*repos)
     }
 
-    fn refresh_repos(&self) -> crate::package_store::Future<Result<(), RepoDownloadError>> {
+    fn refresh_repos(&self) -> crate::package_store::Future<Result<(), HashMap<Url, RepoDownloadError>>> {
         let config = self.config().read().unwrap().clone();
         let repos = self.repos();
         Box::pin(async move {
-            let result = crate::repo::refresh_repos(config).await?;
+            let (result, errors) = crate::repo::refresh_repos(config).await;
             *repos.write().unwrap() = result;
-            Ok(())
+            if errors.is_empty() {
+                Ok(())
+            } else {
+                Err(errors)
+            }
         })
     }
 
@@ -315,6 +324,7 @@ impl WindowsPackageStore {
     pub async fn new(config: Config) -> WindowsPackageStore {
         let store = WindowsPackageStore {
             repos: Default::default(),
+            errors: Default::default(),
             config: Arc::new(RwLock::new(config)),
         };
 

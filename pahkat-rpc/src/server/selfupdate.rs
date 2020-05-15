@@ -63,6 +63,12 @@ pub async fn install(store: &dyn PackageStore) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+#[cfg(all(feature = "macos", not(feature = "launchd")))]
+pub async fn install(store: &dyn PackageStore) -> Result<(), Box<dyn Error>> {
+    log::info!("No doing anything, in test mode.");
+    Ok(())
+}
+
 #[cfg(feature = "launchd")]
 pub async fn install(store: &dyn PackageStore) -> Result<(), Box<dyn Error>> {
     store.install(&UPDATER_KEY, InstallTarget::System)?;

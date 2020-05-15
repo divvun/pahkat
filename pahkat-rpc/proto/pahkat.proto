@@ -172,7 +172,7 @@ message SetRepoRequest {
 
 message SetRepoResponse {
     map<string, RepoRecord> records = 1;
-    string error = 2;
+    map<string, string> errors = 2;
 }
 
 message GetRepoRecordsRequest {
@@ -180,7 +180,7 @@ message GetRepoRecordsRequest {
 
 message GetRepoRecordsResponse {
     map<string, RepoRecord> records = 1;
-    string error = 2;
+    map<string, string> errors = 2;
 }
 
 message RemoveRepoRequest {
@@ -189,7 +189,7 @@ message RemoveRepoRequest {
 
 message RemoveRepoResponse {
     map<string, RepoRecord> records = 1;
-    string error = 2;
+    map<string, string> errors = 2;
 }
 
 // There was no time to do this properly.

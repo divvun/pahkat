@@ -15,7 +15,7 @@ use serde::de::{self, Deserializer};
 use serde::Deserialize;
 use url::Url;
 
-use super::{PackageStore, SharedRepos, SharedStoreConfig};
+use super::{PackageStore, SharedRepos, SharedRepoErrors, SharedStoreConfig};
 use crate::package_store::{ImportError, InstallTarget, LocalizedStrings};
 use crate::repo::{PackageQuery, RepoDownloadError};
 use crate::transaction::{install::InstallError, install::ProcessError, uninstall::UninstallError};
@@ -52,12 +52,17 @@ struct BundlePlistInfo {
 
 pub struct MacOSPackageStore {
     repos: SharedRepos,
+    errors: SharedRepoErrors,
     config: SharedStoreConfig,
 }
 
 impl PackageStore for MacOSPackageStore {
     fn repos(&self) -> SharedRepos {
         Arc::clone(&self.repos)
+    }
+    
+    fn errors(&self) -> super::SharedRepoErrors {
+        Arc::clone(&self.errors)
     }
 
     fn config(&self) -> SharedStoreConfig {
@@ -174,14 +179,18 @@ impl PackageStore for MacOSPackageStore {
         let repos = self.repos.read().unwrap();
         crate::repo::find_package_by_id(self, package_id, &*repos)
     }
-
-    fn refresh_repos(&self) -> crate::package_store::Future<Result<(), RepoDownloadError>> {
+    
+    fn refresh_repos(&self) -> crate::package_store::Future<Result<(), HashMap<Url, RepoDownloadError>>> {
         let config = self.config().read().unwrap().clone();
         let repos = self.repos();
         Box::pin(async move {
-            let result = crate::repo::refresh_repos(config).await?;
+            let (result, errors) = crate::repo::refresh_repos(config).await;
             *repos.write().unwrap() = result;
-            Ok(())
+            if errors.is_empty() {
+                Ok(())
+            } else {
+                Err(errors)
+            }
         })
     }
 
@@ -208,6 +217,7 @@ impl MacOSPackageStore {
     pub async fn new(config: Config) -> MacOSPackageStore {
         let store = MacOSPackageStore {
             repos: Arc::new(RwLock::new(HashMap::new())),
+            errors: Arc::new(RwLock::new(HashMap::new())),
             config: Arc::new(RwLock::new(config)),
         };
 

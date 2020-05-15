@@ -45,11 +45,16 @@ impl LoadedRepository {
         url: Url,
         channel: Option<String>,
     ) -> Result<LoadedRepository, RepoDownloadError> {
+        const USER_AGENT: &str = concat!("pahkat-client/", env!("CARGO_PKG_VERSION"));
         let (tx, rx) = tokio::sync::oneshot::channel();
 
         tokio::spawn(async move {
             let result = async move {
-                let client = reqwest::Client::new();
+                let client = reqwest::Client::builder()
+                    .user_agent(USER_AGENT)
+                    .referer(false)
+                    .redirect(reqwest::redirect::Policy::none())
+                    .build()?;
 
                 log::trace!("Loading repo: {} channel:{:?}", &url, &channel);
 

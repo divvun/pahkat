@@ -640,7 +640,7 @@ pub(crate) fn find_package_by_id(
 #[must_use]
 pub(crate) async fn refresh_repos(
     config: Config,
-) -> Result<HashMap<Url, LoadedRepository>, RepoDownloadError> {
+) -> (HashMap<Url, LoadedRepository>, HashMap<Url, RepoDownloadError>) {
     let config = Arc::new(config);
 
     log::debug!("Refreshing repos...");
@@ -683,20 +683,24 @@ pub(crate) async fn refresh_repos(
         .unwrap()
     };
 
-    let mut map = HashMap::new();
+    let mut res_map = HashMap::new();
+    let mut err_map = HashMap::new();
 
     for (key, value) in repo_data.into_iter() {
-        log::debug!("Resolved repository: {:?}", &key);
 
         match value {
             Ok(v) => {
-                map.insert(key, v);
-            }
-            Err(e) => return Err(e),
+                log::debug!("Resolved repository: {:?}", &key);
+                res_map.insert(key, v);
+            },
+            Err(e) => {
+                log::debug!("Repository resolution failed: {:?} {:?}", &key, &e);
+                err_map.insert(key, e);
+            },
         }
     }
 
-    Ok(map)
+    (res_map, err_map)
 }
 
 pub(crate) fn clear_cache(config: &Arc<RwLock<Config>>) {

@@ -24,6 +24,7 @@ use crate::{LoadedRepository, PackageKey};
 
 pub type SharedStoreConfig = Arc<RwLock<Config>>;
 pub type SharedRepos = Arc<RwLock<HashMap<Url, LoadedRepository>>>;
+pub type SharedRepoErrors = Arc<RwLock<HashMap<Url, RepoDownloadError>>>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ImportError {
@@ -91,6 +92,7 @@ pub type Future<T> = Pin<Box<dyn std::future::Future<Output = T> + Send + Sync +
 
 pub trait PackageStore: Send + Sync {
     fn repos(&self) -> SharedRepos;
+    fn errors(&self) -> SharedRepoErrors;
     fn config(&self) -> SharedStoreConfig;
 
     #[must_use]
@@ -127,15 +129,15 @@ pub trait PackageStore: Send + Sync {
     fn find_package_by_key(&self, key: &PackageKey) -> Option<Package>;
 
     #[must_use]
-    fn refresh_repos(&self) -> Future<Result<(), RepoDownloadError>>;
-
-    fn clear_cache(&self);
+    fn refresh_repos(&self) -> Future<Result<(), HashMap<Url, RepoDownloadError>>>;
 
     #[must_use]
-    fn force_refresh_repos(&self) -> Future<Result<(), RepoDownloadError>> {
+    fn force_refresh_repos(&self) -> Future<Result<(), HashMap<Url, RepoDownloadError>>> {
         self.clear_cache();
         self.refresh_repos()
     }
+
+    fn clear_cache(&self);
 
     fn strings(&self, language: String) -> Future<HashMap<Url, LocalizedStrings>>;
 
