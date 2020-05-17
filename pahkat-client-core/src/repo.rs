@@ -122,7 +122,6 @@ impl<'a> ReleaseQueryIter<'a> {
                 &release.channel
             );
 
-            // eprintln!("release: {:?}", &release);
             // If query is empty, it means search only for the main empty channel
             if let Some(channel) = release.channel.as_ref().map(|x| x.as_str()) {
                 if !self.query.channels.contains(&channel) {

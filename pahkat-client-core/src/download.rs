@@ -164,6 +164,8 @@ impl DownloadManager {
 
         log::debug!("Total bytes: {}", total_bytes);
 
+        let mut last_progress_event = std::time::Instant::now();
+
         let stream = async_stream::stream! {
             let mut file = BufWriter::new(file);
             loop {
@@ -181,7 +183,11 @@ impl DownloadManager {
                             });
                             match result {
                                 Ok(_) => {
-                                    yield DownloadEvent::Progress((downloaded_bytes, total_bytes));
+                                    // Send a progress event at most every 750ms
+                                    if last_progress_event.elapsed().as_millis() >= 750 {
+                                        last_progress_event = std::time::Instant::now();
+                                        yield DownloadEvent::Progress((downloaded_bytes, total_bytes));
+                                    }
                                 },
                                 Err(e) => {
                                     yield DownloadEvent::Error(e);
@@ -213,20 +219,20 @@ impl DownloadManager {
             yield DownloadEvent::Complete(dest_file_path);
         };
 
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        tokio::spawn(async move {
-            use futures::stream::StreamExt;
-            futures::pin_mut!(stream);
+        // let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        // tokio::spawn(async move {
+        //     use futures::stream::StreamExt;
+        //     futures::pin_mut!(stream);
 
-            while let Some(result) = stream.next().await {
-                tx.send(result).unwrap();
-            }
-        });
+        //     while let Some(result) = stream.next().await {
+        //         tx.send(result).unwrap();
+        //     }
+        // });
 
-        // Stop the stream overwhelming receivers.
-        let rx = tokio::time::throttle(std::time::Duration::from_millis(750), rx);
+        // // Stop the stream overwhelming receivers.
+        // let rx = tokio::time::throttle(std::time::Duration::from_millis(750), rx);
 
-        Ok(Box::pin(rx))
+        Ok(Box::pin(stream))
     }
 }
 
