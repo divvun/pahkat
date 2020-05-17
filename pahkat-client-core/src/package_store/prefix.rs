@@ -8,6 +8,7 @@ use std::sync::{Arc, RwLock};
 use dashmap::DashMap;
 use hashbrown::HashMap;
 use pahkat_types::package::{Descriptor, Package};
+use pahkat_types::repo::RepoUrl;
 use r2d2_sqlite::SqliteConnectionManager;
 use url::Url;
 use xz2::read::XzDecoder;

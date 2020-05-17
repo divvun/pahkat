@@ -484,10 +484,18 @@ impl pb::pahkat_server::Pahkat for Rpc {
         request: tonic::Request<pb::SetRepoRequest>,
     ) -> Result<pb::SetRepoResponse> {
         let request = request.into_inner();
+
+        log::debug!("Setting repo: {:?}", &request);
+
         let url =
             Url::parse(&request.url).map_err(|e| Status::failed_precondition(format!("{}", e)))?;
+        log::trace!("Url: {:?}", &url);
         let url = pahkat_client::types::repo::RepoUrl::new(url)
-            .map_err(|e| Status::failed_precondition(format!("{}", e)))?;
+            .map_err(|e| {
+                log::debug!("Bad repo url: {:?}", e);
+                Status::failed_precondition(format!("{}", e))
+            })?;
+        log::trace!("Repo url: {:?}", &url);
 
         let config = self.store.config();
         {

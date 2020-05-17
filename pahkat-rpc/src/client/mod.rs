@@ -303,11 +303,15 @@ pub extern "C" fn pahkat_rpc_set_repo(
         settings: Some(settings),
     });
 
-    block_on(async move {
+    let result = block_on(async move {
         let mut client = client.write().await;
         let response = client.set_repo(request).await.box_err()?;
         Ok(response.into_inner())
-    })
+    });
+
+    eprintln!("RESULT: {:?}", &result);
+
+    result
 }
 
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]

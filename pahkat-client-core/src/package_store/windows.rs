@@ -24,6 +24,7 @@ use crate::{repo::PayloadError, LoadedRepository, PackageKey, PackageStore};
 use pahkat_types::{
     package::{Descriptor, Package},
     payload::windows,
+    repo::RepoUrl,
 };
 
 const UNINSTALL_PATH: &'static str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall";
