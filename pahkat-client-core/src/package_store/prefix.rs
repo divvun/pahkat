@@ -5,24 +5,29 @@ use std::fs::{create_dir_all, read_dir, remove_dir, remove_file, File};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
-use dashmap::DashMap;
 use hashbrown::HashMap;
 use pahkat_types::package::{Descriptor, Package};
 use pahkat_types::repo::RepoUrl;
 use r2d2_sqlite::SqliteConnectionManager;
-use url::Url;
 use xz2::read::XzDecoder;
 
 use super::InstallTarget;
+use crate::package_store::{SharedRepoErrors, SharedRepos, SharedStoreConfig};
 use crate::repo::RepoDownloadError;
 use crate::transaction::{
     install::InstallError, uninstall::UninstallError, PackageDependencyError, ResolvedPackageQuery,
 };
 use crate::{
-    cmp, download::Download, download::DownloadManager, package_store::ImportError,
-    repo::{PackageQuery, LoadedRepository}, transaction::{ResolvedDescriptor, PackageStatus}, transaction::PackageStatusError, Config,
-    PackageKey, PackageStore,
+    cmp,
+    download::Download,
+    download::DownloadManager,
+    package_store::ImportError,
+    repo::{LoadedRepository, PackageQuery},
+    transaction::PackageStatusError,
+    transaction::{PackageStatus, ResolvedDescriptor},
+    Config, PackageKey, PackageStore,
 };
+use pahkat_types::repo::RepoUrl;
 
 // type Result<T> = std::result::Result<T, Error>;
 
@@ -31,8 +36,9 @@ const SQL_INIT: &str = include_str!("prefix/prefix_init.sql");
 pub struct PrefixPackageStore {
     pool: r2d2::Pool<SqliteConnectionManager>,
     prefix: PathBuf,
-    repos: Arc<RwLock<HashMap<RepoUrl, LoadedRepository>>>,
-    config: Arc<RwLock<Config>>,
+    repos: SharedRepos,
+    errors: SharedRepoErrors,
+    config: SharedStoreConfig,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -87,7 +93,8 @@ impl PrefixPackageStore {
         let store = PrefixPackageStore {
             pool,
             prefix: prefix_path,
-            repos: Arc::new(RwLock::new(HashMap::new())),
+            repos: Default::default(),
+            errors: Default::default(),
             config: Arc::new(RwLock::new(config)),
         };
 
@@ -113,7 +120,8 @@ impl PrefixPackageStore {
         let store = PrefixPackageStore {
             pool,
             prefix: prefix_path,
-            repos: Arc::new(RwLock::new(HashMap::new())),
+            repos: Default::default(),
+            errors: Default::default(),
             config: Arc::new(RwLock::new(config)),
         };
 
@@ -166,7 +174,7 @@ impl PackageStore for PrefixPackageStore {
     fn repos(&self) -> super::SharedRepos {
         Arc::clone(&self.repos)
     }
-    
+
     fn errors(&self) -> super::SharedRepoErrors {
         Arc::clone(&self.errors)
     }
@@ -364,16 +372,14 @@ impl PackageStore for PrefixPackageStore {
         crate::repo::find_package_by_id(self, package_id, &*repos)
     }
 
-    fn refresh_repos(&self) -> crate::package_store::Future<Result<(), HashMap<RepoUrl, RepoDownloadError>>> {
+    fn refresh_repos(
+        &self,
+    ) -> crate::package_store::Future<Result<(), HashMap<RepoUrl, RepoDownloadError>>> {
         let config = self.config().read().unwrap().clone();
         let repos = self.repos();
-        let errors = self.errors();
-        
         Box::pin(async move {
             let (result, errors) = crate::repo::refresh_repos(config).await;
             *repos.write().unwrap() = result;
-            *errors.write().unwrap() = errors.clone();
-
             if errors.is_empty() {
                 Ok(())
             } else {
@@ -386,14 +392,22 @@ impl PackageStore for PrefixPackageStore {
         crate::repo::clear_cache(&self.config)
     }
 
-    fn strings(&self, language: String) -> crate::package_store::Future<HashMap<RepoUrl, crate::package_store::LocalizedStrings>> {
+    fn strings(
+        &self,
+        language: String,
+    ) -> crate::package_store::Future<HashMap<RepoUrl, crate::package_store::LocalizedStrings>>
+    {
         let repos = self.repos.read().unwrap();
         let urls = repos.keys().cloned().collect::<Vec<_>>();
 
         Box::pin(crate::repo::strings(urls, language))
     }
 
-    fn resolve_package_query(&self, query: PackageQuery, install_target: &[InstallTarget]) -> ResolvedPackageQuery {
+    fn resolve_package_query(
+        &self,
+        query: PackageQuery,
+        install_target: &[InstallTarget],
+    ) -> ResolvedPackageQuery {
         let repos = self.repos();
         let repos = repos.read().unwrap();
         crate::repo::resolve_package_query(self, &query, install_target, &*repos)

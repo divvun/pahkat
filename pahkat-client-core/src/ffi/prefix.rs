@@ -67,6 +67,10 @@ pub extern "C" fn pahkat_prefix_package_store_all_statuses(
     #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
     #[marshal(cursed::UrlMarshaler)] repo_url: url::Url,
 ) -> BTreeMap<String, i8> {
+    let repo_url = match pahkat_types::repo::RepoUrl::new(repo_url) {
+        Ok(v) => v,
+        Err(_) => return Default::default(),
+    };
     let statuses = handle.all_statuses(&repo_url, Default::default());
     statuses
         .into_iter()
@@ -153,18 +157,26 @@ pub extern "C" fn pahkat_prefix_package_store_clear_cache(
     handle.clear_cache();
 }
 
+#[derive(Debug, thiserror::Error)]
+#[error("{0}")]
+struct RefreshRepoError(&'static str);
+
 #[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
 pub extern "C" fn pahkat_prefix_package_store_refresh_repos(
     #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
 ) -> Result<(), Box<dyn Error>> {
-    block_on(handle.refresh_repos()).box_err()
+    block_on(handle.refresh_repos())
+        .map_err(|_| RefreshRepoError("Some repositories could not be updated."))
+        .box_err()
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
 pub extern "C" fn pahkat_prefix_package_store_force_refresh_repos(
     #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
 ) -> Result<(), Box<dyn Error>> {
-    block_on(handle.force_refresh_repos()).box_err()
+    block_on(handle.force_refresh_repos())
+        .map_err(|_| RefreshRepoError("Some repositories could not be updated."))
+        .box_err()
 }
 
 // #[cthulhu::invoke(return_marshaler = "cursed::StringMarshaler")]
@@ -198,16 +210,14 @@ pub extern "C" fn pahkat_prefix_transaction_new(
 
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_prefix_transaction_actions(
-    #[marshal(cursed::BoxRefMarshaler::<PackageTransaction>)] 
-    handle: &PackageTransaction,
+    #[marshal(cursed::BoxRefMarshaler::<PackageTransaction>)] handle: &PackageTransaction,
 ) -> Vec<crate::transaction::ResolvedAction> {
     handle.actions().to_vec()
 }
 
 #[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
 pub extern "C" fn pahkat_prefix_transaction_process(
-    #[marshal(cursed::BoxRefMarshaler::<PackageTransaction>)] 
-    handle: &PackageTransaction,
+    #[marshal(cursed::BoxRefMarshaler::<PackageTransaction>)] handle: &PackageTransaction,
     tag: u32,
     progress_callback: extern "C" fn(u32, cursed::Slice<u8>, u32) -> u8,
 ) -> Result<(), Box<dyn Error>> {

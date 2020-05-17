@@ -67,18 +67,18 @@ pub extern "C" fn pahkat_config_settings_config_dir(
     handle.read().unwrap().settings().config_dir().to_path_buf()
 }
 
-#[cthulhu::invoke(return_marshaler = "cursed::UrlMarshaler")]
-pub extern "C" fn pahkat_config_settings_cache_url(
-    #[marshal(cursed::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
-) -> Url {
-    handle
-        .read()
-        .unwrap()
-        .settings()
-        .cache_base_dir()
-        .as_url()
-        .to_owned()
-}
+// #[cthulhu::invoke(return_marshaler = "cursed::StringMarshaler")]
+// pub extern "C" fn pahkat_config_settings_cache_url(
+//     #[marshal(cursed::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
+// ) -> String {
+//     handle
+//         .read()
+//         .unwrap()
+//         .settings()
+//         .cache_base_dir()
+//         .as_url()
+//         .to_owned()
+// }
 
 // #[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
 // pub extern "C" fn pahkat_config_set_cache_url(
@@ -94,7 +94,7 @@ pub extern "C" fn pahkat_config_settings_cache_url(
 pub extern "C" fn pahkat_android_init(
     #[marshal(cursed::PathBufMarshaler)] container_path: PathBuf,
 ) {
-    let _ = crate::config::path::CONTAINER_PATH.set(container_path).ok();
+    pathos::android::user::set_container_path(container_path);
 
     std::panic::set_hook(Box::new(|info| {
         if let Some(s) = info.payload().downcast_ref::<&str>() {
