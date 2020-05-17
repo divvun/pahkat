@@ -4,10 +4,10 @@ use std::path::{Path, PathBuf};
 
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use url::Url;
 
 use super::FileError;
 use crate::config::Permission;
+use pahkat_types::repo::RepoUrl;
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct RepoRecord {
@@ -16,7 +16,7 @@ pub struct RepoRecord {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(transparent)]
-pub struct ReposData(IndexMap<Url, RepoRecord>);
+pub struct ReposData(IndexMap<RepoUrl, RepoRecord>);
 
 impl ReposData {
     fn load<P: AsRef<Path>>(path: P) -> Result<ReposData, FileError> {
@@ -65,7 +65,7 @@ pub struct Repos {
 }
 
 impl std::ops::Deref for Repos {
-    type Target = IndexMap<Url, RepoRecord>;
+    type Target = IndexMap<RepoUrl, RepoRecord>;
 
     fn deref(&self) -> &Self::Target {
         &self.data.0
@@ -132,7 +132,7 @@ impl Repos {
         Ok(())
     }
 
-    pub fn insert(&mut self, key: Url, value: RepoRecord) -> Result<(), FileError> {
+    pub fn insert(&mut self, key: RepoUrl, value: RepoRecord) -> Result<(), FileError> {
         self.data.0.insert(key, value);
 
         if self.permission == Permission::ReadWrite {
@@ -142,7 +142,7 @@ impl Repos {
         Ok(())
     }
 
-    pub fn remove(&mut self, key: &Url) -> Result<bool, FileError> {
+    pub fn remove(&mut self, key: &RepoUrl) -> Result<bool, FileError> {
         let result = self.data.0.remove(key).is_some();
 
         if self.permission == Permission::ReadWrite {

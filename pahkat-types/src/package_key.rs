@@ -5,6 +5,8 @@ use serde::de::{self, Deserialize, Deserializer, Visitor};
 use serde::ser::{Serialize, Serializer};
 use url::Url;
 
+use crate::repo::RepoUrl;
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct PackageKeyParams {
     pub channel: Option<String>,
@@ -15,7 +17,7 @@ pub struct PackageKeyParams {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PackageKey {
-    pub repository_url: Url,
+    pub repository_url: RepoUrl,
     pub id: String,
     pub query: PackageKeyParams,
 }
@@ -38,7 +40,7 @@ impl PackageKey {
     }
 
     pub fn new_unchecked(
-        repository_url: Url,
+        repository_url: RepoUrl,
         id: String,
         args: Option<PackageKeyParams>,
     ) -> Self {
@@ -52,7 +54,7 @@ impl PackageKey {
 
 impl<'a> From<&'a PackageKey> for Url {
     fn from(key: &'a PackageKey) -> Url {
-        let mut url = key.repository_url.clone();
+        let mut url = key.repository_url.clone().into_inner();
 
         {
             // URL must always be a base, so this is safe (or we really do want to crash.)
@@ -104,10 +106,13 @@ pub enum TryFromError {
     #[error("Invalid URL")]
     InvalidUrl,
 
+    #[error("Invalid repository URL")]
+    InvalidRepoUrl(#[from] crate::repo::RepoUrlError),
+
     #[error("URL must not be a base")]
     BaseForbidden,
 
-    #[error("URL does not contain /packages/ segment")]
+    #[error("URL does not contain `/packages/` segment")]
     MissingPackagesSegment,
 
     #[error("Invalid package segment")]
@@ -172,7 +177,7 @@ impl<'a> TryFrom<&'a Url> for PackageKey {
         }
 
         Ok(PackageKey {
-            repository_url: url,
+            repository_url: RepoUrl::new(url)?,
             id,
             query,
         })

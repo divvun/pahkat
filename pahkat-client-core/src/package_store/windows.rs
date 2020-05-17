@@ -271,7 +271,7 @@ impl PackageStore for WindowsPackageStore {
         crate::repo::find_package_by_id(self, package_id, &*repos)
     }
 
-    fn refresh_repos(&self) -> crate::package_store::Future<Result<(), HashMap<Url, RepoDownloadError>>> {
+    fn refresh_repos(&self) -> crate::package_store::Future<Result<(), HashMap<RepoUrl, RepoDownloadError>>> {
         let config = self.config().read().unwrap().clone();
         let repos = self.repos();
         Box::pin(async move {
@@ -297,7 +297,7 @@ impl PackageStore for WindowsPackageStore {
 
     fn all_statuses(
         &self,
-        repo_url: &Url,
+        repo_url: &RepoUrl,
         target: InstallTarget,
     ) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>> {
         crate::repo::all_statuses(self, repo_url, target)
@@ -306,7 +306,7 @@ impl PackageStore for WindowsPackageStore {
     fn strings(
         &self,
         language: String,
-    ) -> crate::package_store::Future<HashMap<Url, LocalizedStrings>> {
+    ) -> crate::package_store::Future<HashMap<RepoUrl, LocalizedStrings>> {
         let repos = self.repos.read().unwrap();
         let urls = repos.keys().cloned().collect::<Vec<_>>();
 

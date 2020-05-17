@@ -19,12 +19,13 @@ use url::Url;
 use crate::config::Config;
 use crate::repo::{PackageQuery, RepoDownloadError};
 use crate::transaction::{install::InstallError, uninstall::UninstallError};
-use crate::transaction::{PackageStatus, PackageStatusError, ResolvedDescriptor, ResolvedPackageQuery};
+use crate::transaction::{PackageStatus, PackageStatusError, ResolvedPackageQuery};
 use crate::{LoadedRepository, PackageKey};
+use crate::types::repo::RepoUrl;
 
 pub type SharedStoreConfig = Arc<RwLock<Config>>;
-pub type SharedRepos = Arc<RwLock<HashMap<Url, LoadedRepository>>>;
-pub type SharedRepoErrors = Arc<RwLock<HashMap<Url, RepoDownloadError>>>;
+pub type SharedRepos = Arc<RwLock<HashMap<RepoUrl, LoadedRepository>>>;
+pub type SharedRepoErrors = Arc<RwLock<HashMap<RepoUrl, RepoDownloadError>>>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ImportError {
@@ -120,7 +121,7 @@ pub trait PackageStore: Send + Sync {
 
     fn all_statuses(
         &self,
-        repo_url: &Url,
+        repo_url: &RepoUrl,
         target: InstallTarget,
     ) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>>;
 
@@ -129,17 +130,17 @@ pub trait PackageStore: Send + Sync {
     fn find_package_by_key(&self, key: &PackageKey) -> Option<Package>;
 
     #[must_use]
-    fn refresh_repos(&self) -> Future<Result<(), HashMap<Url, RepoDownloadError>>>;
+    fn refresh_repos(&self) -> Future<Result<(), HashMap<RepoUrl, RepoDownloadError>>>;
 
     #[must_use]
-    fn force_refresh_repos(&self) -> Future<Result<(), HashMap<Url, RepoDownloadError>>> {
+    fn force_refresh_repos(&self) -> Future<Result<(), HashMap<RepoUrl, RepoDownloadError>>> {
         self.clear_cache();
         self.refresh_repos()
     }
 
     fn clear_cache(&self);
 
-    fn strings(&self, language: String) -> Future<HashMap<Url, LocalizedStrings>>;
+    fn strings(&self, language: String) -> Future<HashMap<RepoUrl, LocalizedStrings>>;
 
     // #[export::experimental]
     fn resolve_package_query(&self, query: PackageQuery, install_target: &[InstallTarget]) -> ResolvedPackageQuery;

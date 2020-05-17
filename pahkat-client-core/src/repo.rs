@@ -24,6 +24,7 @@ use crate::package_store::PackageStore;
 use crate::transaction::{ResolvedDescriptor, ResolvedPackageQuery, PackageStatus, PackageStatusError};
 use pahkat_types::package::{Package, Release, Version, Descriptor};
 use pahkat_types::payload::Target;
+use pahkat_types::repo::RepoUrl;
 
 #[derive(Debug, Clone, Error)]
 pub enum PayloadError {
@@ -210,7 +211,7 @@ impl<'a> ReleaseQuery<'a> {
         }
     }
 
-    pub fn new(key: &'a PackageKey, repos: &'a HashMap<Url, LoadedRepository>) -> Self {
+    pub fn new(key: &'a PackageKey, repos: &'a HashMap<RepoUrl, LoadedRepository>) -> Self {
         let channels = key
             .query
             .channel
@@ -261,7 +262,7 @@ impl<'a> ReleaseQuery<'a> {
 
 pub(crate) fn resolve_package<'a>(
     package_key: &PackageKey,
-    repos: &'a HashMap<Url, LoadedRepository>,
+    repos: &'a HashMap<RepoUrl, LoadedRepository>,
 ) -> Result<pahkat_types::package::Descriptor, PayloadError> {
     log::trace!("Finding package");
     let package = find_package_by_key(package_key, repos).ok_or(PayloadError::NoPackage)?;
@@ -283,7 +284,7 @@ pub(crate) fn resolve_package_query<'a>(
     store: &dyn PackageStore,
     query: &PackageQuery,
     install_target: &[InstallTarget],
-    repos: &'a HashMap<Url, LoadedRepository>,
+    repos: &'a HashMap<RepoUrl, LoadedRepository>,
 ) -> ResolvedPackageQuery {
     log::debug!("resolve_package_query {:?} {:?}", query, install_target);
 
@@ -369,7 +370,7 @@ pub(crate) fn resolve_package_query<'a>(
 pub(crate) fn resolve_payload<'a>(
     package_key: &PackageKey,
     query: &ReleaseQuery<'a>,
-    repos: &'a HashMap<Url, LoadedRepository>,
+    repos: &'a HashMap<RepoUrl, LoadedRepository>,
 ) -> Result<
     (
         pahkat_types::payload::Target,
@@ -392,7 +393,7 @@ pub(crate) fn import<'a>(
     config: &Arc<RwLock<Config>>,
     package_key: &PackageKey,
     query: &ReleaseQuery<'a>,
-    repos: &HashMap<Url, LoadedRepository>,
+    repos: &HashMap<RepoUrl, LoadedRepository>,
     installer_path: &Path,
 ) -> Result<std::path::PathBuf, crate::package_store::ImportError> {
     use pahkat_types::payload::AsDownloadUrl;
@@ -413,7 +414,7 @@ pub(crate) fn download<'a>(
     config: &Arc<RwLock<Config>>,
     package_key: &PackageKey,
     query: &ReleaseQuery<'a>,
-    repos: &HashMap<Url, LoadedRepository>,
+    repos: &HashMap<RepoUrl, LoadedRepository>,
 ) -> std::pin::Pin<
     Box<
         dyn futures::stream::Stream<Item = crate::package_store::DownloadEvent>
@@ -492,7 +493,7 @@ pub(crate) fn download_file_path(config: &Config, url: &url::Url) -> std::path::
 
 pub(crate) fn all_statuses<'a>(
     store: &dyn PackageStore,
-    repo_url: &Url,
+    repo_url: &RepoUrl,
     target: crate::package_store::InstallTarget,
 ) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>> {
     log::debug!(
@@ -531,9 +532,9 @@ pub(crate) fn all_statuses<'a>(
 }
 
 pub(crate) async fn strings<'p>(
-    repo_urls: Vec<Url>,
+    repo_urls: Vec<RepoUrl>,
     language: String
-) -> HashMap<Url, crate::package_store::LocalizedStrings> {
+) -> HashMap<RepoUrl, crate::package_store::LocalizedStrings> {
     let futures = repo_urls
         .into_iter()
         .map(|url| {
@@ -570,7 +571,7 @@ pub(crate) async fn strings<'p>(
 
 pub(crate) fn find_package_by_key<'p>(
     package_key: &PackageKey,
-    repos: &'p HashMap<Url, LoadedRepository>,
+    repos: &'p HashMap<RepoUrl, LoadedRepository>,
 ) -> Option<Package> {
     log::trace!("Resolving package...");
     log::trace!("My pkg id: {}", &package_key.id);
@@ -608,7 +609,7 @@ pub(crate) fn find_package_by_key<'p>(
 pub(crate) fn find_package_by_id(
     store: &dyn PackageStore,
     package_id: &str,
-    repos: &HashMap<Url, LoadedRepository>,
+    repos: &HashMap<RepoUrl, LoadedRepository>,
 ) -> Option<(PackageKey, Package)> {
     match PackageKey::try_from(package_id) {
         Ok(k) => return store.find_package_by_key(&k).map(|pkg| (k, pkg)),
@@ -640,7 +641,7 @@ pub(crate) fn find_package_by_id(
 #[must_use]
 pub(crate) async fn refresh_repos(
     config: Config,
-) -> (HashMap<Url, LoadedRepository>, HashMap<Url, RepoDownloadError>) {
+) -> (HashMap<RepoUrl, LoadedRepository>, HashMap<RepoUrl, RepoDownloadError>) {
     let config = Arc::new(config);
 
     log::debug!("Refreshing repos...");
@@ -738,7 +739,7 @@ fn resolve_package_candidate(
     store: &dyn PackageStore,
     package_key: &PackageKey,
     install_target: &[InstallTarget],
-    repos: &HashMap<Url, LoadedRepository>,
+    repos: &HashMap<RepoUrl, LoadedRepository>,
 ) -> Result<PackageCandidate, PackageCandidateError> {
     let query = crate::repo::ReleaseQuery::new(package_key, &repos);
 
@@ -792,7 +793,7 @@ fn recurse_package_set(
     store: &dyn PackageStore,
     package_candidate: &PackageCandidate,
     install_target: &[InstallTarget],
-    repos: &HashMap<Url, LoadedRepository>,
+    repos: &HashMap<RepoUrl, LoadedRepository>,
     set: &mut HashMap<PackageKey, PackageCandidate>
 ) -> Result<(), PackageCandidateError> {
     package_candidate.target.dependencies.keys().try_fold((), |_, key| {

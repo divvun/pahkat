@@ -484,6 +484,8 @@ impl pb::pahkat_server::Pahkat for Rpc {
         let request = request.into_inner();
         let url =
             Url::parse(&request.url).map_err(|e| Status::failed_precondition(format!("{}", e)))?;
+        let url = pahkat_client::types::repo::RepoUrl::new(url)
+            .map_err(|e| Status::failed_precondition(format!("{}", e)))?;
 
         let config = self.store.config();
         {
@@ -552,6 +554,8 @@ impl pb::pahkat_server::Pahkat for Rpc {
 
         let url =
             Url::parse(&request.url).map_err(|e| Status::failed_precondition(format!("{}", e)))?;
+        let url = pahkat_client::types::repo::RepoUrl::new(url)
+            .map_err(|e| Status::failed_precondition(format!("{}", e)))?;
 
         let config = self.store.config();
 

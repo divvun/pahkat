@@ -10,7 +10,7 @@ use std::sync::{Arc, RwLock};
 use dashmap::DashMap;
 use hashbrown::HashMap;
 use pahkat_types::package::Package;
-use pahkat_types::payload::macos;
+use pahkat_types::repo::RepoUrl;
 use serde::de::{self, Deserializer};
 use serde::Deserialize;
 use url::Url;
@@ -164,7 +164,7 @@ impl PackageStore for MacOSPackageStore {
 
     fn all_statuses(
         &self,
-        repo_url: &Url,
+        repo_url: &RepoUrl,
         target: InstallTarget,
     ) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>> {
         crate::repo::all_statuses(self, repo_url, target)
@@ -180,7 +180,7 @@ impl PackageStore for MacOSPackageStore {
         crate::repo::find_package_by_id(self, package_id, &*repos)
     }
     
-    fn refresh_repos(&self) -> crate::package_store::Future<Result<(), HashMap<Url, RepoDownloadError>>> {
+    fn refresh_repos(&self) -> crate::package_store::Future<Result<(), HashMap<RepoUrl, RepoDownloadError>>> {
         let config = self.config().read().unwrap().clone();
         let repos = self.repos();
         Box::pin(async move {
@@ -198,7 +198,7 @@ impl PackageStore for MacOSPackageStore {
         crate::repo::clear_cache(&self.config)
     }
 
-    fn strings(&self, language: String) -> crate::package_store::Future<HashMap<Url, LocalizedStrings>> {
+    fn strings(&self, language: String) -> crate::package_store::Future<HashMap<RepoUrl, LocalizedStrings>> {
         let repos = self.repos.read().unwrap();
         let urls = repos.keys().cloned().collect::<Vec<_>>();
 

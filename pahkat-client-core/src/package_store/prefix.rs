@@ -30,7 +30,7 @@ const SQL_INIT: &str = include_str!("prefix/prefix_init.sql");
 pub struct PrefixPackageStore {
     pool: r2d2::Pool<SqliteConnectionManager>,
     prefix: PathBuf,
-    repos: Arc<RwLock<HashMap<Url, LoadedRepository>>>,
+    repos: Arc<RwLock<HashMap<RepoUrl, LoadedRepository>>>,
     config: Arc<RwLock<Config>>,
 }
 
@@ -347,7 +347,7 @@ impl PackageStore for PrefixPackageStore {
 
     fn all_statuses(
         &self,
-        repo_url: &Url,
+        repo_url: &RepoUrl,
         target: InstallTarget,
     ) -> BTreeMap<String, Result<PackageStatus, PackageStatusError>> {
         crate::repo::all_statuses(self, repo_url, target)
@@ -363,7 +363,7 @@ impl PackageStore for PrefixPackageStore {
         crate::repo::find_package_by_id(self, package_id, &*repos)
     }
 
-    fn refresh_repos(&self) -> crate::package_store::Future<Result<(), HashMap<Url, RepoDownloadError>>> {
+    fn refresh_repos(&self) -> crate::package_store::Future<Result<(), HashMap<RepoUrl, RepoDownloadError>>> {
         let config = self.config().read().unwrap().clone();
         let repos = self.repos();
         let errors = self.errors();
@@ -385,7 +385,7 @@ impl PackageStore for PrefixPackageStore {
         crate::repo::clear_cache(&self.config)
     }
 
-    fn strings(&self, language: String) -> crate::package_store::Future<HashMap<Url, crate::package_store::LocalizedStrings>> {
+    fn strings(&self, language: String) -> crate::package_store::Future<HashMap<RepoUrl, crate::package_store::LocalizedStrings>> {
         let repos = self.repos.read().unwrap();
         let urls = repos.keys().cloned().collect::<Vec<_>>();
 

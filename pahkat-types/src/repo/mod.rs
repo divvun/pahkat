@@ -1,7 +1,11 @@
+mod url;
+
+pub use self::url::{RepoUrl, RepoUrlError};
+
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use typed_builder::TypedBuilder;
-use url::Url;
+use ::url::Url;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[serde(untagged)]
@@ -16,7 +20,7 @@ pub enum Repository {
 )]
 #[non_exhaustive]
 pub struct RepositoryData {
-    pub url: Url,
+    pub url: RepoUrl,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     #[builder(default)]
@@ -32,11 +36,11 @@ pub struct RepositoryData {
 
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[builder(default)]
-    pub linked_repositories: Vec<Url>,
+    pub linked_repositories: Vec<RepoUrl>,
 
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[builder(default)]
-    pub accepted_redirections: Vec<Url>,
+    pub accepted_redirections: Vec<RepoUrl>,
 }
 
 #[derive(
@@ -85,7 +89,7 @@ pub struct Localisation {
 )]
 #[non_exhaustive]
 pub struct RedirectData {
-    pub url: url::Url,
+    pub url: RepoUrl,
 }
 
 #[derive(

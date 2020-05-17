@@ -1,9 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use url::Url;
 
-use pahkat_types::PackageKey;
+use pahkat_types::{PackageKey, repo::RepoUrl};
 use crate::pahkat_fbs;
 
 #[derive(Debug, thiserror::Error)]
@@ -34,7 +33,7 @@ pub struct LoadedRepository {
 
 impl LoadedRepository {
     pub async fn from_cache_or_url(
-        url: Url,
+        url: RepoUrl,
         channel: Option<String>,
         cache_dir: PathBuf,
     ) -> Result<LoadedRepository, RepoDownloadError> {
@@ -42,7 +41,7 @@ impl LoadedRepository {
     }
 
     async fn from_url(
-        url: Url,
+        url: RepoUrl,
         channel: Option<String>,
     ) -> Result<LoadedRepository, RepoDownloadError> {
         const USER_AGENT: &str = concat!("pahkat-client/", env!("CARGO_PKG_VERSION"));
