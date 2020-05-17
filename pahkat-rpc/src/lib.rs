@@ -734,7 +734,7 @@ fn create_background_update_service(
         'main: loop {
             interval.tick().await;
 
-            time::delay_for(Duration::from_secs(10)).await;
+            time::delay_for(Duration::from_secs(2)).await;
             let _ = store.refresh_repos().await;
 
             log::info!("Running self-update check…");
