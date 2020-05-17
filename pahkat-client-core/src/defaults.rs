@@ -45,14 +45,38 @@ pub fn log_path() -> PathBuf {
 }
 
 pub fn cache_dir() -> ConfigPath {
+    if cfg!(windows) && whoami::username() == "SYSTEM" {
+        return ConfigPath(pathos::system::iri::app_cache_dir(APP_PATH))
+    }
+    
+    if cfg!(target_os = "macos") && whoami::username() == "root" {
+        return ConfigPath(pathos::system::iri::app_cache_dir(APP_PATH))
+    }
+
     ConfigPath(pathos::user::iri::app_cache_dir(APP_PATH))
 }
 
 pub fn tmp_dir() -> ConfigPath {
+    if cfg!(windows) && whoami::username() == "SYSTEM" {
+        return ConfigPath(pathos::system::iri::app_temporary_dir(APP_PATH))
+    }
+    
+    if cfg!(target_os = "macos") && whoami::username() == "root" {
+        return ConfigPath(pathos::system::iri::app_temporary_dir(APP_PATH))
+    }
+
     ConfigPath(pathos::user::iri::app_temporary_dir(APP_PATH))
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", feature = "launchd"))]
+pub fn uninstall_path() -> PathBuf {
+    if whoami::username() == "root" {
+        return pathos::system::app_data_dir(APP_PATH).join("uninstall");
+    }
+    pathos::user::app_data_dir(APP_PATH).join("uninstall")
+}
+
+#[cfg(all(target_os = "macos", not(feature = "launchd")))]
 pub fn uninstall_path() -> PathBuf {
     pathos::user::app_data_dir(APP_PATH).join("uninstall")
 }
