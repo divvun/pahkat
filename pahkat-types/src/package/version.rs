@@ -25,6 +25,14 @@ impl SemanticVersion {
     }
 }
 
+impl std::ops::Deref for SemanticVersion {
+    type Target = semver::Version;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Hash, Eq)]
 #[serde(untagged)]
 #[non_exhaustive]

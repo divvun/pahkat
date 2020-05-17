@@ -70,25 +70,20 @@ impl<'a> Default for ReleaseQuery<'a> {
 #[non_exhaustive]
 pub enum VersionQuery<'a> {
     Match(&'a str),
-    Semantic(&'a str),
-    Timestamp(&'a str),
+    Semantic(semver::VersionReq),
 }
 
 impl<'a> VersionQuery<'a> {
-    const fn any_semantic() -> Self {
-        VersionQuery::Semantic("*")
+    fn any_semantic() -> Self {
+        VersionQuery::Semantic(semver::VersionReq::parse("*").unwrap())
     }
 
     fn matches(&self, version: &Version) -> bool {
         match (self, version) {
             (VersionQuery::Semantic(mask), Version::Semantic(v)) => {
-                if *mask == "*" {
-                    true
-                } else {
-                    todo!()
-                }
+                mask.matches(v)
             }
-            _ => todo!(),
+            _ => false,
         }
     }
 }
@@ -190,15 +185,6 @@ impl<'a> Iterator for ReleaseQueryIter<'a> {
 }
 
 impl<'a> ReleaseQuery<'a> {
-    fn semver(channels: &'a [&'a str]) -> ReleaseQuery<'a> {
-        const ANY_SEMANTIC: &[VersionQuery<'static>] = &[VersionQuery::any_semantic()];
-
-        ReleaseQuery {
-            versions: ANY_SEMANTIC.to_vec(),
-            ..Default::default()
-        }
-    }
-
     pub(crate) fn iter(
         &'a self,
         descriptor: &'a pahkat_types::package::Descriptor,
