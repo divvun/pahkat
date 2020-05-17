@@ -304,10 +304,12 @@ impl pb::pahkat_server::Pahkat for Rpc {
                     Ok(v) => v,
                     Err(e) => {
                         let response = pb::TransactionResponse {
-                            value: Some(pb::transaction_response::Value::TransactionError(pb::transaction_response::TransactionError {
-                                package_id: "".to_string(),
-                                error: format!("{}", e)
-                            }))
+                            value: Some(pb::transaction_response::Value::TransactionError(
+                                pb::transaction_response::TransactionError {
+                                    package_id: "".to_string(),
+                                    error: format!("{}", e),
+                                },
+                            )),
                         };
                         match tx.send(Ok(response)) {
                             Ok(_) => {}
@@ -520,7 +522,10 @@ impl pb::pahkat_server::Pahkat for Rpc {
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_owned().into()))
                 .collect(),
-            errors: errors.iter().map(|(k, v)| (k.to_string(), format!("{:?}", v))).collect(),
+            errors: errors
+                .iter()
+                .map(|(k, v)| (k.to_string(), format!("{:?}", v)))
+                .collect(),
         }))
     }
 
@@ -531,7 +536,8 @@ impl pb::pahkat_server::Pahkat for Rpc {
         let records = {
             let config = self.store.config();
             let config = config.read().unwrap();
-            config.repos()
+            config
+                .repos()
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_owned().into()))
                 .collect()
@@ -542,7 +548,10 @@ impl pb::pahkat_server::Pahkat for Rpc {
 
         Ok(tonic::Response::new(pb::GetRepoRecordsResponse {
             records,
-            errors: errors.iter().map(|(k, v)| (k.to_string(), format!("{:?}", v))).collect(),
+            errors: errors
+                .iter()
+                .map(|(k, v)| (k.to_string(), format!("{:?}", v)))
+                .collect(),
         }))
     }
 
@@ -582,17 +591,25 @@ impl pb::pahkat_server::Pahkat for Rpc {
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_owned().into()))
                 .collect(),
-            errors: errors.iter().map(|(k, v)| (k.to_string(), format!("{:?}", v))).collect(),
+            errors: errors
+                .iter()
+                .map(|(k, v)| (k.to_string(), format!("{:?}", v)))
+                .collect(),
         }))
     }
 
-    async fn resolve_package_query(&self, request: Request<pb::JsonRequest>) -> Result<pb::JsonResponse> {
+    async fn resolve_package_query(
+        &self,
+        request: Request<pb::JsonRequest>,
+    ) -> Result<pb::JsonResponse> {
         log::debug!("Received resolve_package_query request: {:?}", &request);
         let json = request.into_inner().json;
         let query: pahkat_client::repo::PackageQuery = serde_json::from_str(&json)
             .map_err(|e| Status::failed_precondition(format!("{}", e)))?;
 
-        let results = self.store.resolve_package_query(query, &[InstallTarget::System, InstallTarget::User]);
+        let results = self
+            .store
+            .resolve_package_query(query, &[InstallTarget::System, InstallTarget::User]);
         log::debug!("resolve_package_query results: {:?}", &results);
         Ok(tonic::Response::new(pb::JsonResponse {
             json: serde_json::to_string(&results).unwrap(),
@@ -730,7 +747,7 @@ fn create_background_update_service(
                 }
                 _ => {}
             }
-            
+
             log::info!("Running update check…");
 
             // Currently installed packages:

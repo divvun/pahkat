@@ -1,6 +1,6 @@
+pub mod selfupdate;
 #[cfg(windows)]
 pub mod windows;
-pub mod selfupdate;
 
 use anyhow::{anyhow, Result};
 use log::{info, warn};
@@ -11,4 +11,3 @@ use std::convert::TryFrom;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time;
-

@@ -172,7 +172,6 @@ where
     }
 }
 
-
 pub struct JsonRefMarshaler<'a>(&'a std::marker::PhantomData<()>);
 
 impl<'a> InputType for JsonRefMarshaler<'a> {
@@ -201,7 +200,6 @@ where
     }
 }
 
-
 #[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<RwLock<PahkatClient>>")]
 pub extern "C" fn pahkat_rpc_new() -> Result<Arc<RwLock<PahkatClient>>, Box<dyn Error>> {
     let client = block_on(new_client())?;
@@ -213,12 +211,16 @@ pub extern "C" fn pahkat_rpc_free(ptr: *const RwLock<PahkatClient>) {
     if ptr.is_null() {
         return;
     }
-    unsafe { Arc::from_raw(ptr); }
+    unsafe {
+        Arc::from_raw(ptr);
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn pahkat_rpc_slice_free(slice: cursed::Slice<u8>) {
-    unsafe { let _ = cursed::VecMarshaler::from_foreign(slice); }
+    unsafe {
+        let _ = cursed::VecMarshaler::from_foreign(slice);
+    }
 }
 
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
@@ -240,22 +242,20 @@ pub extern "C" fn pahkat_rpc_repo_indexes(
 
 #[cthulhu::invoke]
 pub extern "C" fn pahkat_rpc_status(
-    #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)]
-    client: Arc<RwLock<PahkatClient>>,
-    #[marshal(cursed::StrMarshaler::<'_>)]
-    raw_package_key: &str,
+    #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
+    #[marshal(cursed::StrMarshaler::<'_>)] raw_package_key: &str,
     target: u8,
 ) -> i32 {
     let request = Request::new(pb::StatusRequest {
         package_id: raw_package_key.to_string(),
-        target: target as u32
+        target: target as u32,
     });
 
     block_on(async move {
         let mut client = client.write().await;
         let response = match client.status(request).await {
             Ok(v) => v,
-            Err(_) => return 0
+            Err(_) => return 0,
         };
         response.into_inner().value
     })
@@ -266,11 +266,13 @@ extern "C" fn pahkat_rpc_cancel_callback() {
     let mut tx = CURRENT_CANCEL_TX.lock().unwrap();
     let cb = tx.borrow_mut().take();
     match cb {
-        Some(tx) => tx.send(pb::TransactionRequest {
-            value: Some(
-                pb::transaction_request::Value::Cancel(pb::transaction_request::Cancel {})
-            )
-        }).unwrap(),
+        Some(tx) => tx
+            .send(pb::TransactionRequest {
+                value: Some(pb::transaction_request::Value::Cancel(
+                    pb::transaction_request::Cancel {},
+                )),
+            })
+            .unwrap(),
         None => {
             // No problem.
         }
@@ -282,7 +284,7 @@ pub extern "C" fn pahkat_rpc_get_repo_records(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
 ) -> Result<pb::GetRepoRecordsResponse, Box<dyn Error>> {
     let request = Request::new(pb::GetRepoRecordsRequest {});
-    
+
     block_on(async move {
         let mut client = client.write().await;
         let response = client.get_repo_records(request).await.box_err()?;
@@ -292,18 +294,15 @@ pub extern "C" fn pahkat_rpc_get_repo_records(
 
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_rpc_set_repo(
-    #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)]
-    client: Arc<RwLock<PahkatClient>>,
-    #[marshal(cursed::StrMarshaler::<'_>)]
-    repo_url: &str,
-    #[marshal(JsonRefMarshaler)]
-    settings: pb::RepoRecord,
+    #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
+    #[marshal(cursed::StrMarshaler::<'_>)] repo_url: &str,
+    #[marshal(JsonRefMarshaler)] settings: pb::RepoRecord,
 ) -> Result<pb::SetRepoResponse, Box<dyn Error>> {
     let request = Request::new(pb::SetRepoRequest {
         url: repo_url.to_string(),
         settings: Some(settings),
     });
-    
+
     block_on(async move {
         let mut client = client.write().await;
         let response = client.set_repo(request).await.box_err()?;
@@ -313,15 +312,13 @@ pub extern "C" fn pahkat_rpc_set_repo(
 
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_rpc_remove_repo(
-    #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)]
-    client: Arc<RwLock<PahkatClient>>,
-    #[marshal(cursed::StrMarshaler::<'_>)]
-    repo_url: &str,
+    #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
+    #[marshal(cursed::StrMarshaler::<'_>)] repo_url: &str,
 ) -> Result<pb::RemoveRepoResponse, Box<dyn Error>> {
     let request = Request::new(pb::RemoveRepoRequest {
         url: repo_url.to_string(),
     });
-    
+
     block_on(async move {
         let mut client = client.write().await;
         let response = client.remove_repo(request).await.box_err()?;
@@ -342,7 +339,7 @@ pub extern "C" fn pahkat_rpc_notifications(
             let stream = client.notifications(request).await.unwrap();
             stream.into_inner()
         };
-    
+
         while let Ok(Some(message)) = stream.message().await {
             unsafe {
                 (callback)(message.value as i32);
@@ -354,8 +351,7 @@ pub extern "C" fn pahkat_rpc_notifications(
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_rpc_strings(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
-    #[marshal(cursed::StrMarshaler::<'_>)]
-    language_tag: &str,
+    #[marshal(cursed::StrMarshaler::<'_>)] language_tag: &str,
 ) -> Result<pb::StringsResponse, Box<dyn Error>> {
     let request = Request::new(pb::StringsRequest {
         language: language_tag.to_string(),
@@ -373,8 +369,7 @@ pub extern "C" fn pahkat_rpc_strings(
 #[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_rpc_resolve_package_query(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
-    #[marshal(cursed::StrMarshaler::<'_>)]
-    package_query: &str,
+    #[marshal(cursed::StrMarshaler::<'_>)] package_query: &str,
 ) -> Result<pahkat_client::transaction::ResolvedPackageQuery, Box<dyn Error>> {
     let request = Request::new(pb::JsonRequest {
         json: package_query.to_string(),
@@ -393,8 +388,7 @@ pub extern "C" fn pahkat_rpc_resolve_package_query(
 pub extern "C" fn pahkat_rpc_process_transaction(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
 
-    #[marshal(JsonRefMarshaler)]
-    actions: Vec<pb::PackageAction>,
+    #[marshal(JsonRefMarshaler)] actions: Vec<pb::PackageAction>,
 
     callback: extern "C" fn(cursed::Slice<u8>),
 ) -> Result<(), Box<dyn Error>> {
@@ -411,7 +405,7 @@ pub extern "C" fn pahkat_rpc_process_transaction(
             let stream = client.process_transaction(request).await.unwrap();
             stream.into_inner()
         };
-    
+
         while let Ok(Some(message)) = stream.message().await {
             let cb_response = message.value.unwrap();
             let s = serde_json::to_string(&cb_response).unwrap();
@@ -420,12 +414,12 @@ pub extern "C" fn pahkat_rpc_process_transaction(
             unsafe {
                 (callback)(cursed::Slice {
                     data: bytes.as_ptr() as *mut _,
-                    len: bytes.len()
+                    len: bytes.len(),
                 });
             };
         }
     });
-    
+
     tx.send(pb::TransactionRequest {
         value: Some(pb::transaction_request::Value::Transaction(
             pb::transaction_request::Transaction { actions },
@@ -437,9 +431,11 @@ pub extern "C" fn pahkat_rpc_process_transaction(
     Ok(())
 }
 
-static CURRENT_CANCEL_TX: Lazy<std::sync::Mutex<std::cell::RefCell<Option<
-    tokio::sync::mpsc::UnboundedSender<pb::TransactionRequest>
->>>> = Lazy::new(|| std::sync::Mutex::new(std::cell::RefCell::new(None)));
+static CURRENT_CANCEL_TX: Lazy<
+    std::sync::Mutex<
+        std::cell::RefCell<Option<tokio::sync::mpsc::UnboundedSender<pb::TransactionRequest>>>,
+    >,
+> = Lazy::new(|| std::sync::Mutex::new(std::cell::RefCell::new(None)));
 
 static BASIC_RUNTIME: Lazy<std::sync::RwLock<tokio::runtime::Runtime>> = Lazy::new(|| {
     std::sync::RwLock::new(
@@ -463,13 +459,12 @@ fn block_on<F: std::future::Future>(future: F) -> F::Output {
 fn spawn<F>(future: F) -> tokio::task::JoinHandle<F::Output>
 where
     F: std::future::Future + Send + 'static,
-    F::Output: Send
+    F::Output: Send,
 {
     let rt = BASIC_RUNTIME.read().unwrap();
     let handle = rt.handle();
     handle.spawn(future)
 }
-
 
 trait BoxError {
     type Item;

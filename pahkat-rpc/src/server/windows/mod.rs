@@ -2,16 +2,16 @@ pub mod cli;
 pub mod service;
 
 use anyhow::Result;
+use std::fs::OpenOptions;
 use std::process::Command;
 use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
-use std::fs::OpenOptions;
 
 use pahkat_client::{
-    config::RepoRecord, package_store::InstallTarget, PackageAction, PackageActionType, PackageKey,
-    PackageStatus, PackageStore, PackageTransaction, Config,
+    config::RepoRecord, package_store::InstallTarget, Config, PackageAction, PackageActionType,
+    PackageKey, PackageStatus, PackageStore, PackageTransaction,
 };
 
 const SELF_UPDATE_TIMEOUT: u64 = 30;
@@ -61,7 +61,9 @@ pub fn initiate_self_update() -> Result<()> {
     Ok(())
 }
 
-pub(crate) async fn self_update(service_executable: &Path) -> std::result::Result<(), anyhow::Error> {
+pub(crate) async fn self_update(
+    service_executable: &Path,
+) -> std::result::Result<(), anyhow::Error> {
     log::info!("Running self-update");
 
     let store = super::selfupdate::package_store().await;
@@ -98,7 +100,7 @@ pub(crate) async fn self_update(service_executable: &Path) -> std::result::Resul
     match store.install(&super::selfupdate::UPDATER_KEY, InstallTarget::System) {
         Ok(_) => {
             log::info!("Self-updated successfully.");
-        },
+        }
         Err(e) => {
             log::error!("Error during self-update installation: {:?}", e);
             return Err(e.into());

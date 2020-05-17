@@ -1,25 +1,33 @@
+use futures::stream::{StreamExt, TryStreamExt};
+use once_cell::sync::Lazy;
+use pahkat_client::package_store::DownloadEvent;
 use pahkat_client::{
     config::RepoRecord, package_store::InstallTarget, PackageAction, PackageActionType, PackageKey,
     PackageStatus, PackageStore, PackageTransaction,
 };
 use std::error::Error;
-use futures::stream::{StreamExt, TryStreamExt};
-use once_cell::sync::Lazy;
-use pahkat_client::package_store::DownloadEvent;
 
 use std::convert::TryFrom;
 
 pub const UPDATER_DEFAULT_CHANNEL: &str = "nightly";
-pub static UPDATER_KEY: Lazy<PackageKey> = Lazy::new(||
-    PackageKey::try_from("https://pahkat.uit.no/divvun-installer/packages/divvun-installer").unwrap());
+pub static UPDATER_KEY: Lazy<PackageKey> = Lazy::new(|| {
+    PackageKey::try_from("https://pahkat.uit.no/divvun-installer/packages/divvun-installer")
+        .unwrap()
+});
 
 #[cfg(feature = "windows")]
 pub(crate) async fn package_store() -> Box<dyn PackageStore> {
     use pahkat_client::{Config, WindowsPackageStore};
     let mut config = Config::read_only();
-    config.repos_mut().insert(UPDATER_KEY.repository_url.clone(), RepoRecord {
-        channel: Some(UPDATER_DEFAULT_CHANNEL.to_string())
-    }).unwrap();
+    config
+        .repos_mut()
+        .insert(
+            UPDATER_KEY.repository_url.clone(),
+            RepoRecord {
+                channel: Some(UPDATER_DEFAULT_CHANNEL.to_string()),
+            },
+        )
+        .unwrap();
 
     Box::new(WindowsPackageStore::new(config).await)
 }
@@ -29,9 +37,15 @@ pub(crate) async fn package_store() -> Box<dyn PackageStore> {
     use pahkat_client::{Config, MacOSPackageStore};
     let mut config = Config::read_only();
 
-    config.repos_mut().insert(UPDATER_KEY.repository_url.clone(), RepoRecord {
-        channel: Some(UPDATER_DEFAULT_CHANNEL.to_string())
-    }).unwrap();
+    config
+        .repos_mut()
+        .insert(
+            UPDATER_KEY.repository_url.clone(),
+            RepoRecord {
+                channel: Some(UPDATER_DEFAULT_CHANNEL.to_string()),
+            },
+        )
+        .unwrap();
 
     Box::new(MacOSPackageStore::new(config).await)
 }
@@ -45,7 +59,7 @@ pub(crate) fn requires_update(store: &dyn PackageStore) -> bool {
             }
             PackageStatus::RequiresUpdate => true,
             PackageStatus::UpToDate => false,
-        }
+        },
         Err(err) => {
             log::error!("{:?}", err);
             false
@@ -74,7 +88,9 @@ pub async fn install(store: &dyn PackageStore) -> Result<(), Box<dyn Error>> {
     store.install(&UPDATER_KEY, InstallTarget::System)?;
 
     // Stop should trigger an immediate restart.
-    std::process::Command::new("launchctl").args(&["stop", "no.divvun.pahkatd"]).spawn()?;
+    std::process::Command::new("launchctl")
+        .args(&["stop", "no.divvun.pahkatd"])
+        .spawn()?;
     Ok(())
 }
 
@@ -93,7 +109,9 @@ pub(crate) async fn self_update() -> Result<bool, Box<dyn Error>> {
 
         while let Some(result) = stream.next().await {
             match result {
-                DownloadEvent::Progress((current, total)) => log::debug!("Downloaded: {}/{}", current, total),
+                DownloadEvent::Progress((current, total)) => {
+                    log::debug!("Downloaded: {}/{}", current, total)
+                }
                 DownloadEvent::Error(error) => {
                     log::error!("Error downloading update: {:?}", error);
                     if i == retries {

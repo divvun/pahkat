@@ -10,7 +10,12 @@ async fn main() -> anyhow::Result<()> {
         format!("/tmp/pahkat")
     };
 
-    pahkat_rpc::start(Path::new(&path), config_path(), tokio::sync::mpsc::unbounded_channel().1).await
+    pahkat_rpc::start(
+        Path::new(&path),
+        config_path(),
+        tokio::sync::mpsc::unbounded_channel().1,
+    )
+    .await
 }
 
 #[cfg(feature = "prefix")]
