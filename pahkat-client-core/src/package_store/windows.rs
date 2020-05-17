@@ -7,7 +7,6 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, RwLock};
 
-use dashmap::DashMap;
 use hashbrown::HashMap;
 use url::Url;
 use winreg::enums::*;
@@ -32,7 +31,7 @@ const DISPLAY_VERSION: &'static str = "DisplayVersion";
 const QUIET_UNINSTALL_STRING: &'static str = "QuietUninstallString";
 
 use super::LocalizedStrings;
-use super::{SharedRepos, SharedRepoErrors, SharedStoreConfig};
+use super::{SharedRepoErrors, SharedRepos, SharedStoreConfig};
 
 #[derive(Debug)]
 pub struct WindowsPackageStore {
@@ -272,7 +271,9 @@ impl PackageStore for WindowsPackageStore {
         crate::repo::find_package_by_id(self, package_id, &*repos)
     }
 
-    fn refresh_repos(&self) -> crate::package_store::Future<Result<(), HashMap<RepoUrl, RepoDownloadError>>> {
+    fn refresh_repos(
+        &self,
+    ) -> crate::package_store::Future<Result<(), HashMap<RepoUrl, RepoDownloadError>>> {
         let config = self.config().read().unwrap().clone();
         let repos = self.repos();
         Box::pin(async move {
@@ -314,7 +315,11 @@ impl PackageStore for WindowsPackageStore {
         Box::pin(crate::repo::strings(urls, language))
     }
 
-    fn resolve_package_query(&self, query: PackageQuery, install_target: &[InstallTarget]) -> ResolvedPackageQuery {
+    fn resolve_package_query(
+        &self,
+        query: PackageQuery,
+        install_target: &[InstallTarget],
+    ) -> ResolvedPackageQuery {
         let repos = self.repos();
         let repos = repos.read().unwrap();
         crate::repo::resolve_package_query(self, &query, install_target, &*repos)

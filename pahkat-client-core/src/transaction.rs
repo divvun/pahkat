@@ -1,6 +1,6 @@
+use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
-use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -139,9 +139,9 @@ pub enum PackageTransactionError {
 
     #[error("Invalid package status detected")]
     InvalidStatus(#[from] crate::transaction::PackageStatusError),
-    
+
     #[error("A payload could not be resolved")]
-    InvalidPayload(#[from] crate::repo::PayloadError)
+    InvalidPayload(#[from] crate::repo::PayloadError),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -203,7 +203,10 @@ pub enum TransactionEvent {
     Complete,
 }
 
-use pahkat_types::{payload::Target, package::{Descriptor, Release}};
+use pahkat_types::{
+    package::{Descriptor, Release},
+    payload::Target,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResolvedAction {
@@ -284,7 +287,8 @@ impl PackageTransaction {
         let repos = repos.read().unwrap();
 
         // Get mutation set (for install actions)
-        let install_actions = actions.iter()
+        let install_actions = actions
+            .iter()
             .filter(|a| a.action == PackageActionType::Install)
             .collect::<Vec<_>>();
         let install_target = install_actions
@@ -297,30 +301,39 @@ impl PackageTransaction {
             .iter()
             .map(|a| a.id.clone())
             .collect::<Vec<_>>();
-        let install_set = crate::repo::resolve_package_set(&*store, &*install_keys, &*install_target)?;
+        let install_set =
+            crate::repo::resolve_package_set(&*store, &*install_keys, &*install_target)?;
 
         let is_reboot_required = install_set.iter().any(|x| x.is_reboot_required);
 
         // Create a list of resolved actions to be processed.
-        let new_actions = install_set.into_iter().map(|candidate| {
-            let key = candidate.package_key;
+        let new_actions = install_set
+            .into_iter()
+            .map(|candidate| {
+                let key = candidate.package_key;
 
-            ResolvedAction {
-                descriptor: candidate.descriptor,
-                release: candidate.release,
-                target: candidate.target,
-                action: actions.iter().find(|x| &x.id == &key).cloned().unwrap_or_else(|| {
-                    PackageAction {
-                        id: key,
-                        action: PackageActionType::Install,
-                        target: InstallTarget::System,
-                    }
-                }),
-            }
-        }).collect::<Vec<_>>();
-        
+                ResolvedAction {
+                    descriptor: candidate.descriptor,
+                    release: candidate.release,
+                    target: candidate.target,
+                    action: actions
+                        .iter()
+                        .find(|x| &x.id == &key)
+                        .cloned()
+                        .unwrap_or_else(|| PackageAction {
+                            id: key,
+                            action: PackageActionType::Install,
+                            target: InstallTarget::System,
+                        }),
+                }
+            })
+            .collect::<Vec<_>>();
+
         // Check for uninstall actions that contradict this set
-        for action in actions.iter().filter(|x| x.action == PackageActionType::Uninstall) {
+        for action in actions
+            .iter()
+            .filter(|x| x.action == PackageActionType::Uninstall)
+        {
             if new_actions.iter().any(|x| x.action.id == action.id) {
                 return Err(PackageCandidateError::UninstallConflict(action.id.clone()));
             }

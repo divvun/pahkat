@@ -16,13 +16,15 @@ use sha2::Sha256;
 use thiserror::Error;
 use url::Url;
 
-use crate::package_store::DownloadEvent;
 use crate::config::Config;
 use crate::defaults;
 use crate::fbs::PackagesExt;
+use crate::package_store::DownloadEvent;
 use crate::package_store::PackageStore;
-use crate::transaction::{ResolvedDescriptor, ResolvedPackageQuery, PackageStatus, PackageStatusError};
-use pahkat_types::package::{Package, Release, Version, Descriptor};
+use crate::transaction::{
+    PackageStatus, PackageStatusError, ResolvedDescriptor, ResolvedPackageQuery,
+};
+use pahkat_types::package::{Descriptor, Package, Release, Version};
 use pahkat_types::payload::Target;
 use pahkat_types::repo::RepoUrl;
 
@@ -80,9 +82,7 @@ impl<'a> VersionQuery<'a> {
 
     fn matches(&self, version: &Version) -> bool {
         match (self, version) {
-            (VersionQuery::Semantic(mask), Version::Semantic(v)) => {
-                mask.matches(v)
-            }
+            (VersionQuery::Semantic(mask), Version::Semantic(v)) => mask.matches(v),
             _ => false,
         }
     }
@@ -278,14 +278,18 @@ pub(crate) fn resolve_package_query<'a>(
     // Only supports tags right now
     if let Some(tags) = query.tags.as_ref() {
         log::debug!("In tags");
-        let descriptors: Vec<ResolvedDescriptor> = repos.values()
+        let descriptors: Vec<ResolvedDescriptor> = repos
+            .values()
             .flat_map(|repo| {
                 let repo_url = repo.info().repository.url.clone();
 
                 log::debug!("Repo: {:?}", repo_url);
 
                 // Collect all matching descriptors into one list
-                repo.packages().packages().unwrap().iter()
+                repo.packages()
+                    .packages()
+                    .unwrap()
+                    .iter()
                     .map(|(_, pkg)| pkg)
                     .filter(|pkg| {
                         let pkg_tags = pkg.tags().unwrap().unwrap();
@@ -296,12 +300,14 @@ pub(crate) fn resolve_package_query<'a>(
                         })
                     })
                     .filter_map(move |pkg| {
-                        let key = PackageKey::new_unchecked(repo_url.clone(), pkg.id().unwrap().to_string(), None);
-                        let status = install_target.iter().fold(None, |acc, cur| {
-                            match acc {
-                                Some(v) if v != PackageStatus::NotInstalled => Some(v),
-                                _ => store.status(&key, *cur).ok(),
-                            }
+                        let key = PackageKey::new_unchecked(
+                            repo_url.clone(),
+                            pkg.id().unwrap().to_string(),
+                            None,
+                        );
+                        let status = install_target.iter().fold(None, |acc, cur| match acc {
+                            Some(v) if v != PackageStatus::NotInstalled => Some(v),
+                            _ => store.status(&key, *cur).ok(),
                         })?;
 
                         let descriptor = Descriptor::try_from(&pkg).ok()?;
@@ -315,25 +321,40 @@ pub(crate) fn resolve_package_query<'a>(
                                 tags: descriptor.package.tags.clone(),
                                 name: descriptor.name.clone(),
                                 description: descriptor.description.clone(),
-                                release: crate::transaction::ResolvedRelease::new(x.release.clone(), x.target.clone())
+                                release: crate::transaction::ResolvedRelease::new(
+                                    x.release.clone(),
+                                    x.target.clone(),
+                                ),
                             })
-                    }).collect::<Vec<_>>()
-            }).collect();
-        let status = descriptors.iter().fold(PackageStatus::UpToDate, |acc, cur| {
-            match (acc, cur.status) {
-                // If currently requires update, nothing trumps this state
-                (PackageStatus::RequiresUpdate, _) => acc,
-                // Only requires update trumps NotInstalled
-                (PackageStatus::NotInstalled, PackageStatus::RequiresUpdate) => cur.status,
-                (PackageStatus::NotInstalled, PackageStatus::UpToDate) => PackageStatus::RequiresUpdate,
-                (PackageStatus::UpToDate, PackageStatus::NotInstalled) => PackageStatus::RequiresUpdate,
-                // Everything trumps UpToDate
-                (PackageStatus::UpToDate, v) => v,
-                _ => cur.status,
-            }
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        let status = descriptors
+            .iter()
+            .fold(PackageStatus::UpToDate, |acc, cur| {
+                match (acc, cur.status) {
+                    // If currently requires update, nothing trumps this state
+                    (PackageStatus::RequiresUpdate, _) => acc,
+                    // Only requires update trumps NotInstalled
+                    (PackageStatus::NotInstalled, PackageStatus::RequiresUpdate) => cur.status,
+                    (PackageStatus::NotInstalled, PackageStatus::UpToDate) => {
+                        PackageStatus::RequiresUpdate
+                    }
+                    (PackageStatus::UpToDate, PackageStatus::NotInstalled) => {
+                        PackageStatus::RequiresUpdate
+                    }
+                    // Everything trumps UpToDate
+                    (PackageStatus::UpToDate, v) => v,
+                    _ => cur.status,
+                }
+            });
+        let size = descriptors
+            .iter()
+            .fold(0, |acc, cur| acc + cur.release.target.payload.size());
+        let installed_size = descriptors.iter().fold(0, |acc, cur| {
+            acc + cur.release.target.payload.installed_size()
         });
-        let size = descriptors.iter().fold(0, |acc, cur| acc + cur.release.target.payload.size());
-        let installed_size = descriptors.iter().fold(0, |acc, cur| acc + cur.release.target.payload.installed_size());
 
         return ResolvedPackageQuery {
             descriptors,
@@ -518,13 +539,14 @@ pub(crate) fn all_statuses<'a>(
 
 pub(crate) async fn strings<'p>(
     repo_urls: Vec<RepoUrl>,
-    language: String
+    language: String,
 ) -> HashMap<RepoUrl, crate::package_store::LocalizedStrings> {
     let futures = repo_urls
         .into_iter()
         .map(|url| {
             let strings_url = url
-                .join("strings/").unwrap()
+                .join("strings/")
+                .unwrap()
                 .join(&format!("{}.toml", language))
                 .unwrap();
             (url, strings_url)
@@ -551,7 +573,10 @@ pub(crate) async fn strings<'p>(
         .collect::<Vec<_>>();
     let results = futures::future::join_all(futures).await;
 
-    results.into_iter().filter_map(|(k, v)| v.map(|v| (k, v))).collect::<HashMap<_, _>>()
+    results
+        .into_iter()
+        .filter_map(|(k, v)| v.map(|v| (k, v)))
+        .collect::<HashMap<_, _>>()
 }
 
 pub(crate) fn find_package_by_key<'p>(
@@ -626,20 +651,22 @@ pub(crate) fn find_package_by_id(
 #[must_use]
 pub(crate) async fn refresh_repos(
     config: Config,
-) -> (HashMap<RepoUrl, LoadedRepository>, HashMap<RepoUrl, RepoDownloadError>) {
+) -> (
+    HashMap<RepoUrl, LoadedRepository>,
+    HashMap<RepoUrl, RepoDownloadError>,
+) {
     let config = Arc::new(config);
 
     log::debug!("Refreshing repos...");
 
     let repo_data = {
-        let repo_keys =
-            config
-                .repos()
-                .keys()
-                .fold(crossbeam_queue::SegQueue::new(), |acc, cur| {
-                    acc.push(cur.clone());
-                    acc
-                });
+        let repo_keys = config
+            .repos()
+            .keys()
+            .fold(crossbeam_queue::SegQueue::new(), |acc, cur| {
+                acc.push(cur.clone());
+                acc
+            });
 
         workqueue::work(config, repo_keys, |url, queue, config| {
             Box::pin(async move {
@@ -673,16 +700,15 @@ pub(crate) async fn refresh_repos(
     let mut err_map = HashMap::new();
 
     for (key, value) in repo_data.into_iter() {
-
         match value {
             Ok(v) => {
                 log::debug!("Resolved repository: {:?}", &key);
                 res_map.insert(key, v);
-            },
+            }
             Err(e) => {
                 log::debug!("Repository resolution failed: {:?} {:?}", &key, &e);
                 err_map.insert(key, e);
-            },
+            }
         }
     }
 
@@ -728,15 +754,17 @@ fn resolve_package_candidate(
 ) -> Result<PackageCandidate, PackageCandidateError> {
     let query = crate::repo::ReleaseQuery::new(package_key, &repos);
 
-    let status = install_target.iter().fold(None, |acc, cur| {
-        match acc {
+    let status = install_target
+        .iter()
+        .fold(None, |acc, cur| match acc {
             Some(Ok(v)) if v != PackageStatus::NotInstalled => Some(Ok(v)),
-            _ => {
-                Some(store.status(&package_key, *cur)
-                    .map_err(|e| PackageCandidateError::Status(package_key.to_owned(), e)))
-            }
-        }
-    }).unwrap_or_else(|| Err(PackageCandidateError::UnresolvedId(package_key.to_string())))?;
+            _ => Some(
+                store
+                    .status(&package_key, *cur)
+                    .map_err(|e| PackageCandidateError::Status(package_key.to_owned(), e)),
+            ),
+        })
+        .unwrap_or_else(|| Err(PackageCandidateError::UnresolvedId(package_key.to_string())))?;
 
     let (target, release, descriptor) = resolve_payload(package_key, &query, &*repos)
         .map_err(|e| PackageCandidateError::Payload(package_key.to_owned(), e))?;
@@ -760,8 +788,8 @@ fn resolve_package_candidate(
                 PackageStatus::RequiresUpdate => pkg.requires_reboot.contains(&RebootSpec::Update),
                 _ => false,
             }
-        },
-        _ => false
+        }
+        _ => false,
     };
 
     Ok(PackageCandidate {
@@ -779,24 +807,31 @@ fn recurse_package_set(
     package_candidate: &PackageCandidate,
     install_target: &[InstallTarget],
     repos: &HashMap<RepoUrl, LoadedRepository>,
-    set: &mut HashMap<PackageKey, PackageCandidate>
+    set: &mut HashMap<PackageKey, PackageCandidate>,
 ) -> Result<(), PackageCandidateError> {
-    package_candidate.target.dependencies.keys().try_fold((), |_, key| {
-        let key = if !key.starts_with("https://") && !key.starts_with("http://") {
-            store.find_package_by_id(key).map(|x| x.0)
-                .ok_or_else(|| PackageCandidateError::UnresolvedId(key.to_string()))?
-        } else {
-            PackageKey::try_from(&**key).map_err(|_| PackageCandidateError::UnresolvedId(key.to_string()))?
-        };
+    package_candidate
+        .target
+        .dependencies
+        .keys()
+        .try_fold((), |_, key| {
+            let key = if !key.starts_with("https://") && !key.starts_with("http://") {
+                store
+                    .find_package_by_id(key)
+                    .map(|x| x.0)
+                    .ok_or_else(|| PackageCandidateError::UnresolvedId(key.to_string()))?
+            } else {
+                PackageKey::try_from(&**key)
+                    .map_err(|_| PackageCandidateError::UnresolvedId(key.to_string()))?
+            };
 
-        if set.contains_key(&key) {
-            return Ok(());
-        }
+            if set.contains_key(&key) {
+                return Ok(());
+            }
 
-        let candidate = resolve_package_candidate(store, &key, install_target, repos)?;
-        set.insert(key, candidate);
-        Ok(())
-    })
+            let candidate = resolve_package_candidate(store, &key, install_target, repos)?;
+            set.insert(key, candidate);
+            Ok(())
+        })
 }
 
 pub(crate) fn resolve_package_set(
@@ -808,15 +843,25 @@ pub(crate) fn resolve_package_set(
     let repos = repos.read().unwrap();
 
     // Resolve initial package set
-    let mut candidate_set = install_candidates.iter().map(|key| {
-        resolve_package_candidate(store, &key, install_target, &*repos).map(|v| (key.to_owned(), v))
-    }).collect::<Result<HashMap<_, _>, _>>()?;
+    let mut candidate_set = install_candidates
+        .iter()
+        .map(|key| {
+            resolve_package_candidate(store, &key, install_target, &*repos)
+                .map(|v| (key.to_owned(), v))
+        })
+        .collect::<Result<HashMap<_, _>, _>>()?;
 
     // Iterate all dependencies until we achieve victory
     let values = candidate_set.values().cloned().collect::<Vec<_>>();
 
     values.iter().try_fold((), |_, candidate| {
-        recurse_package_set(store, candidate, install_target, &*repos, &mut candidate_set)
+        recurse_package_set(
+            store,
+            candidate,
+            install_target,
+            &*repos,
+            &mut candidate_set,
+        )
     })?;
 
     // Take our candidate set and resolve it down to a mutation set

@@ -49,7 +49,6 @@ indexmap = { version = "1.3.2", features = ["serde-1"] }
 async-trait = "0.1.30"
 futures = "0.3.4"
 async-stream = "0.2.1"
-dashmap = "3.11.0"
 stream-cancel = "0.5.2"
 anyhow = "1.0.28"
 workqueue = "0.1.0"
@@ -60,7 +59,7 @@ iref = "1.1.5"
 
     # MacOS-specific
     [target.'cfg(target_os="macos")'.dependencies]
-    plist = { version = "0.5.4" }
+    plist = { version = "1.0.0" }
 
     # Windows-specific
     [target.'cfg(target_os="windows")'.dependencies]

@@ -7,7 +7,6 @@ use std::process::Command;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 
-use dashmap::DashMap;
 use hashbrown::HashMap;
 use pahkat_types::package::Package;
 use pahkat_types::repo::RepoUrl;
@@ -15,11 +14,13 @@ use serde::de::{self, Deserializer};
 use serde::Deserialize;
 use url::Url;
 
-use super::{PackageStore, SharedRepos, SharedRepoErrors, SharedStoreConfig};
+use super::{PackageStore, SharedRepoErrors, SharedRepos, SharedStoreConfig};
 use crate::package_store::{ImportError, InstallTarget, LocalizedStrings};
 use crate::repo::{PackageQuery, RepoDownloadError};
 use crate::transaction::{install::InstallError, install::ProcessError, uninstall::UninstallError};
-use crate::transaction::{PackageStatus, PackageStatusError, ResolvedDescriptor, ResolvedPackageQuery};
+use crate::transaction::{
+    PackageStatus, PackageStatusError, ResolvedDescriptor, ResolvedPackageQuery,
+};
 use crate::{cmp, Config, PackageKey};
 
 #[cfg(target_os = "macos")]
@@ -60,7 +61,7 @@ impl PackageStore for MacOSPackageStore {
     fn repos(&self) -> SharedRepos {
         Arc::clone(&self.repos)
     }
-    
+
     fn errors(&self) -> super::SharedRepoErrors {
         Arc::clone(&self.errors)
     }
@@ -179,8 +180,10 @@ impl PackageStore for MacOSPackageStore {
         let repos = self.repos.read().unwrap();
         crate::repo::find_package_by_id(self, package_id, &*repos)
     }
-    
-    fn refresh_repos(&self) -> crate::package_store::Future<Result<(), HashMap<RepoUrl, RepoDownloadError>>> {
+
+    fn refresh_repos(
+        &self,
+    ) -> crate::package_store::Future<Result<(), HashMap<RepoUrl, RepoDownloadError>>> {
         let config = self.config().read().unwrap().clone();
         let repos = self.repos();
         Box::pin(async move {
@@ -198,14 +201,21 @@ impl PackageStore for MacOSPackageStore {
         crate::repo::clear_cache(&self.config)
     }
 
-    fn strings(&self, language: String) -> crate::package_store::Future<HashMap<RepoUrl, LocalizedStrings>> {
+    fn strings(
+        &self,
+        language: String,
+    ) -> crate::package_store::Future<HashMap<RepoUrl, LocalizedStrings>> {
         let repos = self.repos.read().unwrap();
         let urls = repos.keys().cloned().collect::<Vec<_>>();
 
         Box::pin(crate::repo::strings(urls, language))
     }
 
-    fn resolve_package_query(&self, query: PackageQuery, install_target: &[InstallTarget]) -> ResolvedPackageQuery {
+    fn resolve_package_query(
+        &self,
+        query: PackageQuery,
+        install_target: &[InstallTarget],
+    ) -> ResolvedPackageQuery {
         let repos = self.repos();
         let repos = repos.read().unwrap();
         crate::repo::resolve_package_query(self, &query, install_target, &*repos)

@@ -6,10 +6,10 @@ pub mod prefix;
 pub mod windows;
 
 use std::collections::BTreeMap;
+use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
-use std::fmt::Debug;
 
 use hashbrown::HashMap;
 use pahkat_types::package::Package;
@@ -20,8 +20,8 @@ use crate::config::Config;
 use crate::repo::{PackageQuery, RepoDownloadError};
 use crate::transaction::{install::InstallError, uninstall::UninstallError};
 use crate::transaction::{PackageStatus, PackageStatusError, ResolvedPackageQuery};
-use crate::{LoadedRepository, PackageKey};
 use crate::types::repo::RepoUrl;
+use crate::{LoadedRepository, PackageKey};
 
 pub type SharedStoreConfig = Arc<RwLock<Config>>;
 pub type SharedRepos = Arc<RwLock<HashMap<RepoUrl, LoadedRepository>>>;
@@ -143,6 +143,9 @@ pub trait PackageStore: Send + Sync {
     fn strings(&self, language: String) -> Future<HashMap<RepoUrl, LocalizedStrings>>;
 
     // #[export::experimental]
-    fn resolve_package_query(&self, query: PackageQuery, install_target: &[InstallTarget]) -> ResolvedPackageQuery;
-
+    fn resolve_package_query(
+        &self,
+        query: PackageQuery,
+        install_target: &[InstallTarget],
+    ) -> ResolvedPackageQuery;
 }

@@ -5,9 +5,9 @@ use once_cell::sync::{Lazy, OnceCell};
 use serde::de::{self, Deserializer, Visitor};
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
+use std::convert::TryInto;
 use thiserror::Error;
 use url::Url;
-use std::convert::TryInto;
 
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub struct ConfigPath(pub(crate) iref::IriBuf);

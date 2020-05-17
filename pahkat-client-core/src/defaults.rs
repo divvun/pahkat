@@ -6,63 +6,93 @@ const APP_PATH: &str = "Pahkat";
 
 #[cfg(not(target_os = "android"))]
 pub fn config_path() -> PathBuf {
-    if cfg!(windows) && whoami::username() == "SYSTEM" {
-        return pathos::system::app_config_dir(APP_PATH)
+    #[cfg(windows)]
+    {
+        if cfg!(windows) && whoami::username() == "SYSTEM" {
+            return pathos::system::app_config_dir(APP_PATH);
+        }
     }
-    
-    if cfg!(target_os = "macos") && whoami::username() == "root" {
-        return pathos::system::app_config_dir(APP_PATH)
+
+    #[cfg(target_os = "macos")]
+    {
+        if cfg!(target_os = "macos") && whoami::username() == "root" {
+            return pathos::system::app_config_dir(APP_PATH);
+        }
     }
-    
+
     pathos::user::app_config_dir(APP_PATH)
 }
 
 #[inline(always)]
 #[cfg(not(target_os = "android"))]
 fn raw_cache_dir() -> PathBuf {
-    if cfg!(windows) && whoami::username() == "SYSTEM" {
-        return pathos::system::app_cache_dir(APP_PATH)
-    }
-    
-    if cfg!(target_os = "macos") && whoami::username() == "root" {
-        return pathos::system::app_cache_dir(APP_PATH)
+    #[cfg(windows)]
+    {
+        if whoami::username() == "SYSTEM" {
+            return pathos::system::app_cache_dir(APP_PATH);
+        }
     }
 
+    #[cfg(target_os = "macos")]
+    {
+        if whoami::username() == "root" {
+            return pathos::system::app_cache_dir(APP_PATH);
+        }
+    }
     pathos::user::app_cache_dir(APP_PATH)
 }
 
 #[inline(always)]
+#[cfg(not(target_os = "android"))]
 pub fn log_path() -> PathBuf {
-    if cfg!(windows) && whoami::username() == "SYSTEM" {
-        return pathos::system::app_log_dir(APP_PATH)
-    }
-    
-    if cfg!(target_os = "macos") && whoami::username() == "root" {
-        return pathos::system::app_log_dir(APP_PATH)
+    #[cfg(windows)]
+    {
+        if whoami::username() == "SYSTEM" {
+            return pathos::system::app_log_dir(APP_PATH);
+        }
     }
 
-    return pathos::user::app_log_dir(APP_PATH)
+    #[cfg(target_os = "macos")]
+    {
+        if whoami::username() == "root" {
+            return pathos::system::app_log_dir(APP_PATH);
+        }
+    }
+
+    return pathos::user::app_log_dir(APP_PATH);
 }
 
 pub fn cache_dir() -> ConfigPath {
-    if cfg!(windows) && whoami::username() == "SYSTEM" {
-        return ConfigPath(pathos::system::iri::app_cache_dir(APP_PATH))
+    #[cfg(windows)]
+    {
+        if whoami::username() == "SYSTEM" {
+            return ConfigPath(pathos::system::iri::app_cache_dir(APP_PATH));
+        }
     }
-    
-    if cfg!(target_os = "macos") && whoami::username() == "root" {
-        return ConfigPath(pathos::system::iri::app_cache_dir(APP_PATH))
+
+    #[cfg(target_os = "macos")]
+    {
+        if cfg!(target_os = "macos") && whoami::username() == "root" {
+            return ConfigPath(pathos::system::iri::app_cache_dir(APP_PATH));
+        }
     }
 
     ConfigPath(pathos::user::iri::app_cache_dir(APP_PATH))
 }
 
 pub fn tmp_dir() -> ConfigPath {
-    if cfg!(windows) && whoami::username() == "SYSTEM" {
-        return ConfigPath(pathos::system::iri::app_temporary_dir(APP_PATH))
+    #[cfg(windows)]
+    {
+        if whoami::username() == "SYSTEM" {
+            return ConfigPath(pathos::system::iri::app_temporary_dir(APP_PATH));
+        }
     }
-    
-    if cfg!(target_os = "macos") && whoami::username() == "root" {
-        return ConfigPath(pathos::system::iri::app_temporary_dir(APP_PATH))
+
+    #[cfg(target_os = "macos")]
+    {
+        if && whoami::username() == "root" {
+            return ConfigPath(pathos::system::iri::app_temporary_dir(APP_PATH));
+        }
     }
 
     ConfigPath(pathos::user::iri::app_temporary_dir(APP_PATH))

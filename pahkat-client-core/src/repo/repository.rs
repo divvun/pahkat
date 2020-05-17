@@ -2,8 +2,8 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use pahkat_types::{PackageKey, repo::RepoUrl};
 use crate::pahkat_fbs;
+use pahkat_types::{repo::RepoUrl, PackageKey};
 
 #[derive(Debug, thiserror::Error)]
 pub enum RepoDownloadError {
@@ -107,6 +107,10 @@ impl LoadedRepository {
     }
 
     pub fn package_key(&self, descriptor: &pahkat_types::package::Descriptor) -> PackageKey {
-        PackageKey::new_unchecked(self.info.repository.url.to_owned(), descriptor.package.id.clone(), None)
+        PackageKey::new_unchecked(
+            self.info.repository.url.to_owned(),
+            descriptor.package.id.clone(),
+            None,
+        )
     }
 }

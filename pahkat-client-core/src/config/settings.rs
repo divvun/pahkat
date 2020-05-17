@@ -31,23 +31,31 @@ impl Default for SettingsData {
 
 impl SettingsData {
     fn load<P: AsRef<Path>>(path: P) -> Result<SettingsData, FileError> {
-        let file = std::fs::read_to_string(&path).map_err(|e| FileError::Read(e, path.as_ref().to_path_buf()))?;
-        let file = toml::from_str(&file).map_err(|e| FileError::FromToml(e, path.as_ref().to_path_buf()))?;
+        let file = std::fs::read_to_string(&path)
+            .map_err(|e| FileError::Read(e, path.as_ref().to_path_buf()))?;
+        let file = toml::from_str(&file)
+            .map_err(|e| FileError::FromToml(e, path.as_ref().to_path_buf()))?;
         Ok(file)
     }
 
     fn save<P: AsRef<Path>>(&self, path: P) -> Result<(), FileError> {
-        let mut file = File::create(&path).map_err(|e| FileError::Write(e, path.as_ref().to_path_buf()))?;
-        let b = toml::to_vec(&self).map_err(|e| FileError::ToToml(e, path.as_ref().to_path_buf()))?;
-        file.write_all(&b).map_err(|e| FileError::Write(e, path.as_ref().to_path_buf()))?;
+        let mut file =
+            File::create(&path).map_err(|e| FileError::Write(e, path.as_ref().to_path_buf()))?;
+        let b =
+            toml::to_vec(&self).map_err(|e| FileError::ToToml(e, path.as_ref().to_path_buf()))?;
+        file.write_all(&b)
+            .map_err(|e| FileError::Write(e, path.as_ref().to_path_buf()))?;
         Ok(())
     }
 
     fn create<P: AsRef<Path>>(path: P) -> Result<SettingsData, FileError> {
         // Create parent directories if they don't exist
-        let parent = path.as_ref().parent()
+        let parent = path
+            .as_ref()
+            .parent()
             .ok_or_else(|| FileError::PathParent(path.as_ref().to_path_buf()))?;
-        std::fs::create_dir_all(&parent).map_err(|e| FileError::CreateParentDir(e, parent.to_path_buf()))?;
+        std::fs::create_dir_all(&parent)
+            .map_err(|e| FileError::CreateParentDir(e, parent.to_path_buf()))?;
 
         let file = Self::default();
         file.save(path)?;
@@ -85,13 +93,15 @@ impl Settings {
         let package_cache_dir = settings.package_cache_dir();
 
         if !package_cache_dir.exists() {
-            std::fs::create_dir_all(&*package_cache_dir).map_err(|e| FileError::Write(e, settings.path.clone()))?;
+            std::fs::create_dir_all(&*package_cache_dir)
+                .map_err(|e| FileError::Write(e, settings.path.clone()))?;
         }
 
         let repo_cache_dir = settings.repo_cache_dir();
 
         if !repo_cache_dir.exists() {
-            std::fs::create_dir_all(&*repo_cache_dir).map_err(|e| FileError::Write(e, settings.path.clone()))?;
+            std::fs::create_dir_all(&*repo_cache_dir)
+                .map_err(|e| FileError::Write(e, settings.path.clone()))?;
         }
 
         Ok(settings)
