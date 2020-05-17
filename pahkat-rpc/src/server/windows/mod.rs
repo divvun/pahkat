@@ -18,26 +18,23 @@ const SELF_UPDATE_TIMEOUT: u64 = 30;
 const UPDATER_FILE_NAME: &str = "pahkat-updater.exe";
 
 pub fn setup_logger(name: &str) -> Result<(), fern::InitError> {
-    if let Some(log_path) = pahkat_client::defaults::log_path() {
-        std::fs::create_dir_all(&log_path)?;
+    let log_path = pahkat_client::defaults::log_path();
+    std::fs::create_dir_all(&log_path)?;
 
-        fern::Dispatch::new()
-            .format(|out, message, record| {
-                out.finish(format_args!(
-                    "{}[{}][{}] {}",
-                    chrono::Local::now().format("[%Y-%m-%d][%H:%M:%S]"),
-                    record.target(),
-                    record.level(),
-                    message
-                ))
-            })
-            .level(log::LevelFilter::Trace)
-            .chain(std::io::stdout())
-            .chain(fern::log_file(log_path.join(format!("{}.log", name)))?)
-            .apply()?;
-    } else {
-        env_logger::init();
-    }
+    fern::Dispatch::new()
+        .format(|out, message, record| {
+            out.finish(format_args!(
+                "[{} {:<5} {}] {}",
+                chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                record.level(),
+                record.target(),
+                message
+            ))
+        })
+        .level(log::LevelFilter::Trace)
+        .chain(std::io::stdout())
+        .chain(fern::log_file(log_path.join(format!("{}.log", name)))?)
+        .apply()?;
 
     log::debug!("logging initialized");
     Ok(())
