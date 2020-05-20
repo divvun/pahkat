@@ -58,21 +58,20 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 async fn new_client() -> anyhow::Result<PahkatClient> {
-    // let channel = Endpoint::try_from("file://tmp/pahkat")?
-    //     .connect_with_connector(service_fn(|_: Uri| {
-    //         let path = if cfg!(windows) {
-    //             format!("//./pipe/pahkat")
-    //         } else {
-    //             format!("/tmp/pahkat")
-    //         };
+    let channel = Endpoint::try_from("file://tmp/pahkat")?
+        .connect_with_connector(service_fn(|_: Uri| {
+            let path = if cfg!(windows) {
+                format!("//./pipe/pahkat")
+            } else {
+                format!("/tmp/pahkat")
+            };
 
-    //         IpcEndpoint::connect(path)
-    //     }))
-    //     .await?;
+            parity_tokio_ipc::Endpoint::connect(path)
+        }))
+        .await?;
 
-    // let mut client = PahkatClient::new(channel);
-    // Ok(client)
-    todo!()
+    let mut client = PahkatClient::new(channel);
+    Ok(client)
 }
 
 pub async fn run() -> anyhow::Result<()> {
