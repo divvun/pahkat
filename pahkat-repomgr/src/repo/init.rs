@@ -3,12 +3,13 @@ use std::fs::{self, create_dir_all, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
+
 use serde::Serialize;
 use typed_builder::TypedBuilder;
 use url::Url;
 
 use pahkat_types::{
-    repo::{Agent, Index, RepositoryData},
+    repo::{Agent, Index, RepositoryData, RepoUrl, RepoUrlError},
     LangTagMap,
 };
 
@@ -16,7 +17,7 @@ use pahkat_types::{
 #[derive(Debug, Clone, TypedBuilder)]
 pub struct Request<'a> {
     pub path: Cow<'a, Path>,
-    pub url: Cow<'a, Url>,
+    pub url: Cow<'a, RepoUrl>,
     pub name: Cow<'a, str>,
     pub description: Cow<'a, str>,
 }
@@ -44,6 +45,9 @@ pub enum RequestError {
 
     #[error("Invalid URL")]
     InvalidUrl(#[from] url::ParseError),
+
+    #[error("Repository URL was not valid")]
+    InvalidRepoUrl(#[from] RepoUrlError)
 }
 
 impl<'a> crate::Request for Request<'a> {
@@ -69,14 +73,19 @@ impl<'a> crate::Request for Request<'a> {
         };
 
         let url = match partial.url {
-            Some(url) => Cow::Borrowed(url),
+            Some(url) => {
+                let url = RepoUrl::new(url.to_owned())?;
+                Cow::Owned(url)
+            }
             None => {
                 let url = Input::<String>::new()
                     .with_prompt("Base URL")
                     .with_initial_text("https://")
                     .interact()
                     .map_err(|_| RequestError::InvalidInput)?;
-                Cow::Owned(Url::parse(&url)?)
+                let url = Url::parse(&url)?;
+                let url = RepoUrl::new(url)?;
+                Cow::Owned(url)
             }
         };
 
