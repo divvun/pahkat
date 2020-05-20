@@ -90,7 +90,7 @@ pub fn tmp_dir() -> ConfigPath {
 
     #[cfg(target_os = "macos")]
     {
-        if && whoami::username() == "root" {
+        if whoami::username() == "root" {
             return ConfigPath(pathos::system::iri::app_temporary_dir(APP_PATH));
         }
     }

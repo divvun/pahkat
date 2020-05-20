@@ -27,7 +27,6 @@ use crate::{
     transaction::{PackageStatus, ResolvedDescriptor},
     Config, PackageKey, PackageStore,
 };
-use pahkat_types::repo::RepoUrl;
 
 // type Result<T> = std::result::Result<T, Error>;
 
