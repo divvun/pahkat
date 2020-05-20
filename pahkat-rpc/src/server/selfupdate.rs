@@ -130,7 +130,7 @@ pub(crate) async fn self_update() -> Result<bool, Box<dyn Error>> {
                 }
                 DownloadEvent::Complete(_) => {
                     log::debug!("Download completed!");
-                    break;
+                    break 'downloader;
                 }
             }
         }
