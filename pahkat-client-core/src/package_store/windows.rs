@@ -346,12 +346,12 @@ impl WindowsPackageStore {
 
     fn status_impl(
         &self,
-        id: &PackageKey,
+        key: &PackageKey,
         package: &Descriptor,
         _target: InstallTarget,
     ) -> Result<PackageStatus, PackageStatusError> {
-        let mut query = crate::repo::ReleaseQuery::default();
-        query.arch = None;
+        let repos = self.repos.read().unwrap();
+        let mut query = crate::repo::ReleaseQuery::new(key, &*repos);
 
         let (response, inst_key) = match query
             .iter(package)

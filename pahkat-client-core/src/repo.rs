@@ -108,7 +108,7 @@ pub(crate) struct ReleaseQueryResponse<'a> {
 impl<'a> ReleaseQueryIter<'a> {
     #[inline(always)]
     fn next_release(&mut self) -> Option<ReleaseQueryResponse<'a>> {
-        log::trace!("Beginning release query iter: {:#?}", &self.query);
+        log::trace!("Beginning release query iter: {:?}", &self.query);
 
         while let Some(release) = self.descriptor.release.get(self.next_release) {
             log::trace!(
@@ -131,7 +131,7 @@ impl<'a> ReleaseQueryIter<'a> {
             }
 
             if let Some(payload) = self.next_payload(release) {
-                log::trace!("Target resolved: {:#?}", &payload.target);
+                log::trace!("Target resolved: {:?}", &payload.target);
                 self.next_release += 1;
                 return Some(payload);
             }
@@ -206,11 +206,8 @@ impl<'a> ReleaseQuery<'a> {
                 repos
                     .iter()
                     .find_map(|(url, repo)| {
-                        log::trace!("ReleaseQuery::new() {} {}", &key.repository_url, url);
                         if &key.repository_url == url {
-                            log::trace!("{:?}", repo.meta());
                             let channel = repo.meta().channel.as_ref().map(|x| &**x);
-                            log::trace!("Channel? {:?}", &channel);
                             channel
                         } else {
                             None
@@ -249,9 +246,9 @@ pub(crate) fn resolve_package<'a>(
     package_key: &PackageKey,
     repos: &'a HashMap<RepoUrl, LoadedRepository>,
 ) -> Result<pahkat_types::package::Descriptor, PayloadError> {
-    log::trace!("Finding package");
+    log::trace!("Finding package: {}", &package_key);
     let package = find_package_by_key(package_key, repos).ok_or(PayloadError::NoPackage)?;
-    log::trace!("Package found");
+    log::trace!("Package found: {}", &package_key);
     let descriptor: pahkat_types::package::Descriptor = package
         .try_into()
         .map_err(|_| PayloadError::NoConcretePackage)?;
@@ -385,9 +382,9 @@ pub(crate) fn resolve_payload<'a>(
     ),
     PayloadError,
 > {
-    log::trace!("Resolving payload");
+    log::trace!("Resolving payload: {}", &package_key);
     let descriptor = resolve_package(package_key, repos)?;
-    log::trace!("Package found");
+    log::trace!("Package found: {}", &package_key);
     query
         .iter(&descriptor)
         .next()
@@ -583,16 +580,14 @@ pub(crate) fn find_package_by_key<'p>(
     package_key: &PackageKey,
     repos: &'p HashMap<RepoUrl, LoadedRepository>,
 ) -> Option<Package> {
-    log::trace!("Resolving package...");
-    log::trace!("My pkg id: {}", &package_key.id);
-    log::trace!("Repo url: {}", &package_key.repository_url);
+    log::trace!("Resolving package: {}", &package_key);
     log::trace!(
-        "Repos: {:?}",
+        "Available repos: {:?}",
         repos.iter().map(|(x, _)| x).collect::<Vec<_>>()
     );
 
     repos.get(&package_key.repository_url).and_then(|r| {
-        log::trace!("Got repo");
+        log::trace!("Got repo: {}", &r.info.repository.url);
         // TODO: need to check that any release supports the requested channel
         let packages = r.packages();
         let packages = match packages.packages() {
@@ -610,7 +605,7 @@ pub(crate) fn find_package_by_key<'p>(
             Some(x) => x,
             None => return None,
         };
-        log::trace!("Found pkg");
+        log::trace!("Found pkg: {}", &package_key);
 
         (&pkg).try_into().map(Package::Concrete).ok()
     })

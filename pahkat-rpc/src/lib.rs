@@ -9,7 +9,6 @@ use pahkat_client::{
     config::RepoRecord, package_store::InstallTarget, PackageAction, PackageActionType, PackageKey,
     PackageStatus, PackageStore, PackageTransaction,
 };
-use parity_tokio_ipc::{Endpoint, SecurityAttributes};
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::pin::Pin;
@@ -23,6 +22,8 @@ use tokio::net::UnixListener;
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
+#[cfg(windows)]
+use tokio_named_pipe::{NamedPipeListener, NamedPipeStream};
 use tonic::transport::server::Connected;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
 use url::Url;
@@ -490,11 +491,10 @@ impl pb::pahkat_server::Pahkat for Rpc {
         let url =
             Url::parse(&request.url).map_err(|e| Status::failed_precondition(format!("{}", e)))?;
         log::trace!("Url: {:?}", &url);
-        let url = pahkat_client::types::repo::RepoUrl::new(url)
-            .map_err(|e| {
-                log::debug!("Bad repo url: {:?}", e);
-                Status::failed_precondition(format!("{}", e))
-            })?;
+        let url = pahkat_client::types::repo::RepoUrl::new(url).map_err(|e| {
+            log::debug!("Bad repo url: {:?}", e);
+            Status::failed_precondition(format!("{}", e))
+        })?;
         log::trace!("Repo url: {:?}", &url);
 
         let config = self.store.config();
@@ -865,6 +865,12 @@ pub async fn start(
     config_path: Option<&Path>,
     shutdown_rx: mpsc::UnboundedReceiver<()>,
 ) -> std::result::Result<(), anyhow::Error> {
+    log::info!(
+        "Starting {} {}...",
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION")
+    );
+
     let mut endpoint = endpoint(path)?;
     let store = store(config_path).await?;
     log::debug!("Created store.");
@@ -945,9 +951,23 @@ pub async fn start(
     config_path: Option<&Path>,
     shutdown_rx: mpsc::UnboundedReceiver<()>,
 ) -> std::result::Result<(), anyhow::Error> {
-    let mut endpoint = Endpoint::new(path.to_str().unwrap().to_string());
+    log::info!(
+        "Starting {} {}...",
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION")
+    );
 
-    let incoming = endpoint.incoming()?;
+    log::debug!("Creating security descriptor for world...");
+    let mut descriptor = tokio_named_pipe::secattr::SecurityDescriptor::world()?;
+    log::debug!("Creating endpoint config...");
+    let mut config = tokio_named_pipe::NamedPipeConfig::default();
+    log::debug!("Creating security attributes...");
+    config.security_attributes =
+        tokio_named_pipe::secattr::SecurityAttributes::new(&mut descriptor, false);
+    log::debug!("Binding named pipe...");
+    let mut endpoint = NamedPipeListener::bind(path, Some(config))?;
+    // endpoint.set_security_attributes(SecurityAttributes::allow_everyone_create().unwrap());
+    let incoming = endpoint.incoming();
 
     let store = store(config_path).await?;
     log::debug!("Created store.");
@@ -969,7 +989,7 @@ pub async fn start(
     Server::builder()
         .add_service(pb::pahkat_server::PahkatServer::new(rpc))
         .serve_with_incoming_shutdown(
-            incoming.map_ok(StreamBox),
+            incoming,
             shutdown_handler(shutdown_rx, notifications, Arc::clone(&current_transaction)),
         )
         .await?;

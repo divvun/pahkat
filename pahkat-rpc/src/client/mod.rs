@@ -1,6 +1,5 @@
 use futures::stream::{self, TryStreamExt};
 use futures::Stream;
-use parity_tokio_ipc::Endpoint as IpcEndpoint;
 use std::convert::TryFrom;
 use std::{
     pin::Pin,
@@ -59,20 +58,21 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 async fn new_client() -> anyhow::Result<PahkatClient> {
-    let channel = Endpoint::try_from("file://tmp/pahkat")?
-        .connect_with_connector(service_fn(|_: Uri| {
-            let path = if cfg!(windows) {
-                format!("//./pipe/pahkat")
-            } else {
-                format!("/tmp/pahkat")
-            };
+    // let channel = Endpoint::try_from("file://tmp/pahkat")?
+    //     .connect_with_connector(service_fn(|_: Uri| {
+    //         let path = if cfg!(windows) {
+    //             format!("//./pipe/pahkat")
+    //         } else {
+    //             format!("/tmp/pahkat")
+    //         };
 
-            IpcEndpoint::connect(path)
-        }))
-        .await?;
+    //         IpcEndpoint::connect(path)
+    //     }))
+    //     .await?;
 
-    let mut client = PahkatClient::new(channel);
-    Ok(client)
+    // let mut client = PahkatClient::new(channel);
+    // Ok(client)
+    todo!()
 }
 
 pub async fn run() -> anyhow::Result<()> {

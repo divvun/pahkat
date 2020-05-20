@@ -5,9 +5,10 @@ use pahkat_client::{
     config::RepoRecord, package_store::InstallTarget, PackageAction, PackageActionType, PackageKey,
     PackageStatus, PackageStore, PackageTransaction,
 };
+use std::convert::TryFrom;
 use std::error::Error;
 
-use std::convert::TryFrom;
+use pahkat_client::Config;
 
 pub const UPDATER_DEFAULT_CHANNEL: &str = "nightly";
 pub static UPDATER_KEY: Lazy<PackageKey> = Lazy::new(|| {
@@ -15,9 +16,7 @@ pub static UPDATER_KEY: Lazy<PackageKey> = Lazy::new(|| {
         .unwrap()
 });
 
-#[cfg(feature = "windows")]
-pub(crate) async fn package_store() -> Box<dyn PackageStore> {
-    use pahkat_client::{Config, WindowsPackageStore};
+fn make_config() -> Config {
     let mut config = Config::read_only();
     config
         .repos_mut()
@@ -29,29 +28,32 @@ pub(crate) async fn package_store() -> Box<dyn PackageStore> {
         )
         .unwrap();
 
-    Box::new(WindowsPackageStore::new(config).await)
+    log::trace!("Creating self-update config:");
+    log::trace!("{:#?}", &config);
+
+    config
+}
+
+#[cfg(feature = "windows")]
+#[inline]
+pub(crate) async fn package_store() -> Box<dyn PackageStore> {
+    let config = make_config();
+    Box::new(pahkat_client::WindowsPackageStore::new(config).await)
 }
 
 #[cfg(feature = "macos")]
+#[inline]
 pub(crate) async fn package_store() -> Box<dyn PackageStore> {
-    use pahkat_client::{Config, MacOSPackageStore};
-    let mut config = Config::read_only();
-
-    config
-        .repos_mut()
-        .insert(
-            UPDATER_KEY.repository_url.clone(),
-            RepoRecord {
-                channel: Some(UPDATER_DEFAULT_CHANNEL.to_string()),
-            },
-        )
-        .unwrap();
-
-    Box::new(MacOSPackageStore::new(config).await)
+    let config = make_config();
+    Box::new(pahkat_client::MacOSPackageStore::new(config).await)
 }
 
 pub(crate) fn requires_update(store: &dyn PackageStore) -> bool {
-    let is_requiring_update = match store.status(&UPDATER_KEY, InstallTarget::System) {
+    let status = store.status(&UPDATER_KEY, InstallTarget::System);
+
+    log::trace!("requires_update store.status: {:?}", status);
+
+    let is_requiring_update = match status {
         Ok(status) => match status {
             PackageStatus::NotInstalled => {
                 log::error!("Self-update detected that Pahkat Service was not installed at all?");
@@ -95,16 +97,21 @@ pub async fn install(store: &dyn PackageStore) -> Result<(), Box<dyn Error>> {
 }
 
 pub(crate) async fn self_update() -> Result<bool, Box<dyn Error>> {
+    log::debug!("Getting self-update store...");
     let store = package_store().await;
 
     if !requires_update(&*store) {
+        log::debug!("No update required, self-updater finishing.");
         return Ok(false);
     }
 
     // Retry 5 times
     let retries = 5i32;
     'downloader: for i in 1i32..=retries {
+        log::debug!("Attempt {} of self update...", i);
+
         // If update is available, download it.
+        log::debug!("Downloading self-update package...");
         let mut stream = store.download(&UPDATER_KEY);
 
         while let Some(result) = stream.next().await {

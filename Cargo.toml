@@ -1,10 +1,13 @@
 [workspace]
 members = [
     "pahkat-types",
-    "pahkat-common",
-    "pahkat-server",
+    # "pahkat-common",
+    # "pahkat-server",
     "pahkat-rpc",
     "pahkat-client-core",
     "pahkat-repomgr",
     "pahkat-cli",
 ]
+
+[patch.crates-io]
+miow = { git = "https://github.com/bbqsrc/miow", branch = "patch/error-no-data" }

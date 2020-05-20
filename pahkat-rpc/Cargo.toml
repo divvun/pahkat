@@ -17,7 +17,7 @@ futures = { version = "0.3", default-features = false, features = ["alloc"] }
 async-stream = "0.2.1"
 http = "0.2"
 tower = "0.3" 
-parity-tokio-ipc = { git = "https://github.com/bbqsrc/parity-tokio-ipc" }
+tokio-named-pipe = { path = "../../tokio-named-pipes", features = ["tonic"] }
 log = "0.4.8"
 env_logger = "0.7.1"
 crossbeam = "0.7.3"
