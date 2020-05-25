@@ -7,6 +7,8 @@ message NotificationResponse {
         REBOOT_REQUIRED = 0;
         REPOSITORIES_CHANGED = 1;
         RPC_STOPPING = 2;
+        TRANSACTION_LOCKED = 3;
+        TRANSACTION_UNLOCKED = 4;
     }
 
     ValueType value = 1;
@@ -126,12 +128,15 @@ message TransactionResponse {
     }
     message TransactionComplete {
     }
+    message TransactionQueued {
+    }
 
     oneof value {
         TransactionStarted transaction_started = 1;
         TransactionProgress transaction_progress = 2;
         TransactionComplete transaction_complete = 3;
         TransactionError transaction_error = 4;
+        TransactionQueued transaction_queued = 5;
 
         DownloadProgress download_progress = 10;
         DownloadComplete download_complete = 12;

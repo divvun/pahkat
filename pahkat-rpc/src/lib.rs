@@ -27,6 +27,7 @@ use tokio_named_pipe::{NamedPipeListener, NamedPipeStream};
 use tonic::transport::server::Connected;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
 use url::Url;
+use std::sync::atomic::AtomicBool;
 
 mod pb {
     tonic::include_proto!("/pahkat");
@@ -132,6 +133,8 @@ enum Notification {
     RebootRequired,
     RepositoriesChanged,
     RpcStopping,
+    TransactionLocked,
+    TransactionUnlocked,
 }
 
 type Result<T> = std::result::Result<Response<T>, Status>;
@@ -142,6 +145,7 @@ struct Rpc {
     store: Arc<dyn PackageStore>,
     notifications: broadcast::Sender<Notification>,
     current_transaction: Arc<tokio::sync::Mutex<()>>,
+    requires_reboot: AtomicBool,
 }
 
 #[tonic::async_trait]
@@ -154,14 +158,25 @@ impl pb::pahkat_server::Pahkat for Rpc {
         _request: Request<pb::NotificationsRequest>,
     ) -> Result<Self::NotificationsStream> {
         let mut rx = self.notifications.subscribe();
+        let current_transaction = Arc::clone(&self.current_transaction);
+        let requires_reboot = self.requires_reboot.load(std::sync::atomic::Ordering::SeqCst);
 
         // log::info!("Peer: {:?}", _request.peer_cred());
 
         let stream = async_stream::try_stream! {
+            use pb::notification_response::ValueType;
+            // Do the initial checks
+            if requires_reboot {
+                yield pb::NotificationResponse { value: ValueType::RebootRequired as i32 };
+            }
+
+            if current_transaction.try_lock().is_err() {
+                yield pb::NotificationResponse { value: ValueType::TransactionLocked as i32 };
+            }
+
             while let response = rx.recv().await {
                 match response {
                     Ok(response) => {
-                        use pb::notification_response::ValueType;
                         match response {
                             Notification::RebootRequired => {
                                 yield pb::NotificationResponse { value: ValueType::RebootRequired as i32 };
@@ -172,6 +187,12 @@ impl pb::pahkat_server::Pahkat for Rpc {
                             Notification::RpcStopping => {
                                 yield pb::NotificationResponse { value: ValueType::RpcStopping as i32 };
                                 break;
+                            }
+                            Notification::TransactionLocked => {
+                                yield pb::NotificationResponse { value: ValueType::TransactionLocked as i32 };
+                            }
+                            Notification::TransactionUnlocked => {
+                                yield pb::NotificationResponse { value: ValueType::TransactionUnlocked as i32 };
                             }
                         }
                     },
@@ -243,12 +264,14 @@ impl pb::pahkat_server::Pahkat for Rpc {
         let request = request.into_inner();
         let store: Arc<dyn PackageStore> = Arc::clone(&self.store as _);
         let current_transaction = Arc::clone(&self.current_transaction);
+        let notifications = self.notifications.clone();
 
         let (tx, rx) = mpsc::unbounded_channel();
         // Get messages
         tokio::spawn(async move {
             let mut has_requested = false;
             let mut has_cancelled = false;
+            let mut requires_reboot = false;
 
             futures::pin_mut!(request);
             let (escape_catch_tx, _) = tokio::sync::broadcast::channel(1);
@@ -326,13 +349,10 @@ impl pb::pahkat_server::Pahkat for Rpc {
                 let current_transaction = Arc::clone(&current_transaction);
 
                 let tx = tx.clone();
+                let notifications = notifications.clone();
 
                 tokio::spawn(async move {
                     // If there is a running transaction, we must block on this transaction and wait
-
-                    log::debug!("Waiting for transaction lock…");
-                    let _guard = current_transaction.lock().await;
-                    log::debug!("Transaction lock attained.");
 
                     let tx1 = tx.clone();
                     let stream = async_stream::try_stream! {
@@ -340,10 +360,29 @@ impl pb::pahkat_server::Pahkat for Rpc {
                         use pahkat_client::package_store::DownloadEvent;
                         use pb::transaction_response::*;
 
+                        log::debug!("Attempting to acquire transaction lock…");
+                        let _guard = {
+                            match current_transaction.try_lock() {
+                                Ok(v) => v,
+                                Err(_) => {
+                                    log::debug!("Waiting for transaction lock…");
+                                    yield pb::TransactionResponse {
+                                        value: Some(Value::TransactionQueued(TransactionQueued {}))
+                                    };
+
+                                    current_transaction.lock().await
+                                }
+                            }
+                        };
+                        log::debug!("Transaction lock attained.");
+                        let _ = notifications.clone().send(Notification::TransactionLocked);
+                        
+                        requires_reboot = transaction.is_reboot_required();
+
                         yield pb::TransactionResponse {
                             value: Some(Value::TransactionStarted(TransactionStarted {
                                 actions: transaction.actions().iter().cloned().map(|x| x.into()).collect(),
-                                is_reboot_required: transaction.is_reboot_required(),
+                                is_reboot_required: requires_reboot,
                             }))
                         };
 
@@ -446,6 +485,8 @@ impl pb::pahkat_server::Pahkat for Rpc {
                                     error: "user cancelled".to_string(),
                                 }))
                             };
+                        } else {
+                            let mut is_reboot_required = false;
                         }
 
                         log::trace!("Ending transaction stream");
@@ -462,6 +503,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
                             }
                         }
                     }
+
                     log::trace!("Ending outer stream loop");
 
                     // HACK: this lets us escape the stream.
@@ -472,6 +514,12 @@ impl pb::pahkat_server::Pahkat for Rpc {
                         }
                     }
                 });
+            }
+
+            let _ = notifications.send(Notification::TransactionUnlocked);
+
+            if requires_reboot {
+                let _ = notifications.send(Notification::RebootRequired);
             }
 
             log::trace!("Ended entire listener loop");
@@ -729,10 +777,12 @@ fn endpoint(path: &Path) -> std::result::Result<UnixListener, anyhow::Error> {
 fn create_background_update_service(
     store: Arc<dyn PackageStore>,
     current_transaction: Arc<tokio::sync::Mutex<()>>,
+    notifications: broadcast::Sender<Notification>,
 ) {
     const UPDATE_INTERVAL: Duration = Duration::from_secs(15 * 60); // 15 minutes
 
     tokio::spawn(async move {
+        let notifications = notifications.clone();
         // let current_transaction = Arc::clone(&current_transaction);
         // let store = Arc::clone(&store);
 
@@ -740,6 +790,7 @@ fn create_background_update_service(
         let mut interval = time::interval(UPDATE_INTERVAL);
 
         'main: loop {
+            let notifications = notifications.clone();
             interval.tick().await;
 
             time::delay_for(Duration::from_secs(2)).await;
@@ -803,6 +854,7 @@ fn create_background_update_service(
             log::debug!("Waiting for transaction lock…");
             let _guard = current_transaction.lock().await;
             log::debug!("Transaction lock attained.");
+            let _ = notifications.send(Notification::TransactionLocked);
 
             let transaction = PackageTransaction::new(Arc::clone(&store) as _, actions).unwrap(); // .map_err(|e| Status::failed_precondition(format!("{}", e)))?;
 
@@ -854,6 +906,7 @@ fn create_background_update_service(
                 log::trace!("{:?}", message);
             }
 
+            let _ = notifications.send(Notification::TransactionUnlocked);
             log::debug!("Completed background transaction.");
         }
     });
@@ -887,6 +940,7 @@ pub async fn start(
         store: Arc::clone(&store),
         notifications: notifications.clone(),
         current_transaction: Arc::clone(&current_transaction),
+        requires_reboot: AtomicBool::new(false),
     };
 
     Server::builder()
@@ -974,16 +1028,17 @@ pub async fn start(
 
     let current_transaction = Arc::new(tokio::sync::Mutex::new(()));
 
-    // Create the background updater
-    create_background_update_service(Arc::clone(&store), Arc::clone(&current_transaction));
-
     // Notifications
     let (notifications, mut notif_rx) = broadcast::channel(5);
+
+    // Create the background updater
+    create_background_update_service(Arc::clone(&store), Arc::clone(&current_transaction), notifications.clone());
 
     let rpc = Rpc {
         store: Arc::clone(&store),
         notifications: notifications.clone(),
         current_transaction: Arc::clone(&current_transaction),
+        requires_reboot: AtomicBool::new(false),
     };
 
     Server::builder()
