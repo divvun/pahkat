@@ -210,9 +210,12 @@ impl PackageStore for PrefixPackageStore {
         key: &PackageKey,
         target: InstallTarget,
     ) -> Result<PackageStatus, InstallError> {
+        log::trace!("In prefix install");
+
         let repos = self.repos.read().unwrap();
         let query = crate::repo::ReleaseQuery::new(key, &*repos);
 
+        log::trace!("Query: {:?}", &query);
         let (target, release, package) =
             crate::repo::resolve_payload(key, &query, &*repos).map_err(InstallError::Payload)?;
         let installer = match target.payload {

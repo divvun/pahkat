@@ -7,7 +7,7 @@ use pahkat_client::{
     transaction::{PackageAction, PackageTransaction},
     package_store::InstallTarget,
     PackageStore,
-    PackageKey,
+    PackageKey, DownloadEvent,
 };
 use crate::Platform;
 
@@ -54,16 +54,63 @@ pub(crate) async fn install<'a>(
     // }
 
     let transaction = PackageTransaction::new(
-        store,
+        Arc::clone(&store),
         keys.iter()
             .map(|x| PackageAction::install(x.clone(), target.clone()))
             .collect(),
     )?;
 
+    for record in transaction.actions().iter() {
+        let id = record.action.id.clone();
+        let mut download = store.download(&record.action.id);
+
+        // TODO: handle cancel here
+
+        println!("Downloading {}", id);
+
+        while let Some(event) = download.next().await {
+            match event {
+                DownloadEvent::Error(e) => {
+                    println!("Error: {}", e);
+                    return Ok(());
+                }
+                DownloadEvent::Progress((current, total)) => {
+                    println!("Progress: {}/{}", current, total);
+                }
+                DownloadEvent::Complete(_) => {
+                    println!("Complete");
+                }
+            }
+        }
+    }
+
     let (canceler, mut tx) = transaction.process();
 
-    if let Some(event) = tx.next().await {
-        // TODO;
+    while let Some(event) = tx.next().await {
+        let mut is_completed = false;
+        use pahkat_client::transaction::TransactionEvent;
+
+        // TODO: handle cancel here
+
+        match event {
+            TransactionEvent::Installing(id) => {
+                println!("Installing: {}", id);
+            }
+            TransactionEvent::Uninstalling(id) => {
+                println!("Uninstalling: {}", id);
+            }
+            TransactionEvent::Progress(id, msg) => {
+                println!("Progress: {} {}", id, msg);
+            }
+            TransactionEvent::Error(id, err) => {
+                println!("Error: {} {}", id, err);
+                return Ok(());
+            }
+            TransactionEvent::Complete => {
+                println!("Complete!");
+                is_completed = true;
+            }
+        }
     }
     // transaction
     //     .process(|key, event| {

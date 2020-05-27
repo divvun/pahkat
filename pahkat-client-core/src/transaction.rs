@@ -368,6 +368,7 @@ impl PackageTransaction {
 
         let store = Arc::clone(&self.store);
         let actions: Arc<Vec<ResolvedAction>> = Arc::clone(&self.actions);
+        log::debug!("beginning transaction process NNNNN");
 
         let stream = async_stream::stream! {
             for record in actions.iter() {
@@ -376,10 +377,14 @@ impl PackageTransaction {
 
                 match action.action {
                     PackageActionType::Install => {
+                        log::debug!("Going to yield now.");
                         yield TransactionEvent::Installing(action.id.clone());
 
+                        log::debug!("Going to install now.");
                         match store.install(&action.id, action.target) {
-                            Ok(_) => {}
+                            Ok(_) => {
+                                log::trace!("We came out the other side.");
+                            }
                             Err(e) => {
                                 log::error!("{:?}", &e);
                                 yield TransactionEvent::Error(action.id.clone(), TransactionError::Install(e));

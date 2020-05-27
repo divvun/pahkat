@@ -6,7 +6,7 @@ license = "GPL-3.0"
 edition = "2018"
 
 [[bin]]
-name = "pahkat"
+name = "pahkat-cli"
 path = "src/main.rs"
 
 [dependencies]

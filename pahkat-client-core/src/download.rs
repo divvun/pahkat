@@ -184,7 +184,7 @@ impl DownloadManager {
                             match result {
                                 Ok(_) => {
                                     // Send a progress event at most every 750ms
-                                    if last_progress_event.elapsed().as_millis() >= 750 {
+                                    if downloaded_bytes == total_bytes || last_progress_event.elapsed().as_millis() >= 750 {
                                         last_progress_event = std::time::Instant::now();
                                         yield DownloadEvent::Progress((downloaded_bytes, total_bytes));
                                     }
@@ -201,8 +201,12 @@ impl DownloadManager {
                         break;
                     }
                 }
-
             }
+
+            match file.flush() {
+                Err(e) => yield DownloadEvent::Error(DownloadError::IoError(e)),
+                _ => {}
+            };
 
             log::debug!("Moving {:?} to {:?}", &tmp_dest_path, &dest_path);
 
