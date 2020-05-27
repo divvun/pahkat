@@ -10,5 +10,6 @@ members = [
 ]
 
 exclude = [
-    "pahkat-server"
+    "pahkat-server",
+    "pahkat-uploader",
 ]

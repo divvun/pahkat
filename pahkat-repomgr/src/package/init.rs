@@ -116,7 +116,7 @@ impl<'a> crate::Request for Request<'a> {
             Some(name) => Cow::Borrowed(name),
             None => Cow::Owned(
                 Input::<String>::new()
-                    .with_prompt("Repo name (in English)")
+                    .with_prompt("Package name (in English)")
                     .interact()
                     .map_err(|_| RequestError::InvalidInput)?,
             ),
@@ -126,7 +126,7 @@ impl<'a> crate::Request for Request<'a> {
             Some(description) => Cow::Borrowed(description),
             None => Cow::Owned(
                 Input::<String>::new()
-                    .with_prompt("Repo description (in English)")
+                    .with_prompt("Package description (in English)")
                     .interact()
                     .map_err(|_| RequestError::InvalidInput)?,
             ),
