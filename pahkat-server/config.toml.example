@@ -1,0 +1,6 @@
+api_token = "7eaf66af-7bb1-4121-a8da-fd732b674d87"
+
+[repos]
+main = "./repos/main"
+tools = "./repos/tools"
+devtools = "./repos/devtools"

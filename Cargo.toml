@@ -9,5 +9,6 @@ members = [
     "pahkat-cli",
 ]
 
-[patch.crates-io]
-miow = { git = "https://github.com/bbqsrc/miow", branch = "patch/error-no-data" }
+exclude = [
+    "pahkat-server"
+]

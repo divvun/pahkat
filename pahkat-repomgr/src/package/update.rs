@@ -12,6 +12,7 @@ pub struct Request<'a> {
     pub repo_path: Cow<'a, Path>,
     pub id: Cow<'a, str>,
     pub platform: Cow<'a, str>,
+    pub arch: Option<Cow<'a, str>>,
     pub channel: Option<Cow<'a, str>>,
     pub version: Cow<'a, Version>,
     pub payload: Cow<'a, pahkat_types::payload::Payload>,
@@ -27,6 +28,8 @@ pub struct PartialRequest<'a> {
     pub id: Option<&'a str>,
     #[builder(default)]
     pub platform: Option<&'a str>,
+    #[builder(default)]
+    pub arch: Option<&'a str>,
     #[builder(default)]
     pub channel: Option<&'a str>,
     #[builder(default)]
@@ -177,6 +180,7 @@ impl<'a> crate::Request for Request<'a> {
             id,
             channel,
             platform,
+            arch: None,
             version,
             payload: Cow::Owned(payload),
             url: partial.url.map(|x| Cow::Borrowed(x)),
@@ -186,6 +190,12 @@ impl<'a> crate::Request for Request<'a> {
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("Failed to read descriptor index: `{0}`")]
+    ReadFailed(PathBuf, #[source] io::Error),
+
+    #[error("Failed to read TOML file `{0}`")]
+    ReadToml(PathBuf, #[source] toml::de::Error),
+
     #[error("Failed to create directory `{0}`")]
     DirCreateFailed(PathBuf, #[source] io::Error),
 
@@ -199,7 +209,7 @@ pub enum Error {
     NoRepo(#[from] FindRepoError),
 }
 
-pub fn update<'a>(request: Request<'a>) -> anyhow::Result<()> {
+pub fn update<'a>(request: Request<'a>) -> Result<(), Error> {
     use std::ops::Deref;
     log::debug!("{:?}", request);
 
@@ -210,8 +220,10 @@ pub fn update<'a>(request: Request<'a>) -> anyhow::Result<()> {
     let pkg_path = pkg_dir.join("index.toml");
     log::debug!("Loading {}", pkg_path.display());
     
-    let pkg_file = std::fs::read_to_string(&pkg_path)?;
-    let mut descriptor: pahkat_types::package::Descriptor = toml::from_str(&pkg_file)?;
+    let pkg_file = std::fs::read_to_string(&pkg_path)
+        .map_err(|e| Error::ReadFailed(pkg_path.clone(), e))?;
+    let mut descriptor: pahkat_types::package::Descriptor = toml::from_str(&pkg_file)
+        .map_err(|e| Error::ReadToml(pkg_path.clone(), e))?;
 
     log::debug!("Loaded {}", pkg_path.display());
 
