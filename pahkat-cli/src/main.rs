@@ -36,7 +36,21 @@ use std::sync::Arc;
 #[cfg(feature = "prefix")]
 async fn store(config_path: Option<&Path>) -> anyhow::Result<Arc<dyn PackageStore>> {
     let config_path = config_path.ok_or_else(|| anyhow::anyhow!("No prefix path specified"))?;
-    let store = pahkat_client::PrefixPackageStore::open(config_path)?;
+    let store = pahkat_client::PrefixPackageStore::open(config_path).await?;
+    let store = Arc::new(store);
+
+    if store.config().read().unwrap().repos().len() == 0 {
+        println!("WARNING: There are no repositories in the given config.");
+    }
+
+    Ok(store)
+}#
+
+[inline(always)]
+#[cfg(feature = "prefix")]
+async fn create_store(config_path: Option<&Path>) -> anyhow::Result<Arc<dyn PackageStore>> {
+    let config_path = config_path.ok_or_else(|| anyhow::anyhow!("No prefix path specified"))?;
+    let store = pahkat_client::PrefixPackageStore::create(config_path).await?;
     let store = Arc::new(store);
 
     if store.config().read().unwrap().repos().len() == 0 {
@@ -74,7 +88,7 @@ async fn main() -> anyhow::Result<()> {
     match &args {
         #[cfg(feature = "prefix")]
         cli::Args::Init(_) => {
-            create_store(&args.config_path)?;
+            create_store(args.config_path()).await?;
         }
         cli::Args::Download(a) => {
             let store = store(args.config_path()).await?;
