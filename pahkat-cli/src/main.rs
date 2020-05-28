@@ -3,6 +3,7 @@ mod download;
 mod install;
 mod status;
 mod uninstall;
+mod config;
 
 use anyhow::{Context, Result};
 use cli::{Args, Platform, ConfigPath};
@@ -87,7 +88,7 @@ async fn main() -> anyhow::Result<()> {
     // match args
     match &args {
         #[cfg(feature = "prefix")]
-        cli::Args::Init(_) => {
+        cli::Args::Init(a) => {
             create_store(args.config_path()).await?;
         }
         cli::Args::Download(a) => {
@@ -113,7 +114,10 @@ async fn main() -> anyhow::Result<()> {
             let store = store(args.config_path()).await?;
             install::install(store, &a.packages, Default::default(), &args).await?
         }
-        _ => {}
+        cli::Args::Config(a) => {
+            let store = store(args.config_path()).await?;
+            config::config(store, a, Default::default(), &args).await?
+        }
     }
 
     Ok(())

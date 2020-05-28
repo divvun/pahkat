@@ -11,16 +11,17 @@ pub struct RepoArgs {
     )]
     pub config_path: Option<PathBuf>,
 
-    #[structopt(help = "Repository URL")]
-    pub repo_url: String,
-
-    #[structopt(help = "Repository package channel", default_value = "stable")]
-    pub channel: String,
 }
 
 #[derive(Debug, StructOpt)]
 #[structopt(about = "Add or modify a repository entry")]
 pub struct Add {
+    #[structopt(help = "Repository URL")]
+    pub repo_url: pahkat_types::repo::RepoUrl,
+
+    #[structopt(help = "Repository package channel")]
+    pub channel: Option<String>,
+
     #[structopt(flatten)]
     args: RepoArgs,
 }
@@ -28,6 +29,9 @@ pub struct Add {
 #[derive(Debug, StructOpt)]
 #[structopt(about = "Remove a repository entry")]
 pub struct Remove {
+    #[structopt(help = "Repository URL")]
+    pub repo_url: pahkat_types::repo::RepoUrl,
+
     #[structopt(flatten)]
     args: RepoArgs,
 }

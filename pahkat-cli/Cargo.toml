@@ -18,6 +18,7 @@ indicatif = "0.14.0"
 env_logger = "0.7.1"
 tokio = { version = "0.2", features = ["rt-threaded", "time", "stream", "fs", "macros", "uds", "sync", "blocking", "signal"] }
 futures = { version = "0.3", default-features = false, features = ["alloc"] }
+pahkat-types = { path = "../pahkat-types" }
 
 [features]
 default = []

@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{str::FromStr, fmt};
 
 use serde::{de, Serialize, Serializer, Deserialize, Deserializer, de::Visitor};
 use ::url::Url;
@@ -29,6 +29,9 @@ pub enum RepoUrlError {
 
     #[error("URL has no path segments. (Likely an invalid URL)")]
     NoPathSegments,
+
+    #[error("URL is invalid.")]
+    InvalidURL(#[from] url::ParseError),
 }
 
 impl RepoUrl {
@@ -47,6 +50,15 @@ impl RepoUrl {
 
     pub fn into_inner(self) -> Url {
         self.0
+    }
+}
+
+impl FromStr for RepoUrl {
+    type Err = RepoUrlError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let url = Url::parse(s)?;
+        RepoUrl::new(url)
     }
 }
 
