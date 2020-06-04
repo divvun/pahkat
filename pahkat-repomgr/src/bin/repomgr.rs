@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use url::Url;
 
-use pahkat_repomgr::{package, repo, Request};
+use pahkat_repomgr::{package, repo, nuke, Request};
 use pahkat_types::package::Version;
 
 #[derive(Debug, StructOpt)]
@@ -132,9 +132,33 @@ enum PackageCommand {
 }
 
 #[derive(Debug, StructOpt)]
+enum NukeCommand {
+    Package(NukePackageCommand),
+}
+
+#[derive(Debug, StructOpt)]
+enum NukePackageCommand {
+    Releases(NukePackageReleasesCommand)
+}
+
+#[derive(Debug, StructOpt)]
+struct NukePackageReleasesCommand {
+    #[structopt(short = "-r", long, parse(from_os_str))]
+    repo_path: Option<PathBuf>,
+}
+impl NukePackageReleasesCommand {
+    fn to_partial<'a>(&'a self) -> nuke::package::releases::PartialRequest<'a> {
+        nuke::package::releases::PartialRequest::builder()
+            .repo_path(self.repo_path.as_ref().map(|x| &**x))
+            .build()
+    }
+}
+
+#[derive(Debug, StructOpt)]
 enum Command {
     Repo(RepoCommand),
     Package(PackageCommand),
+    Nuke(NukeCommand),
     Payload(pahkat_types::payload::Payload),
 }
 
@@ -163,6 +187,14 @@ fn main() -> anyhow::Result<()> {
                 package::update::update(req)?;
             }
         },
+        Command::Nuke(x) => match x {
+            NukeCommand::Package(x) => match x {
+                NukePackageCommand::Releases(nuke) => {
+                    let req = nuke::package::releases::Request::new_from_user_input(nuke.to_partial())?;
+                    nuke::package::releases::nuke_releases(req)?;
+                }
+            }
+        }
         Command::Payload(payload) => {
             println!("{}", toml::to_string_pretty(&payload)?);
         }

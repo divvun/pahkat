@@ -127,6 +127,7 @@ impl<'a> crate::Request for Request<'a> {
             None => Cow::Owned(
                 Input::<String>::new()
                     .with_prompt("Package description (in English)")
+                    .allow_empty(true)
                     .interact()
                     .map_err(|_| RequestError::InvalidInput)?,
             ),

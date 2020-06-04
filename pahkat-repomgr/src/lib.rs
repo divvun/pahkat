@@ -1,5 +1,6 @@
 pub mod package;
 pub mod repo;
+pub mod nuke;
 
 pub(crate) mod fbs {
     butte_build::include_fbs!("index");

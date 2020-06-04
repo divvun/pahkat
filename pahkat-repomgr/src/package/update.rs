@@ -143,9 +143,14 @@ impl<'a> crate::Request for Request<'a> {
         let payload: pahkat_types::payload::Payload = toml::from_str(&payload)?;
 
         let channel = match partial.channel {
-            Some(channel) => Some(Cow::Borrowed(channel)),
+            Some(channel) => if channel == "" {
+                None
+            } else {
+                Some(Cow::Borrowed(channel))
+            },
             None => Input::<String>::new()
                 .with_prompt("Channel (or none for stable)")
+                .allow_empty(true)
                 .interact()
                 .map_err(|_| RequestError::InvalidInput)
                 .map(|v| if v == "" {
