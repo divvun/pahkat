@@ -1,6 +1,6 @@
-use structopt::StructOpt;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use structopt::StructOpt;
 
 #[derive(StructOpt, Serialize, Deserialize)]
 struct Upload {
@@ -52,23 +52,33 @@ async fn main() -> anyhow::Result<()> {
                 platform: upload.platform,
                 arch: upload.arch,
                 channel: upload.channel,
-                payload
+                payload,
             };
 
             let client = reqwest::Client::new();
 
-            let v = client.patch(&upload.url)
+            let response = client
+                .patch(&upload.url)
                 .json(&json)
                 .header("authorization", format!("Bearer {}", auth))
                 .send()
-                .await?
-                .text()
                 .await?;
 
-            println!("{}", v);
+            match response.error_for_status_ref() {
+                Ok(_) => {
+                    println!("Response: {}", response.text().await?);
+                }
+                Err(err) => {
+                    eprintln!("Errored with status {}", err.status().unwrap());
+                    match response.text().await {
+                        Ok(v) => eprintln!("{}", v),
+                        Err(_) => {}
+                    }
+                    std::process::exit(1);
+                }
+            }
         }
     }
 
     Ok(())
 }
-
