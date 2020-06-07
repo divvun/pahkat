@@ -68,20 +68,20 @@ impl DownloadManager {
         let dest_file_path = dest_path.join(filename);
 
         // Check destination path exists
-        if dest_path.exists() && dest_file_path.exists() {
-            match dest_path.metadata() {
-                Ok(v) if v.len() > 0 => {
-                    // self.handle_callback(0, 0, progress.as_ref())?;
+        // if dest_path.exists() && dest_file_path.exists() {
+        //     match dest_path.metadata() {
+        //         Ok(v) if v.len() > 0 => {
+        //             // self.handle_callback(0, 0, progress.as_ref())?;
 
-                    log::debug!("Download already exists at {:?}; using.", &dest_file_path);
+        //             log::debug!("Download already exists at {:?}; using.", &dest_file_path);
 
-                    return Ok(Box::pin(async_stream::stream! {
-                        yield DownloadEvent::Complete(dest_file_path);
-                    }));
-                }
-                _ => {}
-            }
-        }
+        //             return Ok(Box::pin(async_stream::stream! {
+        //                 yield DownloadEvent::Complete(dest_file_path);
+        //             }));
+        //         }
+        //         _ => {}
+        //     }
+        // }
 
         // Create temp dirs if they don't yet exist
         if !self.path.exists() {
@@ -207,6 +207,8 @@ impl DownloadManager {
                 Err(e) => yield DownloadEvent::Error(DownloadError::IoError(e)),
                 _ => {}
             };
+
+            drop(file);
 
             log::debug!("Moving {:?} to {:?}", &tmp_dest_path, &dest_path);
 
