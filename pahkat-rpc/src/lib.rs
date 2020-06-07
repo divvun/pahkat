@@ -388,6 +388,11 @@ impl pb::pahkat_server::Pahkat for Rpc {
 
                         for record in transaction.actions().iter() {
                             let tx = tx.clone();
+
+                            if record.action.action != PackageActionType::Install {
+                                continue;
+                            }
+                            
                             let id = record.action.id.clone();
                             let mut download = store.download(&record.action.id);
 

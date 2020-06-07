@@ -879,7 +879,7 @@ fn recurse_package_set(
                 return Ok(());
             }
 
-            let candidate = resolve_package_candidate(store, &(PackageActionType::Install, key), install_target, repos)?;
+            let candidate = resolve_package_candidate(store, &(PackageActionType::Install, key.to_owned()), install_target, repos)?;
             set.insert(key, candidate);
             Ok(())
         })
@@ -919,7 +919,9 @@ pub(crate) fn resolve_package_set(
     Ok(candidate_set
         .into_iter()
         .filter_map(|(key, candidate)| {
-            if candidate.status == PackageStatus::UpToDate {
+            if candidate.action == PackageActionType::Install && candidate.status == PackageStatus::UpToDate {
+                None
+            } else if candidate.action == PackageActionType::Uninstall && candidate.status == PackageStatus::NotInstalled {
                 None
             } else {
                 Some(candidate)

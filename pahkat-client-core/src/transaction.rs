@@ -307,6 +307,7 @@ impl PackageTransaction {
             .into_iter()
             .map(|candidate| {
                 let key = candidate.package_key;
+                let action = candidate.action;
 
                 ResolvedAction {
                     descriptor: candidate.descriptor,
@@ -318,7 +319,7 @@ impl PackageTransaction {
                         .cloned()
                         .unwrap_or_else(|| PackageAction {
                             id: key,
-                            action: candidate.action,
+                            action,
                             target: InstallTarget::System,
                         }),
                 }
@@ -326,14 +327,14 @@ impl PackageTransaction {
             .collect::<Vec<_>>();
 
         // Check for uninstall actions that contradict this set
-        for action in actions
-            .iter()
-            .filter(|x| x.action == PackageActionType::Uninstall)
-        {
-            if new_actions.iter().any(|x| x.action.id == action.id) {
-                return Err(PackageCandidateError::UninstallConflict(action.id.clone()));
-            }
-        }
+        // for action in actions
+        //     .iter()
+        //     .filter(|x| x.action == PackageActionType::Uninstall)
+        // {
+        //     if new_actions.iter().any(|x| x.action.id == action.id) {
+        //         return Err(PackageCandidateError::UninstallConflict(action.id.clone()));
+        //     }
+        // }
 
         log::debug!("Processed actions: {:#?}", &new_actions);
 
