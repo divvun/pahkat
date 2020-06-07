@@ -930,11 +930,11 @@ pub async fn start(
 
     let current_transaction = Arc::new(tokio::sync::Mutex::new(()));
 
-    // Create the background updater
-    create_background_update_service(Arc::clone(&store), Arc::clone(&current_transaction));
-
     // Notifications
     let (notifications, mut notif_rx) = broadcast::channel(5);
+
+    // Create the background updater
+    create_background_update_service(Arc::clone(&store), Arc::clone(&current_transaction), notifications.clone());
 
     let rpc = Rpc {
         store: Arc::clone(&store),
