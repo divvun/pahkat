@@ -286,28 +286,24 @@ impl PackageTransaction {
         let repos = store.repos();
         let repos = repos.read().unwrap();
 
-        // Get mutation set (for install actions)
-        let install_actions = actions
-            .iter()
-            .filter(|a| a.action == PackageActionType::Install)
-            .collect::<Vec<_>>();
-        let install_target = install_actions
+        // // Get mutation set (for install and uninstall actions)
+        let install_target = actions
             .iter()
             .map(|a| a.target)
             .collect::<std::collections::HashSet<_>>()
             .into_iter()
             .collect::<Vec<_>>();
-        let install_keys = install_actions
+        let candidate_keys = actions
             .iter()
-            .map(|a| a.id.clone())
+            .map(|a| (a.action, a.id.clone()))
             .collect::<Vec<_>>();
-        let install_set =
-            crate::repo::resolve_package_set(&*store, &*install_keys, &*install_target)?;
+        let mutation_set = crate::repo::resolve_package_set(
+            &*store, &*candidate_keys, &*install_target)?;
 
-        let is_reboot_required = install_set.iter().any(|x| x.is_reboot_required);
+        let is_reboot_required = mutation_set.iter().any(|x| x.is_reboot_required);
 
         // Create a list of resolved actions to be processed.
-        let new_actions = install_set
+        let new_actions = mutation_set
             .into_iter()
             .map(|candidate| {
                 let key = candidate.package_key;
@@ -322,7 +318,7 @@ impl PackageTransaction {
                         .cloned()
                         .unwrap_or_else(|| PackageAction {
                             id: key,
-                            action: PackageActionType::Install,
+                            action: candidate.action,
                             target: InstallTarget::System,
                         }),
                 }

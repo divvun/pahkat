@@ -717,6 +717,7 @@ pub(crate) fn clear_cache(config: &Arc<RwLock<Config>>) {
 #[derive(Debug, Clone)]
 pub struct PackageCandidate {
     pub package_key: PackageKey,
+    pub action: PackageActionType,
     pub descriptor: Descriptor,
     pub release: Release,
     pub target: Target,
@@ -739,62 +740,115 @@ pub enum PackageCandidateError {
     UninstallConflict(PackageKey),
 }
 
-use crate::package_store::InstallTarget;
+use crate::{package_store::InstallTarget, PackageActionType};
 
 fn resolve_package_candidate(
     store: &dyn PackageStore,
-    package_key: &PackageKey,
+    candidate: &(PackageActionType, PackageKey),
     install_target: &[InstallTarget],
     repos: &HashMap<RepoUrl, LoadedRepository>,
 ) -> Result<PackageCandidate, PackageCandidateError> {
+    let package_key = &candidate.1;
     let query = crate::repo::ReleaseQuery::new(package_key, &repos);
 
-    let status = install_target
-        .iter()
-        .fold(None, |acc, cur| match acc {
-            Some(Ok(v)) if v != PackageStatus::NotInstalled => Some(Ok(v)),
-            _ => Some(
-                store
-                    .status(&package_key, *cur)
-                    .map_err(|e| PackageCandidateError::Status(package_key.to_owned(), e)),
-            ),
-        })
-        .unwrap_or_else(|| Err(PackageCandidateError::UnresolvedId(package_key.to_string())))?;
+    match candidate.0 {
+        PackageActionType::Install => {
+            let status = install_target
+                .iter()
+                .fold(None, |acc, cur| match acc {
+                    Some(Ok(v)) if v != PackageStatus::NotInstalled => Some(Ok(v)),
+                    _ => Some(
+                        store
+                            .status(&package_key, *cur)
+                            .map_err(|e| PackageCandidateError::Status(package_key.to_owned(), e)),
+                    ),
+                })
+                .unwrap_or_else(|| Err(PackageCandidateError::UnresolvedId(package_key.to_string())))?;
 
-    let (target, release, descriptor) = resolve_payload(package_key, &query, &*repos)
-        .map_err(|e| PackageCandidateError::Payload(package_key.to_owned(), e))?;
+            let (target, release, descriptor) = resolve_payload(package_key, &query, &*repos)
+                .map_err(|e| PackageCandidateError::Payload(package_key.to_owned(), e))?;
 
-    use pahkat_types::payload::Payload;
+            use pahkat_types::payload::Payload;
 
-    let is_reboot_required = match &target.payload {
-        Payload::TarballPackage(_) => false,
-        Payload::MacOSPackage(pkg) => {
-            use pahkat_types::payload::macos::RebootSpec;
-            match status {
-                PackageStatus::NotInstalled => pkg.requires_reboot.contains(&RebootSpec::Install),
-                PackageStatus::RequiresUpdate => pkg.requires_reboot.contains(&RebootSpec::Update),
+            let is_reboot_required = match &target.payload {
+                Payload::TarballPackage(_) => false,
+                Payload::MacOSPackage(pkg) => {
+                    use pahkat_types::payload::macos::RebootSpec;
+                    match status {
+                        PackageStatus::NotInstalled => pkg.requires_reboot.contains(&RebootSpec::Install),
+                        PackageStatus::RequiresUpdate => pkg.requires_reboot.contains(&RebootSpec::Update),
+                        _ => false,
+                    }
+                }
+                Payload::WindowsExecutable(pkg) => {
+                    use pahkat_types::payload::windows::RebootSpec;
+                    match status {
+                        PackageStatus::NotInstalled => pkg.requires_reboot.contains(&RebootSpec::Install),
+                        PackageStatus::RequiresUpdate => pkg.requires_reboot.contains(&RebootSpec::Update),
+                        _ => false,
+                    }
+                }
                 _ => false,
-            }
-        }
-        Payload::WindowsExecutable(pkg) => {
-            use pahkat_types::payload::windows::RebootSpec;
-            match status {
-                PackageStatus::NotInstalled => pkg.requires_reboot.contains(&RebootSpec::Install),
-                PackageStatus::RequiresUpdate => pkg.requires_reboot.contains(&RebootSpec::Update),
-                _ => false,
-            }
-        }
-        _ => false,
-    };
+            };
 
-    Ok(PackageCandidate {
-        package_key: package_key.to_owned(),
-        descriptor,
-        release,
-        target,
-        status,
-        is_reboot_required,
-    })
+            Ok(PackageCandidate {
+                package_key: package_key.to_owned(),
+                action: candidate.0,
+                descriptor,
+                release,
+                target,
+                status,
+                is_reboot_required,
+            })
+        }
+        PackageActionType::Uninstall => {
+            let status = install_target
+                .iter()
+                .fold(None, |acc, cur| match acc {
+                    Some(Ok(v)) if v != PackageStatus::NotInstalled => Some(Ok(v)),
+                    _ => Some(
+                        store
+                            .status(&package_key, *cur)
+                            .map_err(|e| PackageCandidateError::Status(package_key.to_owned(), e)),
+                    ),
+                })
+                .unwrap_or_else(|| Err(PackageCandidateError::UnresolvedId(package_key.to_string())))?;
+
+            let (target, release, descriptor) = resolve_payload(package_key, &query, &*repos)
+                .map_err(|e| PackageCandidateError::Payload(package_key.to_owned(), e))?;
+
+            use pahkat_types::payload::Payload;
+
+            let is_reboot_required = match &target.payload {
+                Payload::TarballPackage(_) => false,
+                Payload::MacOSPackage(pkg) => {
+                    use pahkat_types::payload::macos::RebootSpec;
+                    match status {
+                        PackageStatus::NotInstalled => pkg.requires_reboot.contains(&RebootSpec::Uninstall),
+                        _ => false,
+                    }
+                }
+                Payload::WindowsExecutable(pkg) => {
+                    use pahkat_types::payload::windows::RebootSpec;
+                    match status {
+                        PackageStatus::NotInstalled => pkg.requires_reboot.contains(&RebootSpec::Uninstall),
+                        _ => false,
+                    }
+                }
+                _ => false,
+            };
+
+            Ok(PackageCandidate {
+                package_key: package_key.to_owned(),
+                action: candidate.0,
+                descriptor,
+                release,
+                target,
+                status,
+                is_reboot_required,
+            })
+        }
+    }
 }
 
 fn recurse_package_set(
@@ -819,11 +873,13 @@ fn recurse_package_set(
                     .map_err(|_| PackageCandidateError::UnresolvedId(key.to_string()))?
             };
 
-            if set.contains_key(&key) {
+            // FIXME: this uninstall thing here is a workaround to make uninstall work at all.
+            // No dependency cleanup will occur.
+            if set.contains_key(&key) || package_candidate.action == PackageActionType::Uninstall {
                 return Ok(());
             }
 
-            let candidate = resolve_package_candidate(store, &key, install_target, repos)?;
+            let candidate = resolve_package_candidate(store, &(PackageActionType::Install, key), install_target, repos)?;
             set.insert(key, candidate);
             Ok(())
         })
@@ -831,18 +887,18 @@ fn recurse_package_set(
 
 pub(crate) fn resolve_package_set(
     store: &dyn PackageStore,
-    install_candidates: &[PackageKey],
+    candidates: &[(PackageActionType, PackageKey)],
     install_target: &[InstallTarget],
 ) -> Result<Vec<PackageCandidate>, PackageCandidateError> {
     let repos = store.repos();
     let repos = repos.read().unwrap();
 
     // Resolve initial package set
-    let mut candidate_set = install_candidates
+    let mut candidate_set = candidates
         .iter()
         .map(|key| {
             resolve_package_candidate(store, &key, install_target, &*repos)
-                .map(|v| (key.to_owned(), v))
+                .map(|v| (key.1.to_owned(), v))
         })
         .collect::<Result<HashMap<_, _>, _>>()?;
 
