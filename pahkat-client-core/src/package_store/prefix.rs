@@ -9,7 +9,7 @@ use hashbrown::HashMap;
 use pahkat_types::package::{Descriptor, Package};
 use pahkat_types::repo::RepoUrl;
 use r2d2_sqlite::SqliteConnectionManager;
-use xz2::read::XzDecoder;
+use xz2::bufread::XzDecoder;
 
 use super::InstallTarget;
 use crate::package_store::{SharedRepoErrors, SharedRepos, SharedStoreConfig};
