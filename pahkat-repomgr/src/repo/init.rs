@@ -3,13 +3,12 @@ use std::fs::{self, create_dir_all, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
-
 use serde::Serialize;
 use typed_builder::TypedBuilder;
 use url::Url;
 
 use pahkat_types::{
-    repo::{Agent, Index, RepositoryData, RepoUrl, RepoUrlError},
+    repo::{Agent, Index, RepoUrl, RepoUrlError, RepositoryData},
     LangTagMap,
 };
 
@@ -47,7 +46,7 @@ pub enum RequestError {
     InvalidUrl(#[from] url::ParseError),
 
     #[error("Repository URL was not valid")]
-    InvalidRepoUrl(#[from] RepoUrlError)
+    InvalidRepoUrl(#[from] RepoUrlError),
 }
 
 impl<'a> crate::Request for Request<'a> {

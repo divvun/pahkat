@@ -74,7 +74,6 @@ impl ConfigPath for Download {
 }
 
 impl Platform for Download {
-
     #[inline]
     fn platform(&self) -> Option<&str> {
         self.global_opts.platform.as_ref().map(|x| &**x)
@@ -86,7 +85,6 @@ impl ConfigPath for Install {
     fn config_path(&self) -> Option<&Path> {
         self.global_opts.config_path.as_ref().map(PathBuf::as_path)
     }
-
 }
 
 impl Platform for Install {
@@ -101,7 +99,6 @@ impl ConfigPath for Uninstall {
     fn config_path(&self) -> Option<&Path> {
         self.global_opts.config_path.as_ref().map(PathBuf::as_path)
     }
-
 }
 
 impl Platform for Uninstall {
@@ -116,7 +113,6 @@ impl ConfigPath for Status {
     fn config_path(&self) -> Option<&Path> {
         self.global_opts.config_path.as_ref().map(PathBuf::as_path)
     }
-
 }
 
 impl Platform for Status {
@@ -131,7 +127,6 @@ impl ConfigPath for Init {
     fn config_path(&self) -> Option<&Path> {
         self.global_opts.config_path.as_ref().map(PathBuf::as_path)
     }
-
 }
 
 impl Platform for Init {

@@ -14,8 +14,10 @@ pub(crate) fn parse_set<T: FromStr + Ord>(s: &str) -> Result<BTreeSet<T>, T::Err
     if s == "" {
         return Ok(BTreeSet::new());
     }
-    s.split(",").map(|x| T::from_str(x.trim())).collect::<Result<BTreeSet<T>, _>>()
-} 
+    s.split(",")
+        .map(|x| T::from_str(x.trim()))
+        .collect::<Result<BTreeSet<T>, _>>()
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[serde(untagged)] // #[serde(tag = "_type")]
@@ -47,9 +49,15 @@ impl Payload {
 
     pub fn set_url(&mut self, url: url::Url) {
         match self {
-            Payload::WindowsExecutable(x) => { x.url = url; },
-            Payload::MacOSPackage(x) => { x.url = url; },
-            Payload::TarballPackage(x) => { x.url = url; },
+            Payload::WindowsExecutable(x) => {
+                x.url = url;
+            }
+            Payload::MacOSPackage(x) => {
+                x.url = url;
+            }
+            Payload::TarballPackage(x) => {
+                x.url = url;
+            }
         }
     }
 }

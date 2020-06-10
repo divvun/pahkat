@@ -763,7 +763,9 @@ fn resolve_package_candidate(
                             .map_err(|e| PackageCandidateError::Status(package_key.to_owned(), e)),
                     ),
                 })
-                .unwrap_or_else(|| Err(PackageCandidateError::UnresolvedId(package_key.to_string())))?;
+                .unwrap_or_else(|| {
+                    Err(PackageCandidateError::UnresolvedId(package_key.to_string()))
+                })?;
 
             let (target, release, descriptor) = resolve_payload(package_key, &query, &*repos)
                 .map_err(|e| PackageCandidateError::Payload(package_key.to_owned(), e))?;
@@ -775,16 +777,24 @@ fn resolve_package_candidate(
                 Payload::MacOSPackage(pkg) => {
                     use pahkat_types::payload::macos::RebootSpec;
                     match status {
-                        PackageStatus::NotInstalled => pkg.requires_reboot.contains(&RebootSpec::Install),
-                        PackageStatus::RequiresUpdate => pkg.requires_reboot.contains(&RebootSpec::Update),
+                        PackageStatus::NotInstalled => {
+                            pkg.requires_reboot.contains(&RebootSpec::Install)
+                        }
+                        PackageStatus::RequiresUpdate => {
+                            pkg.requires_reboot.contains(&RebootSpec::Update)
+                        }
                         _ => false,
                     }
                 }
                 Payload::WindowsExecutable(pkg) => {
                     use pahkat_types::payload::windows::RebootSpec;
                     match status {
-                        PackageStatus::NotInstalled => pkg.requires_reboot.contains(&RebootSpec::Install),
-                        PackageStatus::RequiresUpdate => pkg.requires_reboot.contains(&RebootSpec::Update),
+                        PackageStatus::NotInstalled => {
+                            pkg.requires_reboot.contains(&RebootSpec::Install)
+                        }
+                        PackageStatus::RequiresUpdate => {
+                            pkg.requires_reboot.contains(&RebootSpec::Update)
+                        }
                         _ => false,
                     }
                 }
@@ -812,7 +822,9 @@ fn resolve_package_candidate(
                             .map_err(|e| PackageCandidateError::Status(package_key.to_owned(), e)),
                     ),
                 })
-                .unwrap_or_else(|| Err(PackageCandidateError::UnresolvedId(package_key.to_string())))?;
+                .unwrap_or_else(|| {
+                    Err(PackageCandidateError::UnresolvedId(package_key.to_string()))
+                })?;
 
             let (target, release, descriptor) = resolve_payload(package_key, &query, &*repos)
                 .map_err(|e| PackageCandidateError::Payload(package_key.to_owned(), e))?;
@@ -824,14 +836,18 @@ fn resolve_package_candidate(
                 Payload::MacOSPackage(pkg) => {
                     use pahkat_types::payload::macos::RebootSpec;
                     match status {
-                        PackageStatus::NotInstalled => pkg.requires_reboot.contains(&RebootSpec::Uninstall),
+                        PackageStatus::NotInstalled => {
+                            pkg.requires_reboot.contains(&RebootSpec::Uninstall)
+                        }
                         _ => false,
                     }
                 }
                 Payload::WindowsExecutable(pkg) => {
                     use pahkat_types::payload::windows::RebootSpec;
                     match status {
-                        PackageStatus::NotInstalled => pkg.requires_reboot.contains(&RebootSpec::Uninstall),
+                        PackageStatus::NotInstalled => {
+                            pkg.requires_reboot.contains(&RebootSpec::Uninstall)
+                        }
                         _ => false,
                     }
                 }
@@ -879,7 +895,12 @@ fn recurse_package_set(
                 return Ok(());
             }
 
-            let candidate = resolve_package_candidate(store, &(PackageActionType::Install, key.to_owned()), install_target, repos)?;
+            let candidate = resolve_package_candidate(
+                store,
+                &(PackageActionType::Install, key.to_owned()),
+                install_target,
+                repos,
+            )?;
             set.insert(key, candidate);
             Ok(())
         })
@@ -919,9 +940,13 @@ pub(crate) fn resolve_package_set(
     Ok(candidate_set
         .into_iter()
         .filter_map(|(key, candidate)| {
-            if candidate.action == PackageActionType::Install && candidate.status == PackageStatus::UpToDate {
+            if candidate.action == PackageActionType::Install
+                && candidate.status == PackageStatus::UpToDate
+            {
                 None
-            } else if candidate.action == PackageActionType::Uninstall && candidate.status == PackageStatus::NotInstalled {
+            } else if candidate.action == PackageActionType::Uninstall
+                && candidate.status == PackageStatus::NotInstalled
+            {
                 None
             } else {
                 Some(candidate)

@@ -1,9 +1,7 @@
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 
-#[derive(
-    Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord
-)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[serde(transparent)]
 #[repr(transparent)]
 struct PayloadType(String);

@@ -96,9 +96,7 @@ impl<'a> crate::Request for Request<'a> {
 
         let _ = find_repo(&repo_path)?;
 
-        Ok(Request {
-            repo_path,
-        })
+        Ok(Request { repo_path })
     }
 }
 
@@ -126,8 +124,7 @@ pub enum Error {
 pub fn nuke_releases<'a>(request: Request<'a>) -> Result<(), Error> {
     log::debug!("{:?}", request);
 
-    let pkgs_dir = find_repo(&request.repo_path)?
-        .join("packages");
+    let pkgs_dir = find_repo(&request.repo_path)?.join("packages");
 
     let pkgs_paths = std::fs::read_dir(pkgs_dir).unwrap();
 
@@ -136,19 +133,19 @@ pub fn nuke_releases<'a>(request: Request<'a>) -> Result<(), Error> {
         if !path.is_dir() {
             continue;
         }
-        
+
         let pkg_path = path.join("index.toml");
 
         let pkg_file = std::fs::read_to_string(&pkg_path)
             .map_err(|e| Error::ReadFailed(pkg_path.clone(), e))?;
-        let mut descriptor: pahkat_types::package::Descriptor = toml::from_str(&pkg_file)
-            .map_err(|e| Error::ReadToml(pkg_path.clone(), e))?;
+        let mut descriptor: pahkat_types::package::Descriptor =
+            toml::from_str(&pkg_file).map_err(|e| Error::ReadToml(pkg_path.clone(), e))?;
 
         descriptor.release = vec![];
 
         // Write the toml
-        let data =
-            toml::to_string_pretty(&descriptor).map_err(|e| Error::SerializeToml(pkg_path.clone(), e))?;
+        let data = toml::to_string_pretty(&descriptor)
+            .map_err(|e| Error::SerializeToml(pkg_path.clone(), e))?;
         fs::write(&pkg_path, data).map_err(|e| Error::WriteToml(pkg_path.to_path_buf(), e))?;
         log::info!("Wrote descriptor to {}", pkg_path.display());
     }

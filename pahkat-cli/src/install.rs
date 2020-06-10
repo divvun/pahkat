@@ -3,13 +3,12 @@ use std::sync::Arc;
 
 use futures::stream::StreamExt;
 
-use pahkat_client::{
-    transaction::{PackageAction, PackageTransaction},
-    package_store::InstallTarget,
-    PackageStore,
-    PackageKey, DownloadEvent,
-};
 use crate::Platform;
+use pahkat_client::{
+    package_store::InstallTarget,
+    transaction::{PackageAction, PackageTransaction},
+    DownloadEvent, PackageKey, PackageStore,
+};
 
 pub(crate) async fn install<'a>(
     store: Arc<dyn PackageStore>,

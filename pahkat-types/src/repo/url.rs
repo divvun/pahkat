@@ -1,7 +1,7 @@
-use std::{str::FromStr, fmt};
+use std::{fmt, str::FromStr};
 
-use serde::{de, Serialize, Serializer, Deserialize, Deserializer, de::Visitor};
 use ::url::Url;
+use serde::{de, de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
@@ -16,7 +16,7 @@ impl std::fmt::Display for RepoUrl {
 
 impl std::ops::Deref for RepoUrl {
     type Target = Url;
-    
+
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -41,7 +41,9 @@ impl RepoUrl {
         }
 
         {
-            let mut segments = url.path_segments_mut().map_err(|_| RepoUrlError::NoPathSegments)?;
+            let mut segments = url
+                .path_segments_mut()
+                .map_err(|_| RepoUrlError::NoPathSegments)?;
             segments.pop_if_empty().push("");
         }
 
