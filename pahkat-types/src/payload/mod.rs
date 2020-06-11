@@ -10,12 +10,35 @@ use crate::DependencyMap;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 
+#[cfg(feature = "structopt")]
 pub(crate) fn parse_set<T: FromStr + Ord>(s: &str) -> Result<BTreeSet<T>, T::Err> {
     if s == "" {
         return Ok(BTreeSet::new());
     }
-    s.split(",").map(|x| T::from_str(x.trim())).collect::<Result<BTreeSet<T>, _>>()
-} 
+    s.split(",")
+        .map(|x| T::from_str(x.trim()))
+        .collect::<Result<BTreeSet<T>, _>>()
+}
+
+#[cfg(feature = "structopt")]
+pub(crate) fn parse_dep_map(s: &str) -> Result<DependencyMap, &'static str> {
+    let mut map = DependencyMap::new();
+
+    if s == "" {
+        return Ok(map);
+    }
+
+    s.split(",")
+        .map(|x| {
+            let v = x.split("::").collect::<Vec<_>>();
+            (v[0].to_string(), v[1].to_string())
+        })
+        .for_each(|(k, v)| {
+            map.insert(k, v);
+        });
+
+    Ok(map)
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[serde(untagged)] // #[serde(tag = "_type")]
@@ -47,9 +70,15 @@ impl Payload {
 
     pub fn set_url(&mut self, url: url::Url) {
         match self {
-            Payload::WindowsExecutable(x) => { x.url = url; },
-            Payload::MacOSPackage(x) => { x.url = url; },
-            Payload::TarballPackage(x) => { x.url = url; },
+            Payload::WindowsExecutable(x) => {
+                x.url = url;
+            }
+            Payload::MacOSPackage(x) => {
+                x.url = url;
+            }
+            Payload::TarballPackage(x) => {
+                x.url = url;
+            }
         }
     }
 }
@@ -57,14 +86,19 @@ impl Payload {
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
+#[cfg_attr(feature = "structopt", derive(structopt::StructOpt))]
 pub struct Target {
+    #[cfg_attr(feature = "structopt", structopt(short, long))]
     pub platform: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[builder(default)]
+    #[cfg_attr(feature = "structopt", structopt(short, long))]
     pub arch: Option<String>,
     #[serde(default)]
     #[builder(default)]
+    #[cfg_attr(feature = "structopt", structopt(short, long, parse(try_from_str = parse_dep_map)))]
     pub dependencies: DependencyMap,
+    #[cfg_attr(feature = "structopt", structopt(subcommand))]
     pub payload: Payload,
 }
 

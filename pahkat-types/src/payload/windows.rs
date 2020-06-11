@@ -1,14 +1,14 @@
 use std::cmp::Ordering;
-use std::str::FromStr;
 use std::collections::BTreeSet;
+use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
+
+#[cfg(feature = "structopt")]
 use super::parse_set;
 
-#[derive(
-    Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord
-)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[serde(rename_all = "lowercase")]
 pub enum RebootSpec {
     Install,
@@ -33,9 +33,7 @@ impl FromStr for RebootSpec {
     }
 }
 
-#[derive(
-    Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord
-)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[serde(transparent)]
 #[repr(transparent)]
 struct PayloadType(String);

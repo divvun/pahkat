@@ -6,31 +6,44 @@ use structopt::StructOpt;
 struct Upload {
     #[structopt(short, long)]
     pub url: String,
-    #[structopt(short, long)]
-    pub version: pahkat_types::package::Version,
-    #[structopt(short, long)]
-    pub platform: String,
-    #[structopt(short, long)]
-    pub arch: Option<String>,
-    #[structopt(short, long)]
-    pub channel: Option<String>,
     #[structopt(short = "P", long)]
-    pub payload_meta_path: PathBuf,
+    pub release_meta_path: PathBuf,
 }
 
 #[derive(Serialize, Deserialize)]
 struct PackageUpdateRequest {
-    pub version: pahkat_types::package::Version,
-    pub platform: String,
-    pub arch: Option<String>,
-    pub channel: Option<String>,
-    pub payload: pahkat_types::payload::Payload,
+    release: Release,
 }
 
 #[derive(StructOpt)]
 enum Args {
-    Payload(pahkat_types::payload::Payload),
+    Release(Release),
     Upload(Upload),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, structopt::StructOpt)]
+pub struct Release {
+    #[structopt(short, long)]
+    pub version: String,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[structopt(short, long)]
+    pub channel: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[structopt(long)]
+    pub authors: Vec<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[structopt(short, long)]
+    pub license: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[structopt(long)]
+    pub license_url: Option<String>,
+
+    #[structopt(flatten)]
+    pub target: pahkat_types::payload::Target,
 }
 
 #[tokio::main]
@@ -38,22 +51,16 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::from_args();
 
     match args {
-        Args::Payload(payload) => {
-            println!("{}", toml::to_string_pretty(&payload)?);
+        Args::Release(release) => {
+            println!("{}", toml::to_string_pretty(&release)?);
         }
         Args::Upload(upload) => {
             let auth = std::env::var("PAHKAT_API_KEY")?;
 
-            let payload = std::fs::read_to_string(upload.payload_meta_path)?;
-            let payload: pahkat_types::payload::Payload = toml::from_str(&payload)?;
+            let release = std::fs::read_to_string(upload.release_meta_path)?;
+            let release: Release = toml::from_str(&release)?;
 
-            let json = PackageUpdateRequest {
-                version: upload.version,
-                platform: upload.platform,
-                arch: upload.arch,
-                channel: upload.channel,
-                payload,
-            };
+            let json = PackageUpdateRequest { release };
 
             let client = reqwest::Client::new();
 

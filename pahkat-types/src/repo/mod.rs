@@ -2,10 +2,10 @@ mod url;
 
 pub use self::url::{RepoUrl, RepoUrlError};
 
+use ::url::Url;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use typed_builder::TypedBuilder;
-use ::url::Url;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[serde(untagged)]

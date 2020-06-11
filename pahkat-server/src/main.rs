@@ -1,16 +1,16 @@
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
+use std::time::Duration;
 use std::{collections::HashMap, convert::Infallible, path::PathBuf, sync::Arc};
 use warp::http::StatusCode;
 use warp::Filter;
-use std::time::Duration;
-use std::borrow::Cow;
 
 use structopt::StructOpt;
 
-use std::process::{Command, Output, ExitStatus};
+use std::process::{Command, ExitStatus, Output};
 
 pub struct Subversion {
-    path: PathBuf
+    path: PathBuf,
 }
 
 impl Subversion {
@@ -40,10 +40,11 @@ impl Subversion {
         } else {
             Err(output)
         }
-    } 
+    }
 
     fn update(&self) -> Result<Output, Output> {
-        let output = Command::new("svn").arg("up")
+        let output = Command::new("svn")
+            .arg("up")
             .current_dir(&self.path)
             .output()
             .unwrap();
@@ -55,7 +56,13 @@ impl Subversion {
         }
     }
 
-    fn commit(&self, repo: &str, id: &str, username: &str, password: &str) -> Result<Output, Output> {
+    fn commit(
+        &self,
+        repo: &str,
+        id: &str,
+        username: &str,
+        password: &str,
+    ) -> Result<Output, Output> {
         let output = Command::new("svn")
             .args(&["commit", "-m"])
             .arg(format!("[CD] Package: {}, Repo: {}", id, repo))
@@ -66,7 +73,7 @@ impl Subversion {
             .current_dir(&self.path)
             .output()
             .unwrap();
-            
+
         if output.status.success() {
             Ok(output)
         } else {
@@ -81,7 +88,9 @@ struct PackageUpdateRequest {
     pub platform: String,
     pub arch: Option<String>,
     pub channel: Option<String>,
-    pub payload: pahkat_types::payload::Payload,
+    pub license: Option<String>,
+    pub license_url: Option<String>,
+    pub target: pahkat_types::payload::Target,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -148,41 +157,45 @@ async fn process_package_update_request(
         svn.revert().unwrap();
         svn.cleanup().unwrap();
         svn.update().unwrap();
-    
+
         let inner_req = pahkat_repomgr::package::update::Request::builder()
             .repo_path(svn.path.clone().into())
             .id(package_id.clone().into())
-            .platform(req.platform.clone().into())
-            .arch(req.arch.as_ref().map(|x| Cow::Borrowed(&**x)))
             .version(Cow::Owned(req.version.clone()))
             .channel(req.channel.as_ref().map(|x| Cow::Borrowed(&**x)))
-            .payload(Cow::Owned(req.payload.clone()))
+            .target(Cow::Borrowed(&req.target))
             .url(None)
             .build();
-    
-    
+
         log::info!("Updating package...");
         match pahkat_repomgr::package::update::update(inner_req) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => return Ok(Box::new(PackageUpdateError::RepoError(e))),
         };
-    
+
         log::info!("Updating index...");
         match pahkat_repomgr::repo::indexing::index(
-            pahkat_repomgr::repo::indexing::Request::builder().path(svn.path.clone().into()).build())
-        {
-            Ok(_) => {},
+            pahkat_repomgr::repo::indexing::Request::builder()
+                .path(svn.path.clone().into())
+                .build(),
+        ) {
+            Ok(_) => {}
             Err(e) => return Ok(Box::new(PackageUpdateError::IndexError)),
         };
-    
+
         log::info!("Committing to repository...");
-        match svn.commit(&repo_id, &package_id, &config.svn_username, &config.svn_password) {
+        match svn.commit(
+            &repo_id,
+            &package_id,
+            &config.svn_username,
+            &config.svn_password,
+        ) {
             Ok(_) => break,
             Err(_) => {
                 log::error!("Blocked from committing; retrying in 5 seconds.");
                 tokio::time::delay_for(std::time::Duration::from_secs(5)).await;
-                continue
-            },
+                continue;
+            }
         }
     }
 
@@ -199,10 +212,10 @@ pub struct Config {
 
 mod filters {
     use super::*;
-    use std::convert::Infallible;
-    use std::sync::{Arc};
-    use tokio::sync::Mutex;
     use std::collections::HashMap;
+    use std::convert::Infallible;
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
     use warp::Filter;
 
     pub fn config(
@@ -214,7 +227,8 @@ mod filters {
 
     pub fn svn(
         svn: &Arc<HashMap<String, Arc<Mutex<Subversion>>>>,
-    ) -> impl Filter<Extract = (Arc<HashMap<String, Arc<Mutex<Subversion>>>>,), Error = Infallible> + Clone {
+    ) -> impl Filter<Extract = (Arc<HashMap<String, Arc<Mutex<Subversion>>>>,), Error = Infallible> + Clone
+    {
         let svn = Arc::clone(svn);
         warp::any().map(move || Arc::clone(&svn))
     }
@@ -238,7 +252,12 @@ async fn main() -> anyhow::Result<()> {
 
     let mut svn = HashMap::new();
     for (key, value) in config.repos.iter() {
-        svn.insert(key.to_string(), Arc::new(Mutex::new(Subversion { path: std::fs::canonicalize(value.clone()).unwrap() })));
+        svn.insert(
+            key.to_string(),
+            Arc::new(Mutex::new(Subversion {
+                path: std::fs::canonicalize(value.clone()).unwrap(),
+            })),
+        );
     }
     let svn = Arc::new(svn);
 
@@ -256,8 +275,8 @@ async fn main() -> anyhow::Result<()> {
         .and_then(process_package_update_request)
         .with(warp::log("pahkat_server::update_pkg"));
 
-    let index = warp::any()
-        .map(|| "Hello!");
+    // let index = warp::any()
+    //     .map(|| "Hello!");
 
     warp::serve(package_update)
         .run(([127, 0, 0, 1], 3030))

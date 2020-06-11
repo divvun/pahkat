@@ -169,10 +169,10 @@ pub struct Release {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[builder(default)]
     pub authors: Vec<String>,
-    /// Must be a valid SPDX string
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[builder(default)]
+    /// Must be a valid SPDX string
     pub license: Option<String>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]

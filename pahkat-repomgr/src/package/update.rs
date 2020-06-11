@@ -11,11 +11,9 @@ use typed_builder::TypedBuilder;
 pub struct Request<'a> {
     pub repo_path: Cow<'a, Path>,
     pub id: Cow<'a, str>,
-    pub platform: Cow<'a, str>,
-    pub arch: Option<Cow<'a, str>>,
     pub channel: Option<Cow<'a, str>>,
     pub version: Cow<'a, Version>,
-    pub payload: Cow<'a, pahkat_types::payload::Payload>,
+    pub target: Cow<'a, pahkat_types::payload::Target>,
     pub url: Option<Cow<'a, url::Url>>,
 }
 
@@ -132,7 +130,7 @@ impl<'a> crate::Request for Request<'a> {
             Some(path) => Cow::Borrowed(path),
             None => Cow::Owned(
                 Input::<String>::new()
-                    .with_prompt("Payload path (toml)")
+                    .with_prompt("Target path (toml)")
                     .interact()
                     .map_err(|_| RequestError::InvalidInput)
                     .map(std::path::PathBuf::from)?,
@@ -140,7 +138,7 @@ impl<'a> crate::Request for Request<'a> {
         };
 
         let payload = std::fs::read_to_string(payload_path)?;
-        let payload: pahkat_types::payload::Payload = toml::from_str(&payload)?;
+        let target: pahkat_types::payload::Target = toml::from_str(&payload)?;
 
         let channel = match partial.channel {
             Some(channel) => if channel == "" {
@@ -160,21 +158,11 @@ impl<'a> crate::Request for Request<'a> {
                 })?
         };
 
-        let platform = match partial.platform {
-            Some(name) => Cow::Borrowed(name),
-            None => Cow::Owned(
-                Input::<String>::new()
-                    .with_prompt("Platform")
-                    .interact()
-                    .map_err(|_| RequestError::InvalidInput)?,
-            ),
-        };
-
         let version = match partial.version {
             Some(tags) => Cow::Borrowed(tags),
             None => Cow::Owned(
                 Input::<Version>::new()
-                    .with_prompt("New release version")
+                    .with_prompt("Release version")
                     .interact()
                     .map_err(|_| RequestError::InvalidInput)?,
             ),
@@ -184,10 +172,8 @@ impl<'a> crate::Request for Request<'a> {
             repo_path,
             id,
             channel,
-            platform,
-            arch: None,
             version,
-            payload: Cow::Owned(payload),
+            target: Cow::Owned(target),
             url: partial.url.map(|x| Cow::Borrowed(x)),
         })
     }
@@ -252,17 +238,17 @@ pub fn update<'a>(request: Request<'a>) -> Result<(), Error> {
     };
 
     // Check if a target exists that meets this criteria
-    let mut target = match release.target.iter_mut().find(|x| x.platform == request.platform) {
+    let mut target = match release.target.iter_mut().find(|x| x.platform == request.target.platform) {
         Some(target) => {
             log::info!("Found target!");
-            target.payload = request.payload.deref().clone();
+            target.payload = request.target.payload.clone();
             target
         }
         None => {
             log::info!("No target; creating.");
             release.target.insert(0, pahkat_types::payload::Target::builder()
-                .platform(request.platform.to_string())
-                .payload(request.payload.deref().clone()).build());
+                .platform(request.target.platform.to_string())
+                .payload(request.target.payload.clone()).build());
             release.target.first_mut().unwrap()
         } 
     };
