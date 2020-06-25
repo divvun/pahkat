@@ -64,11 +64,11 @@ iref = "1.1.5"
     # Windows-specific
     [target.'cfg(target_os="windows")'.dependencies]
     winapi = { version = "0.3", features = ["shellapi"] }
-    winreg = { git = "https://github.com/bbqsrc/winreg-rs", branch = "master" }
+    registry = { git = "https://github.com/bbqsrc/registry-rs" }
 
     # Android-specific
     [target.'cfg(target_os="android")'.dependencies]
-    backtrace = "0.3.46"
+    backtrace = "0.3.49"
     ctor = "0.1.13"
     android_log = { git = "https://github.com/bbqsrc/android_log-rs" }
 

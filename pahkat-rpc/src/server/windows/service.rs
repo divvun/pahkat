@@ -154,9 +154,6 @@ define_windows_service!(ffi_service_main, service_main);
 
 fn service_main(_: Vec<OsString>) {
     use tokio::runtime::Runtime;
-
-    // winlog::register(SERVICE_DISPLAY_NAME);
-    // winlog::init(SERVICE_DISPLAY_NAME).ok();
     super::setup_logger("service").unwrap();
 
     // Create the runtime

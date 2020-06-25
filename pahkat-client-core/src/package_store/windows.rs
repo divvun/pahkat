@@ -8,9 +8,8 @@ use std::process::Command;
 use std::sync::{Arc, RwLock};
 
 use hashbrown::HashMap;
+use registry::{Data, Hive, Security, RegKey};
 use url::Url;
-use winreg::enums::*;
-use winreg::RegKey;
 
 use crate::package_store::{ImportError, InstallTarget};
 use crate::repo::{PackageQuery, RepoDownloadError};
@@ -41,15 +40,19 @@ pub struct WindowsPackageStore {
 }
 
 fn uninstall_regkey(installer: &windows::Executable) -> Option<RegKey> {
-    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    let path = Path::new(UNINSTALL_PATH).join(&installer.product_code);
-    match hklm.open_subkey(&path) {
-        Err(_e) => match hklm.open_subkey_with_flags(&path, KEY_READ | KEY_WOW64_64KEY) {
-            Err(_e) => None,
-            Ok(v) => Some(v),
-        },
-        Ok(v) => Some(v),
-    }
+    Hive::LocalMachine.open(
+        vec![UNINSTALL_PATH, &*installer.product_code].join(r"\"),
+        Security::Read | Security::Wow6464Key
+    ).ok()
+    // let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    // let path = Path::new(UNINSTALL_PATH).join(&installer.product_code);
+    // match hklm.open_subkey(&path) {
+    //     Err(_e) => match hklm.open_subkey_with_flags(&path, KEY_READ | KEY_WOW64_64KEY) {
+    //         Err(_e) => None,
+    //         Ok(v) => Some(v),
+    //     },
+    //     Ok(v) => Some(v),
+    // }
 }
 
 impl PackageStore for WindowsPackageStore {
@@ -184,10 +187,15 @@ impl PackageStore for WindowsPackageStore {
         };
 
         let uninst_string: String = match regkey
-            .get_value(QUIET_UNINSTALL_STRING)
-            .or_else(|_| regkey.get_value(QUIET_UNINSTALL_STRING))
+            .value(QUIET_UNINSTALL_STRING)
+            .or_else(|_| regkey.value(QUIET_UNINSTALL_STRING))
         {
-            Ok(v) => v,
+            Ok(Data::String(v)) => v.to_string_lossy(),
+            Ok(_) => {
+                return Err(UninstallError::Payload(PayloadError::CriteriaUnmet(
+                    "No compatible uninstallation method found.".into(),
+                )))
+            }
             Err(_) => {
                 return Err(UninstallError::Payload(PayloadError::CriteriaUnmet(
                     "No compatible uninstallation method found.".into(),
@@ -365,9 +373,9 @@ impl WindowsPackageStore {
             None => return Ok(PackageStatus::NotInstalled),
         };
 
-        let disp_version: String = match inst_key.get_value(DISPLAY_VERSION) {
-            Err(_) => return Err(PackageStatusError::ParsingVersion),
-            Ok(v) => v,
+        let disp_version: String = match inst_key.value(DISPLAY_VERSION) {
+            Ok(Data::String(v)) => v.to_string_lossy(),
+            _ => return Err(PackageStatusError::ParsingVersion),
         };
 
         let status = crate::cmp::cmp(&disp_version, &response.release.version);
