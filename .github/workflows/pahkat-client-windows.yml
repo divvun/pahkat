@@ -1,0 +1,77 @@
+name: pahkat-windows-cli
+
+on:
+  push:
+    branches:
+      - master
+      - develop
+      - release
+
+env:
+  RUST_VERSION: stable
+  CARGO_INCREMENTAL: 0
+  RUSTUP_MAX_RETRIES: 10
+  CARGO_NET_RETRY: 10
+  RUST_BACKTRACE: full
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+    - name: Setup Divvun CI
+      uses: divvun/actions/setup@master
+      with:
+        key: ${{ secrets.DIVVUN_KEY }}
+    - name: Get version
+      id: version
+      uses: divvun/actions/version@develop
+      with:
+        cargo: pahkat-cli/Cargo.toml
+        nightly: master, develop
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Install build dependencies
+      uses: divvun/actions/pahkat/init@develop
+      with:
+        repo: https://pahkat.uit.no/devtools/
+        channel: nightly
+        packages: pahkat-uploader
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        profile: minimal
+        override: true
+        target: i686-pc-windows-msvc
+    - name: Build Pahkat CLI Client for Windows
+      run: |
+        cd pahkat-cli
+        cargo build --features windows --release --target i686-pc-windows-msvc
+        cd ..
+      env:
+        RUSTC_BOOTSTRAP: 1
+    - name: Create dist
+      run: |
+        mkdir -p dist/bin
+        mv target/i686-pc-windows-msvc/release/pahkat-cli.exe dist/bin/pahkat-windows.exe
+    - name: Sign code
+      uses: divvun/actions/codesign@develop
+      with:
+        path: dist/bin/pahkat-windows.exe
+    - name: Create tarball package
+      id: installer
+      uses: divvun/actions/create-txz@develop
+      with:
+        path: dist
+    - name: Deploy
+      uses: divvun/actions/deploy@develop
+      with:
+        package-id: pahkat-windows-cli
+        type: TarballPackage
+        platform: windows
+        version: ${{ steps.version.outputs.version }}
+        payload-path: ${{ steps.installer.outputs['txz-path'] }}
+        repo: https://pahkat.thetc.se/devtools/
+        channel: ${{ steps.installer.outputs.channel }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

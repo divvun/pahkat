@@ -1,4 +1,4 @@
-name: Release Tools
+name: repomgr
 on:
   push:
     branches:

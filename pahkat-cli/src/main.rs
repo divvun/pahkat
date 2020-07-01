@@ -23,15 +23,22 @@ fn config_path(holder: &dyn ConfigPath) -> Result<PathBuf> {
 use pahkat_client::{Config, PackageStore};
 use std::sync::Arc;
 
-// #[inline(always)]
-// #[cfg(feature = "windows")]
-// fn store(args: &Args) -> anyhow::Result<Arc<dyn PackageStore<Target=>>> {
-//     let config_path = config_path(&args)?;
-//     let config = pahkat_client::Config::load(&config_path, pahkat_client::Permission::ReadWrite)?;
+#[inline(always)]
+#[cfg(feature = "windows")]
+async fn store(config_path: Option<&Path>) -> anyhow::Result<Arc<dyn PackageStore>> {
+    let config = match config_path {
+        Some(v) => pahkat_client::Config::load(&v, pahkat_client::Permission::ReadWrite)?,
+        None => pahkat_client::Config::load_default()?,
+    };
+    let store = pahkat_client::WindowsPackageStore::new(config).await;
+    let store = Arc::new(store);
 
-//     Arc::new(pahkat_client::WindowsPackageStore::new(config))
-// }
+    if store.config().read().unwrap().repos().len() == 0 {
+        println!("WARNING: There are no repositories in the given config.");
+    }
 
+    Ok(store)
+}
 
 #[inline(always)]
 #[cfg(feature = "prefix")]
@@ -87,8 +94,9 @@ async fn main() -> anyhow::Result<()> {
 
     // match args
     match &args {
-        #[cfg(feature = "prefix")]
         cli::Args::Init(a) => {
+            // TODO: init should only be built for prefix builds.
+            #[cfg(feature = "prefix")]
             create_store(args.config_path()).await?;
         }
         cli::Args::Download(a) => {
