@@ -1,4 +1,4 @@
-name: pahkat-prefix-cli
+name: pahkat-uploader
 
 on:
   push:
@@ -28,7 +28,7 @@ jobs:
       id: version
       uses: divvun/actions/version@develop
       with:
-        cargo: pahkat-cli/Cargo.toml
+        cargo: pahkat-uploader/Cargo.toml
         nightly: master, develop
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - name: Install build dependencies
@@ -44,22 +44,22 @@ jobs:
         profile: minimal
         override: true
         target: i686-pc-windows-msvc
-    - name: Build pahkat-prefix-cli
+    - name: Build pahkat-uploader
       run: |
-        cd pahkat-cli
-        cargo check --features prefix
-        cargo build --features prefix --release --target i686-pc-windows-msvc
+        cd pahkat-uploader
+        cargo check
+        cargo build --release --target i686-pc-windows-msvc
         cd ..
       env:
         RUSTC_BOOTSTRAP: 1
     - name: Create dist
       run: |
         mkdir -p dist/bin
-        mv target/i686-pc-windows-msvc/release/pahkat-cli.exe dist/bin/pahkat-prefix.exe
+        mv pahkat-uploader/target/i686-pc-windows-msvc/release/pahkat-uploader.exe dist/bin/pahkat-uploader.exe
     - name: Sign code
       uses: divvun/actions/codesign@develop
       with:
-        path: dist/bin/pahkat-prefix.exe
+        path: dist/bin/pahkat-uploader.exe
     - name: Create tarball package
       id: installer
       uses: divvun/actions/create-txz@develop
@@ -68,7 +68,7 @@ jobs:
     - name: Deploy
       uses: divvun/actions/deploy@develop
       with:
-        package-id: pahkat-prefix-cli
+        package-id: pahkat-uploader
         type: TarballPackage
         platform: windows
         arch: i686
@@ -78,7 +78,7 @@ jobs:
         channel: ${{ steps.installer.outputs.channel }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   build-macos:
-    runs-on: macOS-latest
+    runs-on: macos-latest
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
@@ -90,7 +90,7 @@ jobs:
       id: version
       uses: divvun/actions/version@develop
       with:
-        cargo: pahkat-cli/Cargo.toml
+        cargo: pahkat-uploader/Cargo.toml
         nightly: master, develop
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - name: Install build dependencies
@@ -105,21 +105,21 @@ jobs:
         toolchain: stable
         profile: minimal
         override: true
-    - name: Build pahkat-prefix-cli
+    - name: Build pahkat-uploader
       run: |
-        cd pahkat-cli
-        cargo check --features prefix
-        cargo build --features prefix --release
+        cd pahkat-uploader
+        cargo check
+        cargo build --release
         cd ..
     - name: Create dist
       run: |
-        strip target/release/pahkat-cli
+        strip pahkat-uploader/target/release/pahkat-uploader
         mkdir -p dist/bin
-        mv target/release/pahkat-cli dist/bin/pahkat-prefix
+        mv pahkat-uploader/target/release/pahkat-uploader dist/bin/pahkat-uploader
     - name: Sign code
       uses: divvun/actions/codesign@develop
       with:
-        path: dist/bin/pahkat-prefix
+        path: dist/bin/pahkat-uploader
     - name: Create tarball package
       id: installer
       uses: divvun/actions/create-txz@develop
@@ -128,7 +128,7 @@ jobs:
     - name: Deploy
       uses: divvun/actions/deploy@develop
       with:
-        package-id: pahkat-prefix-cli
+        package-id: pahkat-uploader
         type: TarballPackage
         platform: macos
         arch: x86_64
@@ -150,7 +150,7 @@ jobs:
       id: version
       uses: divvun/actions/version@develop
       with:
-        cargo: pahkat-cli/Cargo.toml
+        cargo: pahkat-uploader/Cargo.toml
         nightly: master, develop
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - name: Install build dependencies
@@ -165,17 +165,17 @@ jobs:
         toolchain: stable
         profile: minimal
         override: true
-    - name: Build pahkat-prefix-cli
+    - name: Build pahkat-uploader
       run: |
-        cd pahkat-cli
-        cargo check --features prefix
-        cargo build --features prefix --release
+        cd pahkat-uploader
+        cargo check
+        cargo build --release
         cd ..
     - name: Create dist
       run: |
-        strip target/release/pahkat-cli
+        strip pahkat-uploader/target/release/pahkat-uploader
         mkdir -p dist/bin
-        mv target/release/pahkat-cli dist/bin/pahkat-prefix
+        mv pahkat-uploader/target/release/pahkat-uploader dist/bin/pahkat-uploader
     - name: Create tarball package
       id: installer
       uses: divvun/actions/create-txz@develop
@@ -184,7 +184,7 @@ jobs:
     - name: Deploy
       uses: divvun/actions/deploy@develop
       with:
-        package-id: pahkat-prefix-cli
+        package-id: pahkat-uploader
         type: TarballPackage
         platform: linux
         arch: x86_64
