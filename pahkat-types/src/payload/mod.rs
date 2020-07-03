@@ -96,7 +96,7 @@ pub struct Target {
     pub arch: Option<String>,
     #[serde(default)]
     #[builder(default)]
-    #[cfg_attr(feature = "structopt", structopt(short, long, parse(try_from_str = parse_dep_map)))]
+    #[cfg_attr(feature = "structopt", structopt(default_value = "Default::default", short, long, parse(try_from_str = parse_dep_map)))]
     pub dependencies: DependencyMap,
     #[cfg_attr(feature = "structopt", structopt(subcommand))]
     pub payload: Payload,

@@ -1,7 +1,9 @@
-name: repomgr
+name: pahkat-repomgr
 on:
   push:
     branches:
+      - master
+      - develop
       - release
   repository_dispatch:
     types: release

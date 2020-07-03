@@ -73,5 +73,5 @@ jobs:
         version: ${{ steps.version.outputs.version }}
         payload-path: ${{ steps.installer.outputs['txz-path'] }}
         repo: https://pahkat.thetc.se/devtools/
-        channel: ${{ steps.installer.outputs.channel }}
+        channel: ${{ steps.version.outputs.channel }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

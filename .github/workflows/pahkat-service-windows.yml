@@ -85,7 +85,7 @@ jobs:
         version: ${{ steps.version.outputs.version }}
         payload-path: ${{ steps.installer.outputs['installer-path'] }}
         repo: https://pahkat.thetc.se/divvun-installer/
-        channel: ${{ steps.installer.outputs.channel }}
+        channel: ${{ steps.version.outputs.channel }}
         windows-kind: inno
         windows-product-code: "{6B3A048B-BB81-4865-86CA-61A0DF038CFE}_is1"
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
