@@ -44,10 +44,15 @@ jobs:
         profile: minimal
         override: true
         target: i686-pc-windows-msvc
+    - name: Build Pahkat RPC DLL 
+      run: |
+        cd pahkat-rpc
+        cargo build --lib --features windows --release --target i686-pc-windows-msvc
+        cd ..
     - name: Build Pahkat RPC Server
       run: |
         cd pahkat-rpc
-        cargo build --bin server --features windows --release --target i686-pc-windows-msvc
+        cargo build --bin winsvc --features windows --release --target i686-pc-windows-msvc
         cd ..
       env:
         RUSTC_BOOTSTRAP: 1
@@ -61,8 +66,10 @@ jobs:
     - name: Create dist
       run: |
         mkdir dist
-        mv target/i686-pc-windows-msvc/release/server.exe dist/pahkat-service.exe
+        mv target/i686-pc-windows-msvc/release/winsvc.exe dist/pahkat-service.exe
         mv target/i686-pc-windows-msvc/release/client.exe dist/pahkatc.exe
+        mkdir -p dist-lib/bin
+        mv target/i686-pc-windows-msvc/release/pahkat_rpc.dll dist-lib/bin/pahkat_rpc.dll
     - name: Sign code (server)
       uses: divvun/actions/codesign@develop
       with:
@@ -77,7 +84,24 @@ jobs:
       with:
         path: pahkat-rpc/resources/install.iss
         defines: Version=${{ steps.version.outputs.version }}
-    - name: Deploy
+    - name: Bundle DLL
+      id: lib_bundle
+      uses: divvun/actions/create-txz@develop
+      with:
+        path: dist-lib
+    - name: Deploy (library)
+      uses: divvun/actions/deploy@develop
+      with:
+        package-id: libpahkat_rpc
+        platform: windows
+        arch: i686
+        type: TarballPackage
+        version: ${{ steps.version.outputs.version }}
+        payload-path: ${{ steps.lib_bundle.outputs['txz-path'] }}
+        repo: https://pahkat.thetc.se/devtools/
+        channel: ${{ steps.version.outputs.channel }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Deploy (installer)
       uses: divvun/actions/deploy@develop
       with:
         package-id: pahkat-service
