@@ -49,6 +49,8 @@ jobs:
         cd pahkat-rpc
         cargo build --lib --features windows --release --target i686-pc-windows-msvc
         cd ..
+      env:
+        RUSTC_BOOTSTRAP: 1
     - name: Build Pahkat RPC Server
       run: |
         cd pahkat-rpc
