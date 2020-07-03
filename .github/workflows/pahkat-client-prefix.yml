@@ -153,6 +153,9 @@ jobs:
         cargo: pahkat-cli/Cargo.toml
         nightly: master, develop
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Install musl libs and tools
+      run: |
+        sudo apt install -y musl musl-tools
     - name: Install build dependencies
       uses: divvun/actions/pahkat/init@develop
       with:
@@ -163,6 +166,7 @@ jobs:
       uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
+        target: x86_64-unknown-linux-musl
         profile: minimal
         override: true
     - name: Build pahkat-prefix-cli
