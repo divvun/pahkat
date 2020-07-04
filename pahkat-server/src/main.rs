@@ -84,12 +84,25 @@ impl Subversion {
 
 #[derive(Serialize, Deserialize)]
 struct PackageUpdateRequest {
-    pub version: pahkat_types::package::Version,
-    pub platform: String,
-    pub arch: Option<String>,
+    release: Release,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+pub struct Release {
+    pub version: String,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub channel: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub authors: Vec<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub license: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub license_url: Option<String>,
+
     pub target: pahkat_types::payload::Target,
 }
 
@@ -103,6 +116,9 @@ enum PackageUpdateError {
 
     #[error("{0}")]
     RepoError(#[from] pahkat_repomgr::package::update::Error),
+
+    #[error("Invalid version provided")]
+    VersionError(#[from] pahkat_types::package::version::Error),
 
     #[error("Indexing error")]
     IndexError,
@@ -118,6 +134,7 @@ impl warp::reply::Reply for PackageUpdateError {
             PackageUpdateError::UnsupportedRepo => StatusCode::from_u16(400).unwrap(),
             PackageUpdateError::RepoError(_) => StatusCode::from_u16(500).unwrap(),
             PackageUpdateError::IndexError => StatusCode::from_u16(500).unwrap(),
+            PackageUpdateError::VersionError(_) => StatusCode::from_u16(400).unwrap(),
         };
         warp::reply::with_status(msg, code).into_response()
     }
@@ -131,7 +148,6 @@ async fn process_package_update_request(
     req: PackageUpdateRequest,
     auth_token: String,
 ) -> Result<Box<dyn warp::Reply>, Infallible> {
-    log::info!("IN");
     if !auth_token.starts_with("Bearer ") {
         return Ok(Box::new(PackageUpdateError::Unauthorized));
     }
@@ -158,12 +174,17 @@ async fn process_package_update_request(
         svn.cleanup().unwrap();
         svn.update().unwrap();
 
+        let version: pahkat_types::package::Version = match req.release.version.parse() {
+            Ok(v) => v,
+            Err(e) => return Ok(Box::new(PackageUpdateError::VersionError(e))),
+        };
+
         let inner_req = pahkat_repomgr::package::update::Request::builder()
             .repo_path(svn.path.clone().into())
             .id(package_id.clone().into())
-            .version(Cow::Owned(req.version.clone()))
-            .channel(req.channel.as_ref().map(|x| Cow::Borrowed(&**x)))
-            .target(Cow::Borrowed(&req.target))
+            .version(Cow::Owned(version))
+            .channel(req.release.channel.as_ref().map(|x| Cow::Borrowed(&**x)))
+            .target(Cow::Borrowed(&req.release.target))
             .url(None)
             .build();
 
