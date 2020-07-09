@@ -26,7 +26,7 @@ pahkat-types = { path = "../pahkat-types" }
 butte = { git = "https://github.com/butte-rs/butte" }
 butte-build = { git = "https://github.com/butte-rs/butte" }
 
-reqwest = { version = "0.10.4", features = ["native-tls-vendored", "blocking", "gzip"], default-features = false }
+reqwest = { version = "0.10.4", features = ["rustls-tls", "blocking", "gzip"], default-features = false }
 serde = { version = "1.0.106", features = ["derive"] }
 serde_json = "1.0.51"
 semver = "0.9.0"
