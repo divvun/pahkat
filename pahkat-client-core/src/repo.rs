@@ -471,8 +471,8 @@ pub(crate) fn download<'a>(
 
 pub(crate) fn download_dir(config: &Config, url: &url::Url) -> std::path::PathBuf {
     let mut sha = Sha256::new();
-    sha.input(url.as_str().as_bytes());
-    let hash_id = format!("{:x}", sha.result());
+    sha.update(url.as_str().as_bytes());
+    let hash_id = format!("{:x}", sha.finalize());
     let part1 = &hash_id[0..2];
     let part2 = &hash_id[2..4];
     let part3 = &hash_id[4..];

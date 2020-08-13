@@ -10,8 +10,8 @@ pub(crate) trait PathExt {
 impl PathExt for Path {
     fn join_sha256(&self, bytes: &[u8]) -> PathBuf {
         let mut sha = Sha256::new();
-        sha.input(bytes);
-        let hash_id = format!("{:x}", sha.result());
+        sha.update(bytes);
+        let hash_id = format!("{:x}", sha.finalize());
         let part1 = &hash_id[0..2];
         let part2 = &hash_id[2..4];
         let part3 = &hash_id[4..];
