@@ -43,6 +43,7 @@ jobs:
         toolchain: stable
         profile: minimal
         override: true
+        components: rustfmt
         target: i686-pc-windows-msvc
     - name: Build pahkat-uploader
       run: |
@@ -105,6 +106,7 @@ jobs:
         toolchain: stable
         profile: minimal
         override: true
+        components: rustfmt
     - name: Build pahkat-uploader
       run: |
         cd pahkat-uploader
@@ -169,6 +171,7 @@ jobs:
         target: x86_64-unknown-linux-musl
         profile: minimal
         override: true
+        components: rustfmt
     - name: Build pahkat-uploader
       run: |
         cd pahkat-uploader

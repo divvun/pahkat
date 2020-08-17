@@ -36,7 +36,7 @@ jobs:
         target: x86_64-unknown-linux-musl
         profile: minimal
         override: true
-        components: clippy
+        components: clippy, rustfmt
     - name: Install Rust toolchain on macOS
       if: startsWith(matrix.os, 'macos')
       uses: actions-rs/toolchain@v1
@@ -52,7 +52,7 @@ jobs:
         toolchain: ${{ env.RUST_VERSION }}
         profile: minimal
         override: true
-        components: clippy
+        components: clippy, rustfmt
 
     - name: Did this work
       run: |
