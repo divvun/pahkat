@@ -8,7 +8,7 @@ use std::process::Command;
 use std::sync::{Arc, RwLock};
 
 use hashbrown::HashMap;
-use registry::{Data, Hive, Security, RegKey};
+use registry::{Data, Hive, RegKey, Security};
 use url::Url;
 
 use crate::package_store::{ImportError, InstallTarget};
@@ -40,10 +40,12 @@ pub struct WindowsPackageStore {
 }
 
 fn uninstall_regkey(installer: &windows::Executable) -> Option<RegKey> {
-    Hive::LocalMachine.open(
-        vec![UNINSTALL_PATH, &*installer.product_code].join(r"\"),
-        Security::Read | Security::Wow6464Key
-    ).ok()
+    Hive::LocalMachine
+        .open(
+            vec![UNINSTALL_PATH, &*installer.product_code].join(r"\"),
+            Security::Read | Security::Wow6464Key,
+        )
+        .ok()
     // let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     // let path = Path::new(UNINSTALL_PATH).join(&installer.product_code);
     // match hklm.open_subkey(&path) {

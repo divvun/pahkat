@@ -297,8 +297,8 @@ impl PackageTransaction {
             .iter()
             .map(|a| (a.action, a.id.clone()))
             .collect::<Vec<_>>();
-        let mutation_set = crate::repo::resolve_package_set(
-            &*store, &*candidate_keys, &*install_target)?;
+        let mutation_set =
+            crate::repo::resolve_package_set(&*store, &*candidate_keys, &*install_target)?;
 
         let is_reboot_required = mutation_set.iter().any(|x| x.is_reboot_required);
 

@@ -4,13 +4,57 @@ pub mod payload;
 pub mod repo;
 pub mod synth;
 
+use serde::{Deserialize, Serialize};
+use std::str::FromStr;
+use url::Url;
+
 /// Will be replaced with a validating Map in the future.
 ///
 /// Keys must be valid BCP 47 language tags.
 pub type LangTagMap<T> = std::collections::BTreeMap<String, T>;
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum DependencyKey {
+    Remote(Url),
+    Local(String),
+}
+
+impl DependencyKey {
+    pub fn as_str(&self) -> &str {
+        match self {
+            DependencyKey::Remote(x) => x.as_str(),
+            DependencyKey::Local(x) => &*x,
+        }
+    }
+}
+
+impl FromStr for DependencyKey {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(s.into())
+    }
+}
+
+impl From<String> for DependencyKey {
+    fn from(s: String) -> Self {
+        if let Ok(value) = s.parse::<Url>() {
+            DependencyKey::Remote(value)
+        } else {
+            DependencyKey::Local(s.to_string())
+        }
+    }
+}
+
+impl From<&str> for DependencyKey {
+    fn from(s: &str) -> Self {
+        s.to_string().into()
+    }
+}
+
 /// Will be replaced with a validating Map in the future.
-pub type DependencyMap = std::collections::BTreeMap<String, String>;
+pub type DependencyMap = std::collections::BTreeMap<DependencyKey, String>;
 
 pub use package_key::PackageKey;
 pub use payload::AsDownloadUrl;
@@ -27,7 +71,10 @@ mod tests {
         desc.insert("en".to_string(), "A test package for testing.".to_string());
 
         let mut deps = DependencyMap::new();
-        deps.insert("some-dependency".to_string(), "*".to_string());
+        deps.insert(
+            DependencyKey::Local("some-dependency".to_string()),
+            "*".to_string(),
+        );
 
         let package1 = package::Descriptor::builder()
             .package(
@@ -149,7 +196,10 @@ mod tests {
         );
 
         let mut deps = DependencyMap::new();
-        deps.insert("some-other-dependency".to_string(), "*".to_string());
+        deps.insert(
+            DependencyKey::Local("some-other-dependency".to_string()),
+            "*".to_string(),
+        );
 
         let package2 = package::Descriptor::builder()
             .package(

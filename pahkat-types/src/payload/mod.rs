@@ -34,7 +34,7 @@ pub(crate) fn parse_dep_map(s: &str) -> Result<DependencyMap, &'static str> {
             (v[0].to_string(), v[1].to_string())
         })
         .for_each(|(k, v)| {
-            map.insert(k, v);
+            map.insert(k.into(), v);
         });
 
     Ok(map)

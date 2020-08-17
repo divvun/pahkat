@@ -6,6 +6,7 @@ pub(super) mod generated {
 }
 
 use generated::pahkat as pahkat_fbs;
+use types::DependencyKey;
 
 pub(crate) trait DescriptorExt {
     fn name(&self) -> Option<Map<'_, &'_ str, &'_ str>>;
@@ -60,7 +61,7 @@ fn build_target<B: AsRef<[u8]>>(
         .map(|x| {
             let mut out = std::collections::BTreeMap::new();
             for (k, v) in x.iter() {
-                out.insert(k.to_string(), v.to_string());
+                out.insert(DependencyKey::from(k), v.to_string());
             }
             out
         })

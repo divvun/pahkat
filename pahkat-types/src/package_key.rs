@@ -1,4 +1,4 @@
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::fmt;
 
 use serde::de::{self, Deserialize, Deserializer, Visitor};
@@ -117,6 +117,14 @@ pub enum TryFromError {
 
     #[error("Invalid package segment")]
     InvalidPackageSegment,
+}
+
+impl TryFrom<Url> for PackageKey {
+    type Error = TryFromError;
+
+    fn try_from(value: Url) -> Result<Self, Self::Error> {
+        (&value).try_into()
+    }
 }
 
 impl<'a> TryFrom<&'a Url> for PackageKey {
