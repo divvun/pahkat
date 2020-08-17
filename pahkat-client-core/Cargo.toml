@@ -11,10 +11,10 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [dependencies]
 # Prefix feature
 xz2 = { version = "0.1.6", optional = true }
-rusqlite = { version = "0.22.0", features = ["bundled"], optional = true }
-tar = { version = "0.4.26", optional = true }
-r2d2 = { version = "0.8.8", optional = true }
-r2d2_sqlite = { version = "0.15.0", optional = true }
+rusqlite = { version = "0.23.1", features = ["bundled"], optional = true }
+tar = { version = "0.4.29", optional = true }
+r2d2 = { version = "0.8.9", optional = true }
+r2d2_sqlite = { version = "0.16.0", optional = true }
 
 # FFI specific
 env_logger = { version = "0.7.1", optional = true }
@@ -27,33 +27,33 @@ butte = { git = "https://github.com/butte-rs/butte" }
 butte-build = { git = "https://github.com/butte-rs/butte" }
 
 reqwest = { version = "0.10.7", features = ["rustls-tls", "blocking", "gzip"], default-features = false }
-serde = { version = "1.0.114", features = ["derive"] }
+serde = { version = "1.0.115", features = ["derive"] }
 serde_json = "1.0.57"
-semver = "0.9.0"
+semver = "0.10.0"
 url = { version = "2.1.1", features = ["serde"] }
 libc = "0.2.74"
 lazy_static = "1.4.0"
 maplit = "1.0"
-chrono = "0.4.13"
-hashbrown = { version = "0.7.1", features = ["serde"] }
+chrono = "0.4.15"
+hashbrown = { version = "0.8.2", features = ["serde"] }
 is_executable = "0.1.2"
 tempfile = "3.1.0"
 itertools = "0.9.0"
 log = "0.4.11"
 sha2 = "0.9.1"
-tokio = { version = "0.2.18", default-features = false, features = ["tcp", "time"] }
+tokio = { version = "0.2.22", default-features = false, features = ["tcp", "time"] }
 once_cell = "1.3.1"
 toml = "0.5.6"
 thiserror = "1.0.20"
-indexmap = { version = "1.5.0", features = ["serde-1"] }
-async-trait = "0.1.36"
+indexmap = { version = "1.5.1", features = ["serde-1"] }
+async-trait = "0.1.37"
 futures = "0.3.5"
-async-stream = "0.2.1"
+async-stream = "0.3.0"
 stream-cancel = "0.6.1"
 anyhow = "1.0.32"
 workqueue = "0.1.1"
 crossbeam-queue = "0.2.3"
-whoami = "0.8.1"
+whoami = "0.9.0"
 pathos = "0.1.7"
 iref = "1.1.5"
 
@@ -68,8 +68,8 @@ iref = "1.1.5"
 
     # Android-specific
     [target.'cfg(target_os="android")'.dependencies]
-    backtrace = "0.3.49"
-    ctor = "0.1.13"
+    backtrace = "0.3.50"
+    ctor = "0.1.15"
     android_log = { git = "https://github.com/bbqsrc/android_log-rs" }
 
 [build-dependencies]
