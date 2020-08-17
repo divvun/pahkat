@@ -21,6 +21,7 @@ use crate::{
     cmp,
     download::Download,
     download::DownloadManager,
+    ext::DependencyKeyExt,
     package_store::ImportError,
     repo::{LoadedRepository, PackageQuery},
     transaction::PackageStatusError,
@@ -260,7 +261,10 @@ impl PackageStore for PrefixPackageStore {
         }
 
         let deps = &target.dependencies;
-        let dependencies: Vec<String> = deps.keys().map(|x| x.to_owned()).collect();
+        let dependencies: Vec<String> = deps
+            .keys()
+            .map(|x| x.to_package_key(&key.repository_url).unwrap().to_string())
+            .collect();
 
         {
             let record = PackageDbRecord {
