@@ -33,4 +33,6 @@ pub use package_store::prefix::PrefixPackageStore;
 #[cfg(all(windows, feature = "windows"))]
 pub use package_store::windows::WindowsPackageStore;
 
-pub(crate) use fbs::generated::pahkat as pahkat_fbs;
+pub(crate) mod generated {
+    butte_build::include_fbs!("index");
+}

@@ -1,11 +1,6 @@
 use std::convert::TryFrom;
 
-pub(super) mod generated {
-    #![allow(dead_code)]
-    butte_build::include_fbs!("index");
-}
-
-use generated::pahkat as pahkat_fbs;
+use crate::generated::pahkat as pahkat_fbs;
 use types::DependencyKey;
 
 pub(crate) trait DescriptorExt {

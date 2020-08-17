@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::pahkat_fbs;
+use crate::generated::pahkat as pahkat_fbs;
 use pahkat_types::{repo::RepoUrl, PackageKey};
 
 #[derive(Debug, thiserror::Error)]
