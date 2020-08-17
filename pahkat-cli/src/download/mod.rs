@@ -1,10 +1,10 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use futures::stream::StreamExt;
 use futures::pin_mut;
+use futures::stream::StreamExt;
 
-use pahkat_client::{PackageKey, PackageStore, DownloadEvent};
+use pahkat_client::{DownloadEvent, PackageKey, PackageStore};
 
 pub async fn download<'a>(
     store: Arc<dyn PackageStore>,

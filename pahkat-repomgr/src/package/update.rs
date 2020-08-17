@@ -141,21 +141,19 @@ impl<'a> crate::Request for Request<'a> {
         let target: pahkat_types::payload::Target = toml::from_str(&payload)?;
 
         let channel = match partial.channel {
-            Some(channel) => if channel == "" {
-                None
-            } else {
-                Some(Cow::Borrowed(channel))
-            },
+            Some(channel) => {
+                if channel == "" {
+                    None
+                } else {
+                    Some(Cow::Borrowed(channel))
+                }
+            }
             None => Input::<String>::new()
                 .with_prompt("Channel (or none for stable)")
                 .allow_empty(true)
                 .interact()
                 .map_err(|_| RequestError::InvalidInput)
-                .map(|v| if v == "" {
-                    None
-                } else {
-                    Some(Cow::Owned(v))
-                })?
+                .map(|v| if v == "" { None } else { Some(Cow::Owned(v)) })?,
         };
 
         let version = match partial.version {
@@ -210,35 +208,46 @@ pub fn update<'a>(request: Request<'a>) -> Result<(), Error> {
 
     let pkg_path = pkg_dir.join("index.toml");
     log::debug!("Loading {}", pkg_path.display());
-    
-    let pkg_file = std::fs::read_to_string(&pkg_path)
-        .map_err(|e| Error::ReadFailed(pkg_path.clone(), e))?;
-    let mut descriptor: pahkat_types::package::Descriptor = toml::from_str(&pkg_file)
-        .map_err(|e| Error::ReadToml(pkg_path.clone(), e))?;
+
+    let pkg_file =
+        std::fs::read_to_string(&pkg_path).map_err(|e| Error::ReadFailed(pkg_path.clone(), e))?;
+    let mut descriptor: pahkat_types::package::Descriptor =
+        toml::from_str(&pkg_file).map_err(|e| Error::ReadToml(pkg_path.clone(), e))?;
 
     log::debug!("Loaded {}", pkg_path.display());
 
     let channel = request.channel.as_ref().map(|x| x.deref().to_string());
 
     // Check if a release exists that meets this criteria
-    let mut release = match descriptor.release.iter_mut().find(|x| &x.version == &*request.version && x.channel == channel) {
+    let mut release = match descriptor
+        .release
+        .iter_mut()
+        .find(|x| &x.version == &*request.version && x.channel == channel)
+    {
         Some(release) => {
             log::info!("Found release!");
             release
-        },
+        }
         None => {
             log::info!("No release; creating.");
             // Insert new releases at front
-            descriptor.release.insert(0, pahkat_types::package::Release::builder()
-                .channel(channel)
-                .version(request.version.deref().clone())
-                .build());
+            descriptor.release.insert(
+                0,
+                pahkat_types::package::Release::builder()
+                    .channel(channel)
+                    .version(request.version.deref().clone())
+                    .build(),
+            );
             descriptor.release.first_mut().unwrap()
         }
     };
 
     // Check if a target exists that meets this criteria
-    let mut target = match release.target.iter_mut().find(|x| x.platform == request.target.platform) {
+    let mut target = match release
+        .target
+        .iter_mut()
+        .find(|x| x.platform == request.target.platform)
+    {
         Some(target) => {
             log::info!("Found target!");
             target.payload = request.target.payload.clone();
@@ -246,11 +255,15 @@ pub fn update<'a>(request: Request<'a>) -> Result<(), Error> {
         }
         None => {
             log::info!("No target; creating.");
-            release.target.insert(0, pahkat_types::payload::Target::builder()
-                .platform(request.target.platform.to_string())
-                .payload(request.target.payload.clone()).build());
+            release.target.insert(
+                0,
+                pahkat_types::payload::Target::builder()
+                    .platform(request.target.platform.to_string())
+                    .payload(request.target.payload.clone())
+                    .build(),
+            );
             release.target.first_mut().unwrap()
-        } 
+        }
     };
 
     if let Some(url) = request.url {
@@ -259,8 +272,8 @@ pub fn update<'a>(request: Request<'a>) -> Result<(), Error> {
     }
 
     // Write the toml
-    let data =
-        toml::to_string_pretty(&descriptor).map_err(|e| Error::SerializeToml(pkg_path.clone(), e))?;
+    let data = toml::to_string_pretty(&descriptor)
+        .map_err(|e| Error::SerializeToml(pkg_path.clone(), e))?;
     fs::write(&pkg_path, data).map_err(|e| Error::WriteToml(pkg_path.to_path_buf(), e))?;
     log::info!("Wrote descriptor to {}", pkg_path.display());
 

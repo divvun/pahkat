@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use url::Url;
 
-use pahkat_repomgr::{package, repo, nuke, Request};
+use pahkat_repomgr::{nuke, package, repo, Request};
 use pahkat_types::package::Version;
 
 #[derive(Debug, StructOpt)]
@@ -138,7 +138,7 @@ enum NukeCommand {
 
 #[derive(Debug, StructOpt)]
 enum NukePackageCommand {
-    Releases(NukePackageReleasesCommand)
+    Releases(NukePackageReleasesCommand),
 }
 
 #[derive(Debug, StructOpt)]
@@ -190,11 +190,12 @@ fn main() -> anyhow::Result<()> {
         Command::Nuke(x) => match x {
             NukeCommand::Package(x) => match x {
                 NukePackageCommand::Releases(nuke) => {
-                    let req = nuke::package::releases::Request::new_from_user_input(nuke.to_partial())?;
+                    let req =
+                        nuke::package::releases::Request::new_from_user_input(nuke.to_partial())?;
                     nuke::package::releases::nuke_releases(req)?;
                 }
-            }
-        }
+            },
+        },
         Command::Payload(payload) => {
             println!("{}", toml::to_string_pretty(&payload)?);
         }

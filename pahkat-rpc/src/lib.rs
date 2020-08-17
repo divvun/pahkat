@@ -12,6 +12,7 @@ use pahkat_client::{
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::pin::Pin;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
@@ -27,7 +28,6 @@ use tokio_named_pipe::{NamedPipeListener, NamedPipeStream};
 use tonic::transport::server::Connected;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
 use url::Url;
-use std::sync::atomic::AtomicBool;
 
 mod pb {
     tonic::include_proto!("/pahkat");
@@ -159,7 +159,9 @@ impl pb::pahkat_server::Pahkat for Rpc {
     ) -> Result<Self::NotificationsStream> {
         let mut rx = self.notifications.subscribe();
         let current_transaction = Arc::clone(&self.current_transaction);
-        let requires_reboot = self.requires_reboot.load(std::sync::atomic::Ordering::SeqCst);
+        let requires_reboot = self
+            .requires_reboot
+            .load(std::sync::atomic::Ordering::SeqCst);
 
         // log::info!("Peer: {:?}", _request.peer_cred());
 
@@ -376,7 +378,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
                         };
                         log::debug!("Transaction lock attained.");
                         let _ = notifications.clone().send(Notification::TransactionLocked);
-                        
+
                         requires_reboot = transaction.is_reboot_required();
 
                         yield pb::TransactionResponse {
@@ -392,7 +394,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
                             if record.action.action != PackageActionType::Install {
                                 continue;
                             }
-                            
+
                             let id = record.action.id.clone();
                             let mut download = store.download(&record.action.id);
 
@@ -939,7 +941,11 @@ pub async fn start(
     let (notifications, mut notif_rx) = broadcast::channel(5);
 
     // Create the background updater
-    create_background_update_service(Arc::clone(&store), Arc::clone(&current_transaction), notifications.clone());
+    create_background_update_service(
+        Arc::clone(&store),
+        Arc::clone(&current_transaction),
+        notifications.clone(),
+    );
 
     let rpc = Rpc {
         store: Arc::clone(&store),
@@ -1037,7 +1043,11 @@ pub async fn start(
     let (notifications, mut notif_rx) = broadcast::channel(5);
 
     // Create the background updater
-    create_background_update_service(Arc::clone(&store), Arc::clone(&current_transaction), notifications.clone());
+    create_background_update_service(
+        Arc::clone(&store),
+        Arc::clone(&current_transaction),
+        notifications.clone(),
+    );
 
     let rpc = Rpc {
         store: Arc::clone(&store),

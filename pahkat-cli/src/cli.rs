@@ -95,7 +95,7 @@ struct GlobalOpts {
         structopt(short = "P", long, help = "Target platform")
     )]
     platform: Option<String>,
-    
+
     #[structopt(short = "C", long, help = "Target channel [default: none]")]
     channel: Option<String>,
 }

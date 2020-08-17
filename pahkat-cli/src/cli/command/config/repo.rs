@@ -10,7 +10,6 @@ pub struct RepoArgs {
         parse(from_os_str)
     )]
     pub config_path: Option<PathBuf>,
-
 }
 
 #[derive(Debug, StructOpt)]

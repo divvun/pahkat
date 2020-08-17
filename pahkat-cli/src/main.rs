@@ -1,12 +1,12 @@
 mod cli;
+mod config;
 mod download;
 mod install;
 mod status;
 mod uninstall;
-mod config;
 
 use anyhow::{Context, Result};
-use cli::{Args, Platform, ConfigPath};
+use cli::{Args, ConfigPath, Platform};
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
 
@@ -52,9 +52,8 @@ async fn store(config_path: Option<&Path>) -> anyhow::Result<Arc<dyn PackageStor
     }
 
     Ok(store)
-}#
-
-[inline(always)]
+}
+#[inline(always)]
 #[cfg(feature = "prefix")]
 async fn create_store(config_path: Option<&Path>) -> anyhow::Result<Arc<dyn PackageStore>> {
     let config_path = config_path.ok_or_else(|| anyhow::anyhow!("No prefix path specified"))?;
@@ -108,7 +107,8 @@ async fn main() -> anyhow::Result<()> {
                     .as_ref()
                     .map(|x| x.clone())
                     .unwrap_or_else(|| std::env::current_dir().unwrap()),
-            ).await?
+            )
+            .await?
         }
         cli::Args::Status(a) => {
             let store = store(args.config_path()).await?;

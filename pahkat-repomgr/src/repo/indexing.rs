@@ -249,7 +249,12 @@ fn create_targets<'d, 'a>(
             let (dependencies_keys, dependencies_values): (Vec<_>, Vec<_>) = target
                 .dependencies
                 .iter()
-                .map(|(key, value)| (builder.create_string(&key), builder.create_string(&value)))
+                .map(|(key, value)| {
+                    (
+                        builder.create_string(key.as_str()),
+                        builder.create_string(&value),
+                    )
+                })
                 .unzip();
             let (dependencies_keys, dependencies_values) = if dependencies_keys.is_empty() {
                 (None, None)

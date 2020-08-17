@@ -1,17 +1,16 @@
+use futures::stream::StreamExt;
 use std::path::Path;
 use std::sync::Arc;
-use futures::stream::StreamExt;
 
 use pahkat_client::{
-    transaction::{PackageAction, PackageTransaction},
     package_store::InstallTarget,
-    PackageStore,
-    PackageKey, DownloadEvent,
+    transaction::{PackageAction, PackageTransaction},
+    DownloadEvent, PackageKey, PackageStore,
 };
 
+use crate::Platform;
 use pahkat_client::config::RepoRecord;
 use pahkat_types::repo::RepoUrl;
-use crate::Platform;
 
 pub(crate) async fn config<'a>(
     store: Arc<dyn PackageStore>,
@@ -29,20 +28,15 @@ pub(crate) async fn config<'a>(
                 let mut config = config.write().unwrap();
 
                 let repos = config.repos_mut();
-                repos.insert(url, RepoRecord {
-                    channel
-                });
+                repos.insert(url, RepoRecord { channel });
 
                 Ok(())
-
             }
             crate::cli::command::config::Repo::Remove(a) => {
                 let url = &a.repo_url;
                 Ok(())
             }
-            crate::cli::command::config::Repo::List(a) => {
-                Ok(())
-            }
-        }   
+            crate::cli::command::config::Repo::List(a) => Ok(()),
+        },
     }
 }
