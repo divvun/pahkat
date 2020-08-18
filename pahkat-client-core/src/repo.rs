@@ -943,8 +943,11 @@ pub(crate) fn resolve_package_set(
 
     // Iterate all dependencies until we achieve victory
     let values = candidate_set.values().cloned().collect::<Vec<_>>();
+    log::trace!("Package candidates: {:?}", &values);
 
     values.iter().try_fold((), |_, candidate| {
+        log::trace!("Recursing packages for candidate: {:?}", candidate);
+
         recurse_package_set(
             store,
             candidate,
