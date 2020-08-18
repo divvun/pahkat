@@ -39,24 +39,6 @@ pub struct WindowsPackageStore {
     config: SharedStoreConfig,
 }
 
-fn uninstall_regkey(installer: &windows::Executable) -> Option<RegKey> {
-    Hive::LocalMachine
-        .open(
-            vec![UNINSTALL_PATH, &*installer.product_code].join(r"\"),
-            Security::Read | Security::Wow6464Key,
-        )
-        .ok()
-    // let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    // let path = Path::new(UNINSTALL_PATH).join(&installer.product_code);
-    // match hklm.open_subkey(&path) {
-    //     Err(_e) => match hklm.open_subkey_with_flags(&path, KEY_READ | KEY_WOW64_64KEY) {
-    //         Err(_e) => None,
-    //         Ok(v) => Some(v),
-    //     },
-    //     Ok(v) => Some(v),
-    // }
-}
-
 impl PackageStore for WindowsPackageStore {
     fn config(&self) -> SharedStoreConfig {
         Arc::clone(&self.config)
@@ -165,7 +147,9 @@ impl PackageStore for WindowsPackageStore {
             )));
         }
 
-        Ok(self.status_impl(key, &descriptor, install_target).unwrap())
+        Ok(self
+            .status_impl(key, &descriptor, &release.version, install_target)
+            .unwrap())
     }
 
     fn uninstall(
@@ -248,7 +232,9 @@ impl PackageStore for WindowsPackageStore {
             )));
         }
 
-        Ok(self.status_impl(key, &descriptor, install_target).unwrap())
+        Ok(self
+            .status_impl(key, &descriptor, &release.version, install_target)
+            .unwrap())
     }
 
     fn status(
@@ -268,7 +254,7 @@ impl PackageStore for WindowsPackageStore {
             _ => return Err(PackageStatusError::WrongPayloadType),
         };
 
-        self.status_impl(key, &descriptor, install_target)
+        self.status_impl(key, &descriptor, &release.version, install_target)
     }
 
     fn find_package_by_key(&self, key: &PackageKey) -> Option<Package> {
@@ -358,6 +344,7 @@ impl WindowsPackageStore {
         &self,
         key: &PackageKey,
         package: &Descriptor,
+        version: &pahkat_types::package::Version,
         _target: InstallTarget,
     ) -> Result<PackageStatus, PackageStatusError> {
         let repos = self.repos.read().unwrap();
@@ -380,9 +367,21 @@ impl WindowsPackageStore {
             _ => return Err(PackageStatusError::ParsingVersion),
         };
 
-        let status = crate::cmp::cmp(&disp_version, &response.release.version);
+        log::trace!("Display version: {}", &disp_version);
+
+        let status = crate::cmp::cmp(&disp_version, &version);
 
         log::debug!("Status: {:?}", &status);
         status
     }
+}
+
+#[inline(always)]
+fn uninstall_regkey(installer: &windows::Executable) -> Option<RegKey> {
+    Hive::LocalMachine
+        .open(
+            vec![UNINSTALL_PATH, &*installer.product_code].join(r"\"),
+            Security::Read | Security::Wow6464Key,
+        )
+        .ok()
 }

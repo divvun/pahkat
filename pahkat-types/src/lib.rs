@@ -313,24 +313,4 @@ mod tests {
             serde_json::to_string_pretty(&[&package1, &package2]).unwrap()
         );
     }
-
-    #[test]
-    fn smoke2() {
-        use crate::package::Descriptor;
-
-        let p = std::path::Path::new(r"G:\dev\divvun-pahkat-repo\packages");
-
-        let speller_sme = p.join("speller-sme/package.toml");
-        let speller_sme = std::fs::read_to_string(speller_sme).unwrap();
-        let speller_sme: Descriptor = toml::from_str(&speller_sme).unwrap();
-
-        let windivvun = p.join("windivvun/package.toml");
-        let windivvun = std::fs::read_to_string(windivvun).unwrap();
-        let windivvun: Descriptor = toml::from_str(&windivvun).unwrap();
-
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&[&speller_sme, &windivvun]).unwrap()
-        );
-    }
 }

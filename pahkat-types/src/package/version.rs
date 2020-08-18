@@ -108,6 +108,7 @@ mod tests {
 
         assert_eq!(my < other, true);
         assert_eq!(my > other, false);
+        assert_eq!(my == other, false);
     }
 
     #[test]
@@ -118,7 +119,31 @@ mod tests {
         assert_eq!(my.partial_cmp(&other), Some(Ordering::Greater));
         assert_eq!(my > other, true);
         assert_eq!(my < other, false);
+        assert_eq!(my == other, false);
     }
+
+    #[test]
+    fn test_nightly_weaker_than_base_version() {
+        let my = Version::new("1.0.0-nightly.20180501T013059Z").unwrap();
+        let other = Version::new("1.0.0").unwrap();
+
+        assert_eq!(my.partial_cmp(&other), Some(Ordering::Less));
+        assert_eq!(my < other, true);
+        assert_eq!(my > other, false);
+        assert_eq!(my == other, false);
+    }
+
+    #[test]
+    fn test_nightly_stronger_than_smaller_base_version() {
+        let my = Version::new("1.0.1-nightly.20180501T013059Z").unwrap();
+        let other = Version::new("1.0.0").unwrap();
+
+        assert_eq!(my.partial_cmp(&other), Some(Ordering::Greater));
+        assert_eq!(my < other, false);
+        assert_eq!(my > other, true);
+        assert_eq!(my == other, false);
+    }
+
 
     #[test]
     fn test_equal_semver() {

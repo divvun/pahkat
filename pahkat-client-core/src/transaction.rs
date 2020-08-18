@@ -216,6 +216,16 @@ pub struct ResolvedAction {
     pub target: Target,
 }
 
+impl std::fmt::Display for ResolvedAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{:?} {} {}",
+            self.action.action, &self.action.id.id, self.release.version
+        )
+    }
+}
+
 pub struct PackageTransaction {
     store: Arc<dyn PackageStore>,
     actions: Arc<Vec<ResolvedAction>>,
@@ -336,7 +346,13 @@ impl PackageTransaction {
         //     }
         // }
 
-        log::debug!("Processed actions: {:#?}", &new_actions);
+        log::debug!(
+            "Processed actions: {:?}",
+            &new_actions
+                .iter()
+                .map(|x| x.to_string())
+                .collect::<Vec<_>>()
+        );
 
         Ok(PackageTransaction {
             store,

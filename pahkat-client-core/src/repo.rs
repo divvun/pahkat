@@ -385,11 +385,12 @@ pub(crate) fn resolve_payload<'a>(
     log::trace!("Resolving payload: {}", &package_key);
     let descriptor = resolve_package(package_key, repos)?;
     log::trace!("Package found: {}", &package_key);
-    query
+    let result = query
         .iter(&descriptor)
         .next()
         .map(|x| (x.target.clone(), x.release.clone(), descriptor.clone()))
-        .ok_or(PayloadError::NoPayloadFound)
+        .ok_or(PayloadError::NoPayloadFound);
+    result
 }
 
 pub(crate) fn import<'a>(
@@ -983,6 +984,14 @@ pub(crate) fn resolve_package_set(
         let b_deps = b.dependencies_in_set(&mutation_set);
         a_deps.cmp(&b_deps)
     });
+
+    log::trace!(
+        "Output mutation set: {:?}",
+        &output_mutation_set
+            .iter()
+            .map(|x| x.package_key.to_string())
+            .collect::<Vec<_>>()
+    );
 
     Ok(output_mutation_set)
 }
