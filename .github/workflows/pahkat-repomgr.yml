@@ -44,7 +44,7 @@ jobs:
         toolchain: ${{ env.RUST_VERSION }}
         profile: minimal
         override: true
-        components: clippy
+        components: clippy, rustfmt
     - name: Install Rust toolchain on Windows
       if: startsWith(matrix.os, 'windows')
       uses: actions-rs/toolchain@v1
