@@ -250,7 +250,7 @@ pub fn update<'a>(request: Request<'a>) -> Result<(), Error> {
     {
         Some(target) => {
             log::info!("Found target!");
-            target.payload = request.target.payload.clone();
+            *target = (*request.target).to_owned();
             target
         }
         None => {
@@ -258,6 +258,7 @@ pub fn update<'a>(request: Request<'a>) -> Result<(), Error> {
             release.target.insert(
                 0,
                 pahkat_types::payload::Target::builder()
+                    .dependencies(request.target.dependencies.clone())
                     .platform(request.target.platform.to_string())
                     .payload(request.target.payload.clone())
                     .build(),
