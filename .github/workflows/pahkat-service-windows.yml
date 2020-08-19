@@ -59,6 +59,7 @@ jobs:
         cd ..
       env:
         RUSTC_BOOTSTRAP: 1
+        CHANNEL: ${{ steps.version.outputs.channel }}
     - name: Build Pahkat RPC Client
       run: |
         cd pahkat-rpc

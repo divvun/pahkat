@@ -10,9 +10,9 @@ use std::error::Error;
 
 use pahkat_client::Config;
 
-pub const UPDATER_DEFAULT_CHANNEL: &str = "nightly";
+pub const UPDATER_DEFAULT_CHANNEL: Option<&'static str> = option_env!("CHANNEL");
 pub static UPDATER_KEY: Lazy<PackageKey> = Lazy::new(|| {
-    PackageKey::try_from("https://pahkat.uit.no/divvun-installer/packages/divvun-installer")
+    PackageKey::try_from("https://pahkat.uit.no/divvun-installer/packages/pahkat-service")
         .unwrap()
 });
 
@@ -23,7 +23,7 @@ fn make_config() -> Config {
         .insert(
             UPDATER_KEY.repository_url.clone(),
             RepoRecord {
-                channel: Some(UPDATER_DEFAULT_CHANNEL.to_string()),
+                channel: UPDATER_DEFAULT_CHANNEL.filter(|x| x.trim() != "").map(|x| x.to_string())
             },
         )
         .unwrap();
