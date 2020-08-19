@@ -383,5 +383,11 @@ fn uninstall_regkey(installer: &windows::Executable) -> Option<RegKey> {
             vec![UNINSTALL_PATH, &*installer.product_code].join(r"\"),
             Security::Read | Security::Wow6464Key,
         )
+        .or_else(|_| {
+            Hive::LocalMachine.open(
+                vec![UNINSTALL_PATH, &*installer.product_code].join(r"\"),
+                Security::Read | Security::Wow6432Key,
+            )
+        })
         .ok()
 }
