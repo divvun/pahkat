@@ -52,6 +52,7 @@ jobs:
         cd ..
       env:
         RUSTC_BOOTSTRAP: 1
+        CHANNEL: ${{ steps.version.outputs.channel }}
     - name: Build Pahkat RPC Server
       run: |
         cd pahkat-rpc
@@ -67,6 +68,7 @@ jobs:
         cd ..
       env:
         RUSTC_BOOTSTRAP: 1
+        CHANNEL: ${{ steps.version.outputs.channel }}
     - name: Create dist
       run: |
         mkdir dist
