@@ -1,6 +1,7 @@
 use futures::stream::{StreamExt, TryStreamExt};
 use once_cell::sync::Lazy;
 use pahkat_client::package_store::DownloadEvent;
+use pahkat_client::types::repo::RepoUrl;
 use pahkat_client::{
     config::RepoRecord, package_store::InstallTarget, PackageAction, PackageActionType, PackageKey,
     PackageStatus, PackageStore, PackageTransaction,
@@ -10,10 +11,25 @@ use std::error::Error;
 
 use pahkat_client::Config;
 
-pub const UPDATER_DEFAULT_CHANNEL: Option<&'static str> = option_env!("CHANNEL");
-pub static UPDATER_KEY: Lazy<PackageKey> = Lazy::new(|| {
-    PackageKey::try_from("https://pahkat.uit.no/divvun-installer/packages/pahkat-service")
-        .unwrap()
+pub const REPO: Lazy<RepoUrl> =
+    Lazy::new(|| "https://pahkat.uit.no/divvun-installer/".parse().unwrap());
+pub const REPO_CHANNEL: Lazy<Option<&'static str>> = Lazy::new(|| {
+    let channel = env!("CHANNEL");
+    if channel.trim() == "" {
+        None
+    } else {
+        Some(channel)
+    }
+});
+
+pub const SELFUPDATE_KEYS: Lazy<Vec<PackageKey>> = Lazy::new(|| {
+    vec![
+        PackageKey::try_from("https://pahkat.uit.no/divvun-installer/packages/divvun-installer")
+            .unwrap(),
+        #[cfg(windows)]
+        PackageKey::try_from("https://pahkat.uit.no/divvun-installer/packages/pahkat-service")
+            .unwrap(),
+    ]
 });
 
 fn make_config() -> Config {
@@ -21,9 +37,9 @@ fn make_config() -> Config {
     config
         .repos_mut()
         .insert(
-            UPDATER_KEY.repository_url.clone(),
+            REPO.to_owned(),
             RepoRecord {
-                channel: UPDATER_DEFAULT_CHANNEL.filter(|x| x.trim() != "").map(|x| x.to_string())
+                channel: REPO_CHANNEL.as_ref().map(|x| x.to_string()),
             },
         )
         .unwrap();
@@ -49,24 +65,31 @@ pub(crate) async fn package_store() -> Box<dyn PackageStore> {
 }
 
 pub(crate) fn requires_update(store: &dyn PackageStore) -> bool {
-    let status = store.status(&UPDATER_KEY, InstallTarget::System);
+    let mut is_requiring_update = false;
 
-    log::trace!("requires_update store.status: {:?}", status);
+    for key in &*SELFUPDATE_KEYS {
+        let status = store.status(&key, InstallTarget::System);
 
-    let is_requiring_update = match status {
-        Ok(status) => match status {
-            PackageStatus::NotInstalled => {
-                log::error!("Self-update detected that Pahkat Service was not installed at all?");
-                false
+        log::trace!("requires_update store.status: {:?}", status);
+
+        let is_requiring_update = match status {
+            Ok(status) => match status {
+                PackageStatus::NotInstalled => {
+                    log::error!(
+                        "Self-update detected that Pahkat Service was not installed at all?"
+                    );
+                    // false
+                }
+                PackageStatus::RequiresUpdate => {
+                    is_requiring_update = true;
+                }
+                PackageStatus::UpToDate => {}
+            },
+            Err(err) => {
+                log::error!("{:?}", err);
             }
-            PackageStatus::RequiresUpdate => true,
-            PackageStatus::UpToDate => false,
-        },
-        Err(err) => {
-            log::error!("{:?}", err);
-            false
-        }
-    };
+        };
+    }
 
     is_requiring_update
 }
@@ -87,7 +110,11 @@ pub async fn install(store: &dyn PackageStore) -> Result<(), Box<dyn Error>> {
 
 #[cfg(feature = "launchd")]
 pub async fn install(store: &dyn PackageStore) -> Result<(), Box<dyn Error>> {
-    store.install(&UPDATER_KEY, InstallTarget::System)?;
+    for key in SELFUPDATE_KEYS.get() {
+        if let PackageStatus::RequiresUpdate = store.status(&key, InstallTarget::System) {
+            store.install(&key, InstallTarget::System)?;
+        }
+    }
 
     // Stop should trigger an immediate restart.
     std::process::Command::new("launchctl")
@@ -112,25 +139,27 @@ pub(crate) async fn self_update() -> Result<bool, Box<dyn Error>> {
 
         // If update is available, download it.
         log::debug!("Downloading self-update package...");
-        let mut stream = store.download(&UPDATER_KEY);
+        for key in &*SELFUPDATE_KEYS {
+            let mut stream = store.download(&key);
 
-        while let Some(result) = stream.next().await {
-            match result {
-                DownloadEvent::Progress((current, total)) => {
-                    log::debug!("Downloaded: {}/{}", current, total)
-                }
-                DownloadEvent::Error(error) => {
-                    log::error!("Error downloading update: {:?}", error);
-                    if i == retries {
-                        log::error!("Downloading failed {} times; aborting!", retries);
-                        return Ok(false);
+            while let Some(result) = stream.next().await {
+                match result {
+                    DownloadEvent::Progress((current, total)) => {
+                        log::debug!("Downloaded: {}/{}", current, total)
                     }
-                    tokio::time::delay_for(std::time::Duration::from_secs(2)).await;
-                    continue 'downloader;
-                }
-                DownloadEvent::Complete(_) => {
-                    log::debug!("Download completed!");
-                    break 'downloader;
+                    DownloadEvent::Error(error) => {
+                        log::error!("Error downloading update: {:?}", error);
+                        if i == retries {
+                            log::error!("Downloading failed {} times; aborting!", retries);
+                            return Ok(false);
+                        }
+                        tokio::time::delay_for(std::time::Duration::from_secs(2)).await;
+                        continue 'downloader;
+                    }
+                    DownloadEvent::Complete(_) => {
+                        log::debug!("Download completed!");
+                        break 'downloader;
+                    }
                 }
             }
         }
