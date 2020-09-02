@@ -87,7 +87,7 @@ impl DownloadManager {
         if !self.path.exists() {
             fs::create_dir_all(&self.path).map_err(|e| {
                 log::error!("{:?}", &e);
-                DownloadError::IoError(e)
+                DownloadError::TempDirCreateFailed(e, self.path.to_path_buf())
             })?;
         }
 
@@ -96,7 +96,7 @@ impl DownloadManager {
         if !cache_dir.exists() {
             fs::create_dir_all(&cache_dir).map_err(|e| {
                 log::error!("{:?}", &e);
-                DownloadError::IoError(e)
+                DownloadError::TempDirCreateFailed(e, cache_dir.to_path_buf())
             })?;
         }
 
@@ -108,11 +108,11 @@ impl DownloadManager {
             .or_else(|_| fs::File::create(&tmp_dest_path))
             .map_err(|e| {
                 log::error!("{:?}", &e);
-                DownloadError::IoError(e)
+                DownloadError::TempFileOpenFailed(e, tmp_dest_path.to_path_buf())
             })?;
         let meta = file.metadata().map_err(|e| {
             log::error!("metadata error: {:?}", &e);
-            DownloadError::IoError(e)
+            DownloadError::MetadataFailed(e, tmp_dest_path.to_path_buf())
         })?;
 
         let mut downloaded_bytes = meta.len();
@@ -124,7 +124,9 @@ impl DownloadManager {
             req = req.header(header::RANGE, format!("bytes={}-", downloaded_bytes));
         }
 
-        let req = req.build().map_err(DownloadError::ReqwestError)?;
+        let req = req
+            .build()
+            .map_err(|e| DownloadError::ReqwestError(e, url.as_str().to_string()))?;
 
         // Get URL headers
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -135,7 +137,10 @@ impl DownloadManager {
                 .and_then(|x| x.error_for_status());
             tx.send(response).unwrap();
         });
-        let mut res = rx.await.unwrap()?;
+        let mut res = rx
+            .await
+            .unwrap()
+            .map_err(|e| DownloadError::ReqwestError(e, url.as_str().to_string()))?;
 
         // Get content length and send if exists
         let content_len = res
@@ -152,7 +157,7 @@ impl DownloadManager {
         let total_bytes = if !is_partial {
             file.set_len(0).map_err(|e| {
                 log::error!("error setting length of file: {:?}", &e);
-                DownloadError::IoError(e)
+                DownloadError::SetFileLengthFailed(e, tmp_dest_path.to_path_buf())
             })?;
             content_len
         } else if content_len > 0 {
@@ -166,10 +171,11 @@ impl DownloadManager {
 
         let mut last_progress_event = std::time::Instant::now();
 
+        let url = url.to_owned();
         let stream = async_stream::stream! {
             let mut file = BufWriter::new(file);
             loop {
-                let chunk = res.chunk().await.map_err(DownloadError::ReqwestError);
+                let chunk = res.chunk().await.map_err(|e| DownloadError::ReqwestError(e, url.as_str().to_string()));
                 match chunk {
                     Ok(v) => match v {
                         None => {
@@ -179,7 +185,7 @@ impl DownloadManager {
                             downloaded_bytes += v.len() as u64;
                             let result = file.write(&*v).map_err(|e| {
                                 log::error!("error writing output: {:?}", &e);
-                                DownloadError::IoError(e)
+                                DownloadError::WriteFailed(e, tmp_dest_path.to_path_buf())
                             });
                             match result {
                                 Ok(_) => {
@@ -204,7 +210,7 @@ impl DownloadManager {
             }
 
             match file.flush() {
-                Err(e) => yield DownloadEvent::Error(DownloadError::IoError(e)),
+                Err(e) => yield DownloadEvent::Error(DownloadError::FlushFailed(e, tmp_dest_path.to_path_buf())),
                 _ => {}
             };
 
@@ -215,28 +221,15 @@ impl DownloadManager {
             // If it's done, move the file!
             let _ = fs::create_dir_all(dest_path);
             match fs::copy(&tmp_dest_path, &dest_file_path) {
-                Err(e) => yield DownloadEvent::Error(DownloadError::IoError(e)),
+                Err(e) => yield DownloadEvent::Error(DownloadError::CopyFailed(e, tmp_dest_path.to_path_buf(), dest_file_path.to_path_buf())),
                 _ => {}
             };
             match fs::remove_file(&tmp_dest_path) {
-                Err(e) => yield DownloadEvent::Error(DownloadError::IoError(e)),
+                Err(e) => yield DownloadEvent::Error(DownloadError::RemoveFailed(e, tmp_dest_path.to_path_buf())),
                 _ => {}
             };
             yield DownloadEvent::Complete(dest_file_path);
         };
-
-        // let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        // tokio::spawn(async move {
-        //     use futures::stream::StreamExt;
-        //     futures::pin_mut!(stream);
-
-        //     while let Some(result) = stream.next().await {
-        //         tx.send(result).unwrap();
-        //     }
-        // });
-
-        // // Stop the stream overwhelming receivers.
-        // let rx = tokio::time::throttle(std::time::Duration::from_millis(750), rx);
 
         Ok(Box::pin(stream))
     }
@@ -256,9 +249,30 @@ pub enum DownloadError {
     #[error("Failed to acquire file lock")]
     LockFailure,
 
-    #[error("File IO error")]
-    IoError(#[from] std::io::Error),
+    #[error("An internal error occurred while attempting to download: {1}")]
+    ReqwestError(#[source] reqwest::Error, String),
 
-    #[error("Error downloading file")]
-    ReqwestError(#[from] reqwest::Error),
+    #[error("Failed to get metadata for file at path: {}", .1.display())]
+    MetadataFailed(#[source] std::io::Error, PathBuf),
+
+    #[error("Could not truncate file length at path: {}", .1.display())]
+    SetFileLengthFailed(#[source] std::io::Error, PathBuf),
+
+    #[error("Could not create temporary directory at path: {}", .1.display())]
+    TempDirCreateFailed(#[source] std::io::Error, PathBuf),
+
+    #[error("Could not open temporary file at path: {}", .1.display())]
+    TempFileOpenFailed(#[source] std::io::Error, PathBuf),
+
+    #[error("Could not flush file to disk at path: {}", .1.display())]
+    FlushFailed(#[source] std::io::Error, PathBuf),
+
+    #[error("Could not copy file from path {} to path {}", .1.display(), .2.display())]
+    CopyFailed(#[source] std::io::Error, PathBuf, PathBuf),
+
+    #[error("Could not remove file at path: {}", .1.display())]
+    RemoveFailed(#[source] std::io::Error, PathBuf),
+
+    #[error("Could not write data to file at path: {}", .1.display())]
+    WriteFailed(#[source] std::io::Error, PathBuf),
 }

@@ -144,7 +144,6 @@ mod tests {
         assert_eq!(my == other, false);
     }
 
-
     #[test]
     fn test_equal_semver() {
         let my = Version::new("1.2.3").unwrap();
