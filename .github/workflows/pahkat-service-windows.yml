@@ -1,11 +1,6 @@
 name: pahkat-service (Windows)
 
-on:
-  push:
-    branches:
-      - master
-      - develop
-      - release
+on: push
 
 env:
   RUST_VERSION: stable
@@ -29,7 +24,7 @@ jobs:
       uses: divvun/actions/version@develop
       with:
         cargo: pahkat-rpc/Cargo.toml
-        nightly: master, develop
+        stable-channel: beta
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - name: Install build dependencies
       uses: divvun/actions/pahkat/init@develop
