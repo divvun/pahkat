@@ -40,6 +40,11 @@ jobs:
         override: true
         components: rustfmt
         target: i686-pc-windows-msvc
+    - name: Set self-update channel to nightly
+      id: self_update_channel
+      if: ${{ steps.version.outputs.channel == "nightly" }}
+      run: |
+        echo "::set-output name=channel::nightly"
     - name: Build Pahkat RPC DLL 
       run: |
         cd pahkat-rpc
@@ -47,7 +52,7 @@ jobs:
         cd ..
       env:
         RUSTC_BOOTSTRAP: 1
-        CHANNEL: ${{ steps.version.outputs.channel }}
+        CHANNEL: ${{ steps.self_update_channel.outputs.channel }}
     - name: Build Pahkat RPC Server
       run: |
         cd pahkat-rpc
@@ -55,7 +60,7 @@ jobs:
         cd ..
       env:
         RUSTC_BOOTSTRAP: 1
-        CHANNEL: ${{ steps.version.outputs.channel }}
+        CHANNEL: ${{ steps.self_update_channel.outputs.channel }}
     - name: Build Pahkat RPC Client
       run: |
         cd pahkat-rpc
@@ -63,7 +68,7 @@ jobs:
         cd ..
       env:
         RUSTC_BOOTSTRAP: 1
-        CHANNEL: ${{ steps.version.outputs.channel }}
+        CHANNEL: ${{ steps.self_update_channel.outputs.channel }}
     - name: Create dist
       run: |
         mkdir dist

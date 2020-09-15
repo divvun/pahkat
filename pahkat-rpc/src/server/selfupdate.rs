@@ -110,9 +110,18 @@ pub async fn install(store: &dyn PackageStore) -> Result<(), Box<dyn Error>> {
 
 #[cfg(feature = "launchd")]
 pub async fn install(store: &dyn PackageStore) -> Result<(), Box<dyn Error>> {
-    for key in SELFUPDATE_KEYS.get() {
-        if let PackageStatus::RequiresUpdate = store.status(&key, InstallTarget::System) {
-            store.install(&key, InstallTarget::System)?;
+    for key in &*super::selfupdate::SELFUPDATE_KEYS {
+        if let Ok(PackageStatus::RequiresUpdate) = store.status(key, InstallTarget::System) {
+            // Expect the package to be downloaded already
+            match store.install(key, InstallTarget::System) {
+                Ok(_) => {
+                    log::info!("Self-updated successfully.");
+                }
+                Err(e) => {
+                    log::error!("Error during self-update installation: {:?}", e);
+                    return Err(e.into());
+                }
+            }
         }
     }
 
