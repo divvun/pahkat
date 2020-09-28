@@ -22,6 +22,9 @@ pub enum Error {
 
     #[error("Error loading settings.toml file")]
     SettingsFile(#[source] FileError),
+
+    #[error("An error occurred managing app paths")]
+    PathError(#[from] pathos::Error)
 }
 
 #[derive(Debug, Error)]
@@ -70,7 +73,7 @@ impl Config {
 
     #[cfg(not(target_os = "android"))]
     pub fn load_default() -> Result<Config, Error> {
-        let path = defaults::config_path();
+        let path = defaults::config_path()?;
         Self::load(path, Permission::ReadWrite)
     }
 

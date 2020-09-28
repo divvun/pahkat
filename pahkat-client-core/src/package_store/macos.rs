@@ -328,7 +328,8 @@ fn get_package_info(
 ) -> Result<MacOSPackageExportPlist, ProcessError> {
     use std::io::Cursor;
 
-    let home_dir = pathos::user::home_dir();
+    let home_dir = pathos::user::home_dir().unwrap();
+
     let mut args = vec!["--export-plist", bundle_id];
     if let InstallTarget::User = target {
         args.push("--volume");
@@ -388,7 +389,7 @@ fn install_macos_package(pkg_path: &Path, target: InstallTarget) -> Result<(), P
 
 fn run_script(name: &str, bundle_id: &str, target: InstallTarget) -> Result<(), ProcessError> {
     let path = match target {
-        InstallTarget::User => crate::defaults::uninstall_path(),
+        InstallTarget::User => crate::defaults::uninstall_path().unwrap(),
         InstallTarget::System => global_uninstall_path(),
     };
     let script_path = path.join(bundle_id).join(name);
@@ -484,7 +485,8 @@ fn uninstall_macos_package(bundle_id: &str, target: InstallTarget) -> Result<(),
 }
 
 fn forget_pkg_id(bundle_id: &str, target: InstallTarget) -> Result<(), ProcessError> {
-    let home_dir = pathos::user::home_dir();
+    let home_dir = pathos::user::home_dir().unwrap();
+    
     let mut args = vec!["--forget", bundle_id];
     if let InstallTarget::User = target {
         args.push("--volume");
