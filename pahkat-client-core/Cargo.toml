@@ -35,17 +35,17 @@ libc = "0.2.74"
 lazy_static = "1.4.0"
 maplit = "1.0"
 chrono = "0.4.15"
-hashbrown = { version = "0.8.2", features = ["serde"] }
+hashbrown = { version = "0.9.0", features = ["serde"] }
 is_executable = "0.1.2"
 tempfile = "3.1.0"
 itertools = "0.9.0"
 log = "0.4.11"
 sha2 = "0.9.1"
 tokio = { version = "0.2.22", default-features = false, features = ["tcp", "time"] }
-once_cell = "1.3.1"
+once_cell = "1.4.1"
 toml = "0.5.6"
 thiserror = "1.0.20"
-indexmap = { version = "1.5.1", features = ["serde-1"] }
+indexmap = { version = "1.6.0", features = ["serde-1"] }
 async-trait = "0.1.37"
 futures = "0.3.5"
 async-stream = "0.3.0"
@@ -54,8 +54,8 @@ anyhow = "1.0.32"
 workqueue = "0.1.1"
 crossbeam-queue = "0.2.3"
 whoami = "0.9.0"
-pathos = "0.1.7"
-iref = "1.1.5"
+pathos = "0.2.0-pre.6"
+iref = "1.2.0"
 
     # MacOS-specific
     [target.'cfg(target_os="macos")'.dependencies]

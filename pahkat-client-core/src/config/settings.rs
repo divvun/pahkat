@@ -9,11 +9,21 @@ use super::FileError;
 use crate::config::Permission;
 use crate::defaults;
 
+#[inline(always)]
+fn cache_dir_default() -> ConfigPath {
+    defaults::cache_dir().expect("cache dir")
+}
+
+#[inline(always)]
+fn tmp_dir_default() -> ConfigPath {
+    defaults::tmp_dir().expect("tmp dir")
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SettingsData {
-    #[serde(default = "defaults::cache_dir")]
+    #[serde(default = "cache_dir_default")]
     pub cache_dir: ConfigPath,
-    #[serde(default = "defaults::tmp_dir")]
+    #[serde(default = "tmp_dir_default")]
     pub tmp_dir: ConfigPath,
     #[serde(default)]
     pub max_concurrent_downloads: u8,
@@ -22,8 +32,8 @@ pub struct SettingsData {
 impl Default for SettingsData {
     fn default() -> SettingsData {
         SettingsData {
-            cache_dir: defaults::cache_dir(),
-            tmp_dir: defaults::tmp_dir(),
+            cache_dir: cache_dir_default(),
+            tmp_dir: tmp_dir_default(),
             max_concurrent_downloads: 0,
         }
     }
