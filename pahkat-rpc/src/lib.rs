@@ -208,6 +208,21 @@ impl pb::pahkat_server::Pahkat for Rpc {
         Ok(Response::new(Box::pin(stream) as Self::NotificationsStream))
     }
 
+    async fn refresh(&self, request: Request<pb::RefreshRequest>) -> Result<pb::RefreshResponse> {
+        let errors = match self.store.force_refresh_repos().await {
+            Ok(_) => HashMap::new(),
+            Err(e) => e.into_iter().collect(),
+        };
+
+        if errors.len() > 0 {
+            log::error!("Error refreshing via RPC");
+            log::error!("{:#?}", errors);
+        };
+
+        let _ = self.notifications.send(Notification::RepositoriesChanged);
+        Ok(Response::new(pb::RefreshResponse {}))
+    }
+
     async fn strings(&self, request: Request<pb::StringsRequest>) -> Result<pb::StringsResponse> {
         let pb::StringsRequest { language } = request.into_inner();
 
@@ -776,7 +791,18 @@ fn endpoint(path: &Path) -> std::result::Result<UnixListener, anyhow::Error> {
 #[inline(always)]
 fn endpoint(path: &Path) -> std::result::Result<UnixListener, anyhow::Error> {
     use std::os::unix::io::FromRawFd;
+
+    log::debug!("Creating launchd UNIX socket named 'pahkat'...");
     let fds = raunch::activate_socket("pahkat")?;
+    let path = std::env::var("PAHKATD_UDS_PATH").unwrap();
+
+    log::debug!("UDS path: {:?}", &path);
+    log::debug!("Linking private socket path to /tmp/pahkat.sock");
+
+    let _ = std::fs::remove_file("/tmp/pahkat.sock").unwrap_or(());
+    std::fs::hard_link(path, "/tmp/pahkat.sock").unwrap();
+
+    log::debug!("Success! Unsafely converting to a UnixListener from a raw FD");
     let std_listener = unsafe { std::os::unix::net::UnixListener::from_raw_fd(fds[0]) };
     Ok(tokio::net::UnixListener::from_std(std_listener).unwrap())
 }
@@ -925,6 +951,16 @@ pub async fn start(
     config_path: Option<&Path>,
     shutdown_rx: mpsc::UnboundedReceiver<()>,
 ) -> std::result::Result<(), anyhow::Error> {
+    match server::setup_logger("service") {
+        Ok(_) => log::debug!("Logging started."),
+        Err(e) => {
+            log::error!("Error setting up logging:");
+            log::error!("{:?}", e);
+            log::error!("Attempting env_logger...");
+            env_logger::try_init()?;
+        }
+    }
+
     log::info!(
         "Starting {} {}...",
         env!("CARGO_PKG_NAME"),
@@ -932,6 +968,7 @@ pub async fn start(
     );
 
     let mut endpoint = endpoint(path)?;
+    log::debug!("Endpoint created successfully.");
     let store = store(config_path).await?;
     log::debug!("Created store.");
 
