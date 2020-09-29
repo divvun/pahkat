@@ -208,6 +208,7 @@ message JsonResponse {
 
 service Pahkat {
     rpc Notifications(NotificationsRequest) returns (stream NotificationResponse) {}
+    rpc Refresh(RefreshRequest) returns (RefreshResponse) {}
 
     // Store
     rpc Status(StatusRequest) returns (StatusResponse) {}

@@ -2,8 +2,6 @@ use std::path::Path;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    env_logger::init();
-
     let path = if cfg!(windows) {
         format!("//./pipe/pahkat")
     } else {
