@@ -154,7 +154,7 @@ define_windows_service!(ffi_service_main, service_main);
 
 fn service_main(_: Vec<OsString>) {
     use tokio::runtime::Runtime;
-    super::setup_logger("service").unwrap();
+    crate::server::setup_logger("service").unwrap();
 
     // Create the runtime
     let mut rt = Runtime::new().unwrap();

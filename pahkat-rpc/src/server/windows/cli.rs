@@ -25,10 +25,10 @@ pub enum ServiceOpts {
 }
 
 pub async fn run_service_command(opts: &ServiceOpts) -> Result<()> {
+    crate::server::setup_logger("self-update").unwrap_or(());
+
     match opts {
         ServiceOpts::Install => {
-            super::setup_logger("self-update").unwrap();
-
             let exe_path = std::env::current_exe()?;
             println!(
                 "Installing service {} at {:?}",
@@ -46,11 +46,11 @@ pub async fn run_service_command(opts: &ServiceOpts) -> Result<()> {
                 tokio::time::delay_for(Duration::from_secs(1)).await;
                 if let Err(e) = service::install_service(&exe_path) {
                     if retries <= 0 {
-                        eprintln!("Failed to install service: {:?}", e);
+                        log::error!("Failed to install service: {:?}", e);
                         return Err(e);
                     }
                     retries -= 1;
-                    eprintln!("Failed to install service, retrying: {:?}", e);
+                    log::error!("Failed to install service, retrying: {:?}", e);
                 } else {
                     break;
                 }
@@ -59,8 +59,6 @@ pub async fn run_service_command(opts: &ServiceOpts) -> Result<()> {
             println!("Successfully installed service");
         }
         ServiceOpts::Uninstall => {
-            super::setup_logger("self-update").unwrap();
-
             println!("Stopping service {}", service::SERVICE_NAME);
             service::stop_service().await?;
             println!("Uninstalling service {}", service::SERVICE_NAME);
@@ -68,7 +66,6 @@ pub async fn run_service_command(opts: &ServiceOpts) -> Result<()> {
             println!("Successfully uninstalled service {}", service::SERVICE_NAME);
         }
         ServiceOpts::Stop => {
-            super::setup_logger("self-update").unwrap();
             println!("Stopping service {}", service::SERVICE_NAME);
             service::stop_service().await?;
         }
@@ -77,7 +74,6 @@ pub async fn run_service_command(opts: &ServiceOpts) -> Result<()> {
             service::run_service()?;
         }
         ServiceOpts::SelfUpdate { service_executable } => {
-            super::setup_logger("self-update").unwrap();
             super::self_update(&service_executable).await?;
         }
     };
