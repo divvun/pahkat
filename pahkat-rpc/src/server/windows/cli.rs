@@ -13,7 +13,6 @@ use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 pub enum ServiceOpts {
-    //SelfUpdate,
     Install,
     Uninstall,
     Stop,
@@ -25,10 +24,9 @@ pub enum ServiceOpts {
 }
 
 pub async fn run_service_command(opts: &ServiceOpts) -> Result<()> {
-    crate::server::setup_logger("self-update").unwrap_or(());
-
     match opts {
         ServiceOpts::Install => {
+            crate::server::setup_logger("self-update").unwrap_or(());
             let exe_path = std::env::current_exe()?;
             println!(
                 "Installing service {} at {:?}",
@@ -59,6 +57,7 @@ pub async fn run_service_command(opts: &ServiceOpts) -> Result<()> {
             println!("Successfully installed service");
         }
         ServiceOpts::Uninstall => {
+            crate::server::setup_logger("self-update").unwrap_or(());
             println!("Stopping service {}", service::SERVICE_NAME);
             service::stop_service().await?;
             println!("Uninstalling service {}", service::SERVICE_NAME);
@@ -66,6 +65,7 @@ pub async fn run_service_command(opts: &ServiceOpts) -> Result<()> {
             println!("Successfully uninstalled service {}", service::SERVICE_NAME);
         }
         ServiceOpts::Stop => {
+            crate::server::setup_logger("self-update").unwrap_or(());
             println!("Stopping service {}", service::SERVICE_NAME);
             service::stop_service().await?;
         }
@@ -74,6 +74,7 @@ pub async fn run_service_command(opts: &ServiceOpts) -> Result<()> {
             service::run_service()?;
         }
         ServiceOpts::SelfUpdate { service_executable } => {
+            crate::server::setup_logger("self-update").unwrap_or(());
             super::self_update(&service_executable).await?;
         }
     };
