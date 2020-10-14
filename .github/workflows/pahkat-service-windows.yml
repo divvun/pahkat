@@ -21,13 +21,13 @@ jobs:
         key: ${{ secrets.DIVVUN_KEY }}
     - name: Get version
       id: version
-      uses: divvun/actions/version@develop
+      uses: divvun/actions/version@master
       with:
         cargo: pahkat-rpc/Cargo.toml
         stable-channel: beta
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - name: Install build dependencies
-      uses: divvun/actions/pahkat/init@develop
+      uses: divvun/actions/pahkat/init@master
       with:
         repo: https://pahkat.uit.no/devtools/
         channel: nightly
@@ -77,26 +77,26 @@ jobs:
         mkdir -p dist-lib/bin
         mv target/i686-pc-windows-msvc/release/pahkat_rpc.dll dist-lib/bin/pahkat_rpc.dll
     - name: Sign code (server)
-      uses: divvun/actions/codesign@develop
+      uses: divvun/actions/codesign@master
       with:
         path: dist/pahkat-service.exe
     - name: Sign code (client)
-      uses: divvun/actions/codesign@develop
+      uses: divvun/actions/codesign@master
       with:
         path: dist/pahkatc.exe
     - name: Create installer
       id: installer
-      uses: divvun/actions/inno-setup@develop
+      uses: divvun/actions/inno-setup@master
       with:
         path: pahkat-rpc/resources/install.iss
         defines: Version=${{ steps.version.outputs.version }}
     - name: Bundle DLL
       id: lib_bundle
-      uses: divvun/actions/create-txz@develop
+      uses: divvun/actions/create-txz@master
       with:
         path: dist-lib
     - name: Deploy (library)
-      uses: divvun/actions/deploy@develop
+      uses: divvun/actions/deploy@master
       with:
         package-id: libpahkat_rpc
         platform: windows
@@ -108,7 +108,7 @@ jobs:
         channel: ${{ steps.version.outputs.channel }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - name: Deploy (installer)
-      uses: divvun/actions/deploy@develop
+      uses: divvun/actions/deploy@master
       with:
         package-id: pahkat-service
         platform: windows

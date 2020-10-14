@@ -26,13 +26,13 @@ jobs:
         key: ${{ secrets.DIVVUN_KEY }}
     - name: Get version
       id: version
-      uses: divvun/actions/version@develop
+      uses: divvun/actions/version@master
       with:
         cargo: pahkat-cli/Cargo.toml
         nightly: master, develop
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - name: Install build dependencies
-      uses: divvun/actions/pahkat/init@develop
+      uses: divvun/actions/pahkat/init@master
       with:
         repo: https://pahkat.uit.no/devtools/
         channel: nightly
@@ -57,16 +57,16 @@ jobs:
         mkdir -p dist/bin
         mv target/i686-pc-windows-msvc/release/pahkat-cli.exe dist/bin/pahkat-windows.exe
     - name: Sign code
-      uses: divvun/actions/codesign@develop
+      uses: divvun/actions/codesign@master
       with:
         path: dist/bin/pahkat-windows.exe
     - name: Create tarball package
       id: installer
-      uses: divvun/actions/create-txz@develop
+      uses: divvun/actions/create-txz@master
       with:
         path: dist
     - name: Deploy
-      uses: divvun/actions/deploy@develop
+      uses: divvun/actions/deploy@master
       with:
         package-id: pahkat-windows-cli
         type: TarballPackage
