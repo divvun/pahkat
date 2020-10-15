@@ -35,7 +35,7 @@ use self::log::ExternalLogger;
 use marshal::{JsonMarshaler, JsonRefMarshaler, PackageKeyMarshaler, TargetMarshaler};
 use runtime::block_on;
 
-#[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
+#[cffi::marshal(return_marshaler = "cursed::UnitMarshaler")]
 pub extern "C" fn pahkat_set_logging_callback(
     callback: extern "C" fn(u8, *const libc::c_char, *const libc::c_char, *const libc::c_char),
 ) -> Result<(), Box<dyn Error>> {
@@ -44,7 +44,7 @@ pub extern "C" fn pahkat_set_logging_callback(
         .box_err()
 }
 
-#[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
+#[cffi::marshal(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_config_repos_get(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
 ) -> crate::config::ReposData {
@@ -52,7 +52,7 @@ pub extern "C" fn pahkat_config_repos_get(
     config.repos().data().clone()
 }
 
-#[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
+#[cffi::marshal(return_marshaler = "cursed::UnitMarshaler")]
 pub extern "C" fn pahkat_config_repos_set(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
     #[marshal(JsonRefMarshaler::<'_>)] repos: crate::config::ReposData,
@@ -60,14 +60,14 @@ pub extern "C" fn pahkat_config_repos_set(
     handle.write().unwrap().repos_mut().set(repos).box_err()
 }
 
-#[cthulhu::invoke(return_marshaler = "cursed::PathBufMarshaler")]
+#[cffi::marshal(return_marshaler = "cursed::PathBufMarshaler")]
 pub extern "C" fn pahkat_config_settings_config_dir(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
 ) -> std::path::PathBuf {
     handle.read().unwrap().settings().config_dir().to_path_buf()
 }
 
-// #[cthulhu::invoke(return_marshaler = "cursed::StringMarshaler")]
+// #[cffi::marshal(return_marshaler = "cursed::StringMarshaler")]
 // pub extern "C" fn pahkat_config_settings_cache_url(
 //     #[marshal(cursed::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
 // ) -> String {
@@ -80,7 +80,7 @@ pub extern "C" fn pahkat_config_settings_config_dir(
 //         .to_owned()
 // }
 
-// #[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
+// #[cffi::marshal(return_marshaler = "cursed::UnitMarshaler")]
 // pub extern "C" fn pahkat_config_set_cache_url(
 //     #[marshal(cursed::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
 //     #[marshal(cursed::UrlMarshaler)] url: Url,
@@ -90,7 +90,7 @@ pub extern "C" fn pahkat_config_settings_config_dir(
 // }
 
 #[cfg(target_os = "android")]
-#[cthulhu::invoke]
+#[cffi::marshal]
 pub extern "C" fn pahkat_android_init(
     #[marshal(cursed::PathBufMarshaler)] container_path: PathBuf,
 ) {

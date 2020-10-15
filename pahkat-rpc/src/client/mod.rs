@@ -199,7 +199,7 @@ where
     }
 }
 
-#[cthulhu::invoke(return_marshaler = "cursed::ArcMarshaler::<RwLock<PahkatClient>>")]
+#[cffi::marshal(return_marshaler = "cursed::ArcMarshaler::<RwLock<PahkatClient>>")]
 pub extern "C" fn pahkat_rpc_new() -> Result<Arc<RwLock<PahkatClient>>, Box<dyn Error>> {
     let client = block_on(new_client())?;
     Ok(Arc::new(RwLock::new(client)))
@@ -222,7 +222,7 @@ pub extern "C" fn pahkat_rpc_slice_free(slice: cursed::Slice<u8>) {
     }
 }
 
-#[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
+#[cffi::marshal(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_rpc_repo_indexes(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
 ) -> Result<pb::RepositoryIndexesResponse, Box<dyn Error>> {
@@ -239,7 +239,7 @@ pub extern "C" fn pahkat_rpc_repo_indexes(
     Ok(response)
 }
 
-#[cthulhu::invoke]
+#[cffi::marshal]
 pub extern "C" fn pahkat_rpc_status(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
     #[marshal(cursed::StrMarshaler::<'_>)] raw_package_key: &str,
@@ -278,7 +278,7 @@ extern "C" fn pahkat_rpc_cancel_callback() {
     }
 }
 
-#[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
+#[cffi::marshal(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_rpc_get_repo_records(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
 ) -> Result<pb::GetRepoRecordsResponse, Box<dyn Error>> {
@@ -291,7 +291,7 @@ pub extern "C" fn pahkat_rpc_get_repo_records(
     })
 }
 
-#[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
+#[cffi::marshal(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_rpc_set_repo(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
     #[marshal(cursed::StrMarshaler::<'_>)] repo_url: &str,
@@ -313,7 +313,7 @@ pub extern "C" fn pahkat_rpc_set_repo(
     result
 }
 
-#[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
+#[cffi::marshal(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_rpc_remove_repo(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
     #[marshal(cursed::StrMarshaler::<'_>)] repo_url: &str,
@@ -329,7 +329,7 @@ pub extern "C" fn pahkat_rpc_remove_repo(
     })
 }
 
-#[cthulhu::invoke]
+#[cffi::marshal]
 pub extern "C" fn pahkat_rpc_notifications(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
     callback: extern "C" fn(i32),
@@ -351,7 +351,7 @@ pub extern "C" fn pahkat_rpc_notifications(
     });
 }
 
-#[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
+#[cffi::marshal(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_rpc_strings(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
     #[marshal(cursed::StrMarshaler::<'_>)] language_tag: &str,
@@ -369,7 +369,7 @@ pub extern "C" fn pahkat_rpc_strings(
     response
 }
 
-#[cthulhu::invoke(return_marshaler = "JsonMarshaler")]
+#[cffi::marshal(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_rpc_resolve_package_query(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
     #[marshal(cursed::StrMarshaler::<'_>)] package_query: &str,
@@ -387,7 +387,7 @@ pub extern "C" fn pahkat_rpc_resolve_package_query(
     serde_json::from_str(&response?.json).box_err()
 }
 
-#[cthulhu::invoke(return_marshaler = "cursed::UnitMarshaler")]
+#[cffi::marshal(return_marshaler = "cursed::UnitMarshaler")]
 pub extern "C" fn pahkat_rpc_process_transaction(
     #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
 
