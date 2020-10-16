@@ -63,7 +63,7 @@ iref = "1.2.0"
     # Windows-specific
     [target.'cfg(target_os="windows")'.dependencies]
     winapi = { version = "0.3", features = ["shellapi"] }
-    registry = { git = "https://github.com/bbqsrc/registry-rs" }
+    registry = "1.0"
 
     # Android-specific
     [target.'cfg(target_os="android")'.dependencies]
