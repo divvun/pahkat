@@ -6,7 +6,7 @@ use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
-use cursed::{FromForeign, InputType, ReturnType, ToForeign};
+use cffi::{FromForeign, InputType, ReturnType, ToForeign};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
@@ -23,23 +23,23 @@ pub type MacOSTarget = pahkat_types::InstallTarget;
 pub type MacOSPackageAction = crate::transaction::PackageAction<MacOSTarget>;
 pub type MacOSPackageTransaction = crate::transaction::PackageTransaction<MacOSTarget>;
 
-// #[cffi::marshal(return_marshaler = "cursed::ArcMarshaler::<MacOSPackageStore>")]
+// #[cffi::marshal(return_marshaler = "cffi::ArcMarshaler::<MacOSPackageStore>")]
 // pub extern "C" fn pahkat_macos_package_store_default() -> Arc<MacOSPackageStore> {
 //     Arc::new(MacOSPackageStore::default())
 // }
 
-#[cffi::marshal(return_marshaler = "cursed::ArcMarshaler::<MacOSPackageStore>")]
+#[cffi::marshal(return_marshaler = "cffi::ArcMarshaler::<MacOSPackageStore>")]
 pub extern "C" fn pahkat_macos_package_store_new(
-    #[marshal(cursed::PathBufMarshaler)] path: PathBuf,
+    #[marshal(cffi::PathBufMarshaler)] path: PathBuf,
 ) -> Result<Arc<MacOSPackageStore>, Box<dyn Error>> {
     let config = StoreConfig::new(&path);
     config.save()?;
     Ok(Arc::new(MacOSPackageStore::new(config)))
 }
 
-#[cffi::marshal(return_marshaler = "cursed::ArcMarshaler::<MacOSPackageStore>")]
+#[cffi::marshal(return_marshaler = "cffi::ArcMarshaler::<MacOSPackageStore>")]
 pub extern "C" fn pahkat_macos_package_store_load(
-    #[marshal(cursed::PathBufMarshaler)] path: PathBuf,
+    #[marshal(cffi::PathBufMarshaler)] path: PathBuf,
 ) -> Result<Arc<MacOSPackageStore>, Box<dyn Error>> {
     let config = match StoreConfig::load(&path, true) {
         Ok(v) => v,
@@ -50,7 +50,7 @@ pub extern "C" fn pahkat_macos_package_store_load(
 
 #[cffi::marshal]
 pub extern "C" fn pahkat_macos_package_store_status(
-    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
+    #[marshal(cffi::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
     #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
     #[marshal(TargetMarshaler)] target: MacOSTarget,
 ) -> i8 {
@@ -59,7 +59,7 @@ pub extern "C" fn pahkat_macos_package_store_status(
 
 #[cffi::marshal(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_macos_package_store_all_statuses(
-    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
+    #[marshal(cffi::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
     #[marshal(JsonMarshaler)] repo_record: RepoRecord,
     #[marshal(TargetMarshaler)] target: MacOSTarget,
 ) -> BTreeMap<String, i8> {
@@ -70,18 +70,18 @@ pub extern "C" fn pahkat_macos_package_store_all_statuses(
         .collect()
 }
 
-#[cffi::marshal(return_marshaler = "cursed::PathBufMarshaler")]
+#[cffi::marshal(return_marshaler = "cffi::PathBufMarshaler")]
 pub extern "C" fn pahkat_macos_package_store_import(
-    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
+    #[marshal(cffi::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
     #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
-    #[marshal(cursed::PathBufMarshaler)] installer_path: PathBuf,
+    #[marshal(cffi::PathBufMarshaler)] installer_path: PathBuf,
 ) -> Result<PathBuf, Box<dyn Error>> {
     handle.import(&package_key, &installer_path)
 }
 
-#[cffi::marshal(return_marshaler = "cursed::PathBufMarshaler")]
+#[cffi::marshal(return_marshaler = "cffi::PathBufMarshaler")]
 pub extern "C" fn pahkat_macos_package_store_download(
-    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
+    #[marshal(cffi::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
     #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
     progress: extern "C" fn(*const libc::c_char, u64, u64) -> u8,
 ) -> Result<PathBuf, Box<dyn Error>> {
@@ -96,7 +96,7 @@ pub extern "C" fn pahkat_macos_package_store_download(
 
 #[cffi::marshal(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_macos_package_store_find_package_by_key(
-    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
+    #[marshal(cffi::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
     #[marshal(PackageKeyMarshaler)] package_key: PackageKey,
 ) -> Option<pahkat_types::Package> {
     handle.find_package_by_key(&package_key)
@@ -104,28 +104,28 @@ pub extern "C" fn pahkat_macos_package_store_find_package_by_key(
 
 #[cffi::marshal]
 pub extern "C" fn pahkat_macos_package_store_clear_cache(
-    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
+    #[marshal(cffi::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
 ) {
     handle.clear_cache();
 }
 
 #[cffi::marshal]
 pub extern "C" fn pahkat_macos_package_store_refresh_repos(
-    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
+    #[marshal(cffi::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
 ) {
     handle.refresh_repos();
 }
 
 #[cffi::marshal]
 pub extern "C" fn pahkat_macos_package_store_force_refresh_repos(
-    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
+    #[marshal(cffi::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
 ) {
     handle.force_refresh_repos();
 }
 
-#[cffi::marshal(return_marshaler = "cursed::StringMarshaler")]
+#[cffi::marshal(return_marshaler = "cffi::StringMarshaler")]
 pub extern "C" fn pahkat_macos_package_store_repo_indexes(
-    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
+    #[marshal(cffi::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
 ) -> Result<String, Box<dyn Error>> {
     let rwlock = handle.repos();
     let guard = rwlock.read().unwrap();
@@ -133,16 +133,16 @@ pub extern "C" fn pahkat_macos_package_store_repo_indexes(
     serde_json::to_string(&indexes).map_err(|e| Box::new(e) as _)
 }
 
-#[cffi::marshal(return_marshaler = "cursed::ArcMarshaler::<RwLock<StoreConfig>>")]
+#[cffi::marshal(return_marshaler = "cffi::ArcMarshaler::<RwLock<StoreConfig>>")]
 pub extern "C" fn pahkat_macos_package_config(
-    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
+    #[marshal(cffi::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
 ) -> Arc<RwLock<StoreConfig>> {
     handle.config()
 }
 
-#[cffi::marshal(return_marshaler = "cursed::BoxMarshaler::<MacOSPackageTransaction>")]
+#[cffi::marshal(return_marshaler = "cffi::BoxMarshaler::<MacOSPackageTransaction>")]
 pub extern "C" fn pahkat_macos_transaction_new(
-    #[marshal(cursed::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
+    #[marshal(cffi::ArcRefMarshaler::<MacOSPackageStore>)] handle: Arc<MacOSPackageStore>,
     #[marshal(JsonMarshaler)] actions: Vec<MacOSPackageAction>,
 ) -> Result<Box<MacOSPackageTransaction>, Box<dyn Error>> {
     MacOSPackageTransaction::new(handle as _, actions)
@@ -152,14 +152,14 @@ pub extern "C" fn pahkat_macos_transaction_new(
 
 #[cffi::marshal(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_macos_transaction_actions(
-    #[marshal(cursed::BoxRefMarshaler::<MacOSPackageTransaction>)] handle: &MacOSPackageTransaction,
+    #[marshal(cffi::BoxRefMarshaler::<MacOSPackageTransaction>)] handle: &MacOSPackageTransaction,
 ) -> Vec<MacOSPackageAction> {
     handle.actions().to_vec()
 }
 
-#[cffi::marshal(return_marshaler = "cursed::UnitMarshaler")]
+#[cffi::marshal(return_marshaler = "cffi::UnitMarshaler")]
 pub extern "C" fn pahkat_macos_transaction_process(
-    #[marshal(cursed::BoxRefMarshaler::<MacOSPackageTransaction>)] handle: &MacOSPackageTransaction,
+    #[marshal(cffi::BoxRefMarshaler::<MacOSPackageTransaction>)] handle: &MacOSPackageTransaction,
     tag: u32,
     progress_callback: extern "C" fn(u32, *const libc::c_char, u32) -> u8,
 ) -> Result<(), Box<dyn Error>> {

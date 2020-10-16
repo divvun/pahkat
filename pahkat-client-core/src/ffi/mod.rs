@@ -17,7 +17,7 @@ use std::ffi::{CStr, CString};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 
-use cursed::{FromForeign, InputType, ReturnType, ToForeign};
+use cffi::{FromForeign, InputType, ReturnType, ToForeign};
 use once_cell::sync::Lazy;
 use pahkat_types::payload::{
     macos::InstallTarget as MacOSInstallTarget, windows::InstallTarget as WindowsInstallTarget,
@@ -35,7 +35,7 @@ use self::log::ExternalLogger;
 use marshal::{JsonMarshaler, JsonRefMarshaler, PackageKeyMarshaler, TargetMarshaler};
 use runtime::block_on;
 
-#[cffi::marshal(return_marshaler = "cursed::UnitMarshaler")]
+#[cffi::marshal(return_marshaler = "cffi::UnitMarshaler")]
 pub extern "C" fn pahkat_set_logging_callback(
     callback: extern "C" fn(u8, *const libc::c_char, *const libc::c_char, *const libc::c_char),
 ) -> Result<(), Box<dyn Error>> {
@@ -46,30 +46,30 @@ pub extern "C" fn pahkat_set_logging_callback(
 
 #[cffi::marshal(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_config_repos_get(
-    #[marshal(cursed::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
+    #[marshal(cffi::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
 ) -> crate::config::ReposData {
     let config = handle.read().unwrap();
     config.repos().data().clone()
 }
 
-#[cffi::marshal(return_marshaler = "cursed::UnitMarshaler")]
+#[cffi::marshal(return_marshaler = "cffi::UnitMarshaler")]
 pub extern "C" fn pahkat_config_repos_set(
-    #[marshal(cursed::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
+    #[marshal(cffi::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
     #[marshal(JsonRefMarshaler::<'_>)] repos: crate::config::ReposData,
 ) -> Result<(), Box<dyn Error>> {
     handle.write().unwrap().repos_mut().set(repos).box_err()
 }
 
-#[cffi::marshal(return_marshaler = "cursed::PathBufMarshaler")]
+#[cffi::marshal(return_marshaler = "cffi::PathBufMarshaler")]
 pub extern "C" fn pahkat_config_settings_config_dir(
-    #[marshal(cursed::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
+    #[marshal(cffi::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
 ) -> std::path::PathBuf {
     handle.read().unwrap().settings().config_dir().to_path_buf()
 }
 
-// #[cffi::marshal(return_marshaler = "cursed::StringMarshaler")]
+// #[cffi::marshal(return_marshaler = "cffi::StringMarshaler")]
 // pub extern "C" fn pahkat_config_settings_cache_url(
-//     #[marshal(cursed::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
+//     #[marshal(cffi::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
 // ) -> String {
 //     handle
 //         .read()
@@ -80,10 +80,10 @@ pub extern "C" fn pahkat_config_settings_config_dir(
 //         .to_owned()
 // }
 
-// #[cffi::marshal(return_marshaler = "cursed::UnitMarshaler")]
+// #[cffi::marshal(return_marshaler = "cffi::UnitMarshaler")]
 // pub extern "C" fn pahkat_config_set_cache_url(
-//     #[marshal(cursed::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
-//     #[marshal(cursed::UrlMarshaler)] url: Url,
+//     #[marshal(cffi::ArcRefMarshaler::<RwLock<Config>>)] handle: Arc<RwLock<Config>>,
+//     #[marshal(cffi::UrlMarshaler)] url: Url,
 // ) -> Result<(), Box<dyn Error>> {
 //     let path = ConfigPath::from_url(url)?;
 //     handle.write().unwrap().settings().set_cache_base_dir(path)
@@ -92,7 +92,7 @@ pub extern "C" fn pahkat_config_settings_config_dir(
 #[cfg(target_os = "android")]
 #[cffi::marshal]
 pub extern "C" fn pahkat_android_init(
-    #[marshal(cursed::PathBufMarshaler)] container_path: PathBuf,
+    #[marshal(cffi::PathBufMarshaler)] container_path: PathBuf,
 ) {
     pathos::android::user::set_container_path(container_path);
 

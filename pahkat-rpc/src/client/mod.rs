@@ -140,33 +140,33 @@ pub async fn run() -> anyhow::Result<()> {
     Ok(())
 }
 
-use cursed::{FromForeign, InputType, ReturnType, ToForeign};
+use cffi::{FromForeign, InputType, ReturnType, ToForeign};
 use serde::Serialize;
 
 pub struct JsonMarshaler;
 
 impl InputType for JsonMarshaler {
-    type Foreign = <cursed::StringMarshaler as InputType>::Foreign;
+    type Foreign = <cffi::StringMarshaler as InputType>::Foreign;
 }
 
 impl ReturnType for JsonMarshaler {
-    type Foreign = cursed::Slice<u8>;
+    type Foreign = cffi::Slice<u8>;
 
     fn foreign_default() -> Self::Foreign {
-        cursed::Slice::default()
+        cffi::Slice::default()
     }
 }
 
-impl<T> ToForeign<Result<T, Box<dyn Error>>, cursed::Slice<u8>> for JsonMarshaler
+impl<T> ToForeign<Result<T, Box<dyn Error>>, cffi::Slice<u8>> for JsonMarshaler
 where
     T: Serialize,
 {
     type Error = Box<dyn Error>;
 
-    fn to_foreign(result: Result<T, Self::Error>) -> Result<cursed::Slice<u8>, Self::Error> {
+    fn to_foreign(result: Result<T, Self::Error>) -> Result<cffi::Slice<u8>, Self::Error> {
         result.and_then(|input| {
             let json_str = serde_json::to_string(&input)?;
-            Ok(cursed::StringMarshaler::to_foreign(json_str).unwrap())
+            Ok(cffi::StringMarshaler::to_foreign(json_str).unwrap())
         })
     }
 }
@@ -174,18 +174,18 @@ where
 pub struct JsonRefMarshaler<'a>(&'a std::marker::PhantomData<()>);
 
 impl<'a> InputType for JsonRefMarshaler<'a> {
-    type Foreign = <cursed::StrMarshaler<'a> as InputType>::Foreign;
+    type Foreign = <cffi::StrMarshaler<'a> as InputType>::Foreign;
 }
 
-impl<'a, T> FromForeign<cursed::Slice<u8>, T> for JsonRefMarshaler<'a>
+impl<'a, T> FromForeign<cffi::Slice<u8>, T> for JsonRefMarshaler<'a>
 where
     T: serde::de::DeserializeOwned,
 {
     type Error = Box<dyn Error>;
 
-    unsafe fn from_foreign(ptr: cursed::Slice<u8>) -> Result<T, Self::Error> {
+    unsafe fn from_foreign(ptr: cffi::Slice<u8>) -> Result<T, Self::Error> {
         let json_str =
-            <cursed::StrMarshaler<'a> as FromForeign<cursed::Slice<u8>, &'a str>>::from_foreign(
+            <cffi::StrMarshaler<'a> as FromForeign<cffi::Slice<u8>, &'a str>>::from_foreign(
                 ptr,
             )?;
         log::debug!("JSON: {}, type: {}", &json_str, std::any::type_name::<T>());
@@ -199,7 +199,7 @@ where
     }
 }
 
-#[cffi::marshal(return_marshaler = "cursed::ArcMarshaler::<RwLock<PahkatClient>>")]
+#[cffi::marshal(return_marshaler = "cffi::ArcMarshaler::<RwLock<PahkatClient>>")]
 pub extern "C" fn pahkat_rpc_new() -> Result<Arc<RwLock<PahkatClient>>, Box<dyn Error>> {
     let client = block_on(new_client())?;
     Ok(Arc::new(RwLock::new(client)))
@@ -216,15 +216,15 @@ pub extern "C" fn pahkat_rpc_free(ptr: *const RwLock<PahkatClient>) {
 }
 
 #[no_mangle]
-pub extern "C" fn pahkat_rpc_slice_free(slice: cursed::Slice<u8>) {
+pub extern "C" fn pahkat_rpc_slice_free(slice: cffi::Slice<u8>) {
     unsafe {
-        let _ = cursed::VecMarshaler::from_foreign(slice);
+        let _ = cffi::VecMarshaler::from_foreign(slice);
     }
 }
 
 #[cffi::marshal(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_rpc_repo_indexes(
-    #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
+    #[marshal(cffi::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
 ) -> Result<pb::RepositoryIndexesResponse, Box<dyn Error>> {
     let request = Request::new(pb::RepositoryIndexesRequest {});
 
@@ -241,8 +241,8 @@ pub extern "C" fn pahkat_rpc_repo_indexes(
 
 #[cffi::marshal]
 pub extern "C" fn pahkat_rpc_status(
-    #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
-    #[marshal(cursed::StrMarshaler::<'_>)] raw_package_key: &str,
+    #[marshal(cffi::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
+    #[marshal(cffi::StrMarshaler::<'_>)] raw_package_key: &str,
     target: u8,
 ) -> i32 {
     let request = Request::new(pb::StatusRequest {
@@ -280,7 +280,7 @@ extern "C" fn pahkat_rpc_cancel_callback() {
 
 #[cffi::marshal(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_rpc_get_repo_records(
-    #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
+    #[marshal(cffi::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
 ) -> Result<pb::GetRepoRecordsResponse, Box<dyn Error>> {
     let request = Request::new(pb::GetRepoRecordsRequest {});
 
@@ -293,8 +293,8 @@ pub extern "C" fn pahkat_rpc_get_repo_records(
 
 #[cffi::marshal(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_rpc_set_repo(
-    #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
-    #[marshal(cursed::StrMarshaler::<'_>)] repo_url: &str,
+    #[marshal(cffi::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
+    #[marshal(cffi::StrMarshaler::<'_>)] repo_url: &str,
     #[marshal(JsonRefMarshaler)] settings: pb::RepoRecord,
 ) -> Result<pb::SetRepoResponse, Box<dyn Error>> {
     let request = Request::new(pb::SetRepoRequest {
@@ -315,8 +315,8 @@ pub extern "C" fn pahkat_rpc_set_repo(
 
 #[cffi::marshal(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_rpc_remove_repo(
-    #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
-    #[marshal(cursed::StrMarshaler::<'_>)] repo_url: &str,
+    #[marshal(cffi::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
+    #[marshal(cffi::StrMarshaler::<'_>)] repo_url: &str,
 ) -> Result<pb::RemoveRepoResponse, Box<dyn Error>> {
     let request = Request::new(pb::RemoveRepoRequest {
         url: repo_url.to_string(),
@@ -331,7 +331,7 @@ pub extern "C" fn pahkat_rpc_remove_repo(
 
 #[cffi::marshal]
 pub extern "C" fn pahkat_rpc_notifications(
-    #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
+    #[marshal(cffi::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
     callback: extern "C" fn(i32),
 ) {
     let request = Request::new(pb::NotificationsRequest {});
@@ -353,8 +353,8 @@ pub extern "C" fn pahkat_rpc_notifications(
 
 #[cffi::marshal(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_rpc_strings(
-    #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
-    #[marshal(cursed::StrMarshaler::<'_>)] language_tag: &str,
+    #[marshal(cffi::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
+    #[marshal(cffi::StrMarshaler::<'_>)] language_tag: &str,
 ) -> Result<pb::StringsResponse, Box<dyn Error>> {
     let request = Request::new(pb::StringsRequest {
         language: language_tag.to_string(),
@@ -371,8 +371,8 @@ pub extern "C" fn pahkat_rpc_strings(
 
 #[cffi::marshal(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_rpc_resolve_package_query(
-    #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
-    #[marshal(cursed::StrMarshaler::<'_>)] package_query: &str,
+    #[marshal(cffi::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
+    #[marshal(cffi::StrMarshaler::<'_>)] package_query: &str,
 ) -> Result<pahkat_client::transaction::ResolvedPackageQuery, Box<dyn Error>> {
     let request = Request::new(pb::JsonRequest {
         json: package_query.to_string(),
@@ -387,13 +387,13 @@ pub extern "C" fn pahkat_rpc_resolve_package_query(
     serde_json::from_str(&response?.json).box_err()
 }
 
-#[cffi::marshal(return_marshaler = "cursed::UnitMarshaler")]
+#[cffi::marshal(return_marshaler = "cffi::UnitMarshaler")]
 pub extern "C" fn pahkat_rpc_process_transaction(
-    #[marshal(cursed::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
+    #[marshal(cffi::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
 
     #[marshal(JsonRefMarshaler)] actions: Vec<pb::PackageAction>,
 
-    callback: extern "C" fn(cursed::Slice<u8>),
+    callback: extern "C" fn(cffi::Slice<u8>),
 ) -> Result<(), Box<dyn Error>> {
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
@@ -415,7 +415,7 @@ pub extern "C" fn pahkat_rpc_process_transaction(
             let bytes = s.as_bytes();
 
             unsafe {
-                (callback)(cursed::Slice {
+                (callback)(cffi::Slice {
                     data: bytes.as_ptr() as *mut _,
                     len: bytes.len(),
                 });

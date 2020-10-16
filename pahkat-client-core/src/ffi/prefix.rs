@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
-use cursed::{FromForeign, ToForeign};
+use cffi::{FromForeign, ToForeign};
 use futures::stream::{Stream, StreamExt};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -23,27 +23,27 @@ use super::{block_on, BoxError};
 
 use crate::transaction::status_to_i8;
 
-#[cffi::marshal(return_marshaler = "cursed::ArcMarshaler::<PrefixPackageStore>")]
+#[cffi::marshal(return_marshaler = "cffi::ArcMarshaler::<PrefixPackageStore>")]
 pub extern "C" fn pahkat_prefix_package_store_open(
-    #[marshal(cursed::PathBufMarshaler)] prefix_path: PathBuf,
+    #[marshal(cffi::PathBufMarshaler)] prefix_path: PathBuf,
 ) -> Result<Arc<PrefixPackageStore>, Box<dyn Error>> {
     block_on(PrefixPackageStore::open(prefix_path))
         .map(|x| Arc::new(x))
         .box_err()
 }
 
-#[cffi::marshal(return_marshaler = "cursed::ArcMarshaler::<PrefixPackageStore>")]
+#[cffi::marshal(return_marshaler = "cffi::ArcMarshaler::<PrefixPackageStore>")]
 pub extern "C" fn pahkat_prefix_package_store_create(
-    #[marshal(cursed::PathBufMarshaler)] prefix_path: PathBuf,
+    #[marshal(cffi::PathBufMarshaler)] prefix_path: PathBuf,
 ) -> Result<Arc<PrefixPackageStore>, Box<dyn Error>> {
     block_on(PrefixPackageStore::create(prefix_path))
         .map(|x| Arc::new(x))
         .box_err()
 }
 
-#[cffi::marshal(return_marshaler = "cursed::ArcMarshaler::<PrefixPackageStore>")]
+#[cffi::marshal(return_marshaler = "cffi::ArcMarshaler::<PrefixPackageStore>")]
 pub extern "C" fn pahkat_prefix_package_store_open_or_create(
-    #[marshal(cursed::PathBufMarshaler)] prefix_path: PathBuf,
+    #[marshal(cffi::PathBufMarshaler)] prefix_path: PathBuf,
 ) -> Result<Arc<PrefixPackageStore>, Box<dyn Error>> {
     block_on(PrefixPackageStore::open_or_create(prefix_path))
         .map(|x| Arc::new(x))
@@ -52,7 +52,7 @@ pub extern "C" fn pahkat_prefix_package_store_open_or_create(
 
 #[cffi::marshal]
 pub extern "C" fn pahkat_prefix_package_store_status(
-    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
+    #[marshal(cffi::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
     #[marshal(PackageKeyMarshaler::<'_>)] package_key: PackageKey,
 ) -> i8 {
     log::trace!(
@@ -64,8 +64,8 @@ pub extern "C" fn pahkat_prefix_package_store_status(
 
 #[cffi::marshal(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_prefix_package_store_all_statuses(
-    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
-    #[marshal(cursed::UrlMarshaler)] repo_url: url::Url,
+    #[marshal(cffi::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
+    #[marshal(cffi::UrlMarshaler)] repo_url: url::Url,
 ) -> BTreeMap<String, i8> {
     let repo_url = match pahkat_types::repo::RepoUrl::new(repo_url) {
         Ok(v) => v,
@@ -78,18 +78,18 @@ pub extern "C" fn pahkat_prefix_package_store_all_statuses(
         .collect()
 }
 
-#[cffi::marshal(return_marshaler = "cursed::PathBufMarshaler")]
+#[cffi::marshal(return_marshaler = "cffi::PathBufMarshaler")]
 pub extern "C" fn pahkat_prefix_package_store_import(
-    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
+    #[marshal(cffi::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
     #[marshal(PackageKeyMarshaler::<'_>)] package_key: PackageKey,
-    #[marshal(cursed::PathBufMarshaler)] installer_path: PathBuf,
+    #[marshal(cffi::PathBufMarshaler)] installer_path: PathBuf,
 ) -> Result<PathBuf, Box<dyn Error>> {
     handle.import(&package_key, &installer_path).box_err()
 }
 
-#[cffi::marshal(return_marshaler = "cursed::PathBufMarshaler")]
+#[cffi::marshal(return_marshaler = "cffi::PathBufMarshaler")]
 pub extern "C" fn pahkat_prefix_package_store_download(
-    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
+    #[marshal(cffi::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
     #[marshal(PackageKeyMarshaler::<'_>)] package_key: PackageKey,
     progress: extern "C" fn(*const libc::c_char, u64, u64) -> bool,
 ) -> Result<PathBuf, Box<dyn Error>> {
@@ -121,9 +121,9 @@ pub extern "C" fn pahkat_prefix_package_store_download(
     .box_err()
 }
 
-#[cffi::marshal(return_marshaler = "cursed::UrlMarshaler")]
+#[cffi::marshal(return_marshaler = "cffi::UrlMarshaler")]
 pub extern "C" fn pahkat_prefix_package_store_download_url(
-    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
+    #[marshal(cffi::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
     #[marshal(PackageKeyMarshaler::<'_>)] package_key: PackageKey,
 ) -> Result<url::Url, Box<dyn Error>> {
     use crate::repo::*;
@@ -144,7 +144,7 @@ pub extern "C" fn pahkat_prefix_package_store_download_url(
 
 #[cffi::marshal(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_prefix_package_store_find_package_by_key(
-    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
+    #[marshal(cffi::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
     #[marshal(PackageKeyMarshaler::<'_>)] package_key: PackageKey,
 ) -> Option<pahkat_types::package::Package> {
     handle.find_package_by_key(&package_key)
@@ -152,7 +152,7 @@ pub extern "C" fn pahkat_prefix_package_store_find_package_by_key(
 
 #[cffi::marshal]
 pub extern "C" fn pahkat_prefix_package_store_clear_cache(
-    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
+    #[marshal(cffi::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
 ) {
     handle.clear_cache();
 }
@@ -161,27 +161,27 @@ pub extern "C" fn pahkat_prefix_package_store_clear_cache(
 #[error("{0}")]
 struct RefreshRepoError(&'static str);
 
-#[cffi::marshal(return_marshaler = "cursed::UnitMarshaler")]
+#[cffi::marshal(return_marshaler = "cffi::UnitMarshaler")]
 pub extern "C" fn pahkat_prefix_package_store_refresh_repos(
-    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
+    #[marshal(cffi::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
 ) -> Result<(), Box<dyn Error>> {
     block_on(handle.refresh_repos())
         .map_err(|_| RefreshRepoError("Some repositories could not be updated."))
         .box_err()
 }
 
-#[cffi::marshal(return_marshaler = "cursed::UnitMarshaler")]
+#[cffi::marshal(return_marshaler = "cffi::UnitMarshaler")]
 pub extern "C" fn pahkat_prefix_package_store_force_refresh_repos(
-    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
+    #[marshal(cffi::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
 ) -> Result<(), Box<dyn Error>> {
     block_on(handle.force_refresh_repos())
         .map_err(|_| RefreshRepoError("Some repositories could not be updated."))
         .box_err()
 }
 
-// #[cffi::marshal(return_marshaler = "cursed::StringMarshaler")]
+// #[cffi::marshal(return_marshaler = "cffi::StringMarshaler")]
 // pub extern "C" fn pahkat_prefix_package_store_repo_indexes(
-//     #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
+//     #[marshal(cffi::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
 // ) -> Result<String, Box<dyn Error>> {
 //     let rwlock = handle.repos().read().unwrap();
 //     let guard = rwlock.read().unwrap();
@@ -189,18 +189,18 @@ pub extern "C" fn pahkat_prefix_package_store_force_refresh_repos(
 //     serde_json::to_string(&indexes).map_err(|e| Box::new(e) as _)
 // }
 
-#[cffi::marshal(return_marshaler = "cursed::ArcMarshaler::<RwLock<Config>>")]
+#[cffi::marshal(return_marshaler = "cffi::ArcMarshaler::<RwLock<Config>>")]
 pub extern "C" fn pahkat_prefix_package_store_config(
-    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
+    #[marshal(cffi::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
 ) -> Arc<RwLock<Config>> {
     handle.config()
 }
 
-#[cffi::marshal(return_marshaler = "cursed::BoxMarshaler::<PackageTransaction>")]
+#[cffi::marshal(return_marshaler = "cffi::BoxMarshaler::<PackageTransaction>")]
 pub extern "C" fn pahkat_prefix_transaction_new(
-    #[marshal(cursed::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
+    #[marshal(cffi::ArcRefMarshaler::<PrefixPackageStore>)] handle: Arc<PrefixPackageStore>,
 
-    #[marshal(cursed::StrMarshaler::<'_>)] actions: &str,
+    #[marshal(cffi::StrMarshaler::<'_>)] actions: &str,
 ) -> Result<Box<PackageTransaction>, Box<dyn Error>> {
     let actions: Vec<PackageAction> = serde_json::from_str(actions)?;
     PackageTransaction::new(handle as _, actions.clone())
@@ -210,16 +210,16 @@ pub extern "C" fn pahkat_prefix_transaction_new(
 
 #[cffi::marshal(return_marshaler = "JsonMarshaler")]
 pub extern "C" fn pahkat_prefix_transaction_actions(
-    #[marshal(cursed::BoxRefMarshaler::<PackageTransaction>)] handle: &PackageTransaction,
+    #[marshal(cffi::BoxRefMarshaler::<PackageTransaction>)] handle: &PackageTransaction,
 ) -> Vec<crate::transaction::ResolvedAction> {
     handle.actions().to_vec()
 }
 
-#[cffi::marshal(return_marshaler = "cursed::UnitMarshaler")]
+#[cffi::marshal(return_marshaler = "cffi::UnitMarshaler")]
 pub extern "C" fn pahkat_prefix_transaction_process(
-    #[marshal(cursed::BoxRefMarshaler::<PackageTransaction>)] handle: &PackageTransaction,
+    #[marshal(cffi::BoxRefMarshaler::<PackageTransaction>)] handle: &PackageTransaction,
     tag: u32,
-    progress_callback: extern "C" fn(u32, cursed::Slice<u8>, u32) -> u8,
+    progress_callback: extern "C" fn(u32, cffi::Slice<u8>, u32) -> u8,
 ) -> Result<(), Box<dyn Error>> {
     let (canceler, mut stream) = handle.process();
 

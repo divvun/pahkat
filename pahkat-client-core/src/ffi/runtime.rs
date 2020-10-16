@@ -4,7 +4,7 @@ use std::ffi::{CStr, CString};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 
-use cursed::{FromForeign, InputType, ReturnType, ToForeign};
+use cffi::{FromForeign, InputType, ReturnType, ToForeign};
 use once_cell::sync::Lazy;
 use pahkat_types::payload::{
     macos::InstallTarget as MacOSInstallTarget, windows::InstallTarget as WindowsInstallTarget,

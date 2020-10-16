@@ -76,7 +76,7 @@ anyhow = "1.0.32"
 butte-build = { git = "https://github.com/butte-rs/butte" }
 
 [features]
-ffi = ["env_logger", "cffi", "cursed"]
+ffi = ["env_logger", "cffi"]
 prefix = ["tar", "xz2", "rusqlite", "r2d2_sqlite", "r2d2"]
 windows = []
 macos = []
