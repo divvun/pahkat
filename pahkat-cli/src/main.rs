@@ -8,7 +8,10 @@ mod uninstall;
 use anyhow::{Context, Result};
 use cli::{Args, ConfigPath, Platform};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use structopt::StructOpt;
+
+use pahkat_client::{Config, PackageStore};
 
 #[inline]
 #[cfg(any(windows, target_os = "macos", target_os = "linux"))]
@@ -20,8 +23,6 @@ fn config_path(holder: &dyn ConfigPath) -> Result<PathBuf> {
         .with_context(|| "No default config path could be found")
 }
 
-use pahkat_client::{Config, PackageStore};
-use std::sync::Arc;
 
 #[inline(always)]
 #[cfg(feature = "windows")]
@@ -53,6 +54,7 @@ async fn store(config_path: Option<&Path>) -> anyhow::Result<Arc<dyn PackageStor
 
     Ok(store)
 }
+
 #[inline(always)]
 #[cfg(feature = "prefix")]
 async fn create_store(config_path: Option<&Path>) -> anyhow::Result<Arc<dyn PackageStore>> {
@@ -89,9 +91,7 @@ async fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     let args = Args::from_args();
-    println!("{:?}", &args);
 
-    // match args
     match &args {
         cli::Args::Init(a) => {
             // TODO: init should only be built for prefix builds.

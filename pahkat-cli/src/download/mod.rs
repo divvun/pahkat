@@ -23,12 +23,17 @@ pub async fn download<'a>(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
+    println!("Preparing to download:");
+    for key in keys.iter() {
+        println!(" - {}", &key);
+    }
+
     for key in keys {
-        // let pb = indicatif::ProgressBar::new(0);
-        // pb.set_style(indicatif::ProgressStyle::default_bar()
-        //     .template("{spinner:.green} {prefix} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
-        //     .progress_chars("=>-"));
-        // pb.set_prefix(&key.id);
+        let pb = indicatif::ProgressBar::new(0);
+        pb.set_style(indicatif::ProgressStyle::default_bar()
+            .template("{spinner:.green} {prefix} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+            .progress_chars("=>-"));
+        pb.set_prefix(&key.id);
 
         // let progress = Box::new(move |cur, max| {
         //     // pb.set_length(max);
@@ -46,9 +51,14 @@ pub async fn download<'a>(
 
         while let Some(event) = download.next().await {
             match event {
+                DownloadEvent::Progress((current, total)) => {
+                    pb.set_length(total);
+                    pb.set_position(current);
+                }
                 DownloadEvent::Complete(pkg_path) => {
                     std::fs::copy(&pkg_path, output_path.join(pkg_path.file_name().unwrap()))?;
                     std::fs::remove_file(&pkg_path)?;
+                    pb.finish();
                 }
                 _ => {}
             }

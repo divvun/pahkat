@@ -434,10 +434,9 @@ pub(crate) fn download<'a>(
         Ok(v) => v,
         Err(e) => {
             log::error!(
-                "Failed to resolve: {} {:?} {:?}",
+                "Failed to resolve: {} {:?}",
                 &package_key,
-                &query,
-                &repos
+                &query
             );
             return Box::pin(async_stream::stream! {
                 yield crate::package_store::DownloadEvent::Error(crate::download::DownloadError::Payload(e));
