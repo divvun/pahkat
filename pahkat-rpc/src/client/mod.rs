@@ -22,8 +22,8 @@ struct StatusCommand {
     target: String,
 }
 
-#[derive(Debug, StructOpt)]
-struct RepoIndexesCommand {}
+// #[derive(Debug, StructOpt)]
+// struct RepoIndexesCommand {}
 
 #[derive(Debug, StructOpt)]
 struct ProcessTransactionCommand {
@@ -31,17 +31,29 @@ struct ProcessTransactionCommand {
     actions: Vec<String>,
 }
 
+// #[derive(Debug, StructOpt)]
+// struct InstallCommand {
+//     ids: Vec<String>,
+// }
+
+// #[derive(Debug, StructOpt)]
+// struct StringsCommand {
+//     language: String,
+// }
+
 #[derive(Debug, StructOpt)]
-struct StringsCommand {
-    language: String,
+struct SetRepoCommand {
+    repo_url: String,
 }
 
 #[derive(Debug, StructOpt)]
 enum Command {
+    // Install(InstallCommand),
     Status(StatusCommand),
-    RepoIndexes(RepoIndexesCommand),
+    // RepoIndexes(RepoIndexesCommand),
     ProcessTransaction(ProcessTransactionCommand),
-    Strings(StringsCommand),
+    // Strings(StringsCommand),
+    SetRepo(SetRepoCommand),
 }
 
 #[derive(Debug, StructOpt)]
@@ -51,6 +63,7 @@ struct Args {
 }
 
 type PahkatClient = pb::pahkat_client::PahkatClient<tonic::transport::channel::Channel>;
+
 use once_cell::sync::Lazy;
 use std::error::Error;
 use std::path::PathBuf;
@@ -63,7 +76,7 @@ async fn new_client() -> anyhow::Result<PahkatClient> {
             let path = if cfg!(windows) {
                 format!("//./pipe/pahkat")
             } else {
-                format!("/tmp/pahkat")
+                format!("/tmp/pahkat.sock")
             };
 
             parity_tokio_ipc::Endpoint::connect(path)
@@ -88,12 +101,29 @@ pub async fn run() -> anyhow::Result<()> {
             let response = client.status(request).await?;
             println!("{:#?}", response);
         }
-        Command::RepoIndexes(_) => {
-            let request = Request::new(pb::RepositoryIndexesRequest {});
+        Command::SetRepo(command) => {
+            let request = Request::new(pb::SetRepoRequest {
+                url: command.repo_url,
+                settings: None,
+            });
 
-            let response = client.repository_indexes(request).await?;
-            println!("{:?}", response);
+            let response = client.set_repo(request).await?;
+            let result = response.into_inner();
+
+            println!("Response: {:?}", &result);
+
         }
+        // Command::RepoIndexes(_) => {
+        //     let request = Request::new(pb::RepositoryIndexesRequest {});
+
+        //     let response = client.repository_indexes(request).await?;
+        //     let v = serde_json::to_string(&response.into_inner()).unwrap();
+
+        //     println!("{}", v);
+        // }
+        // Command::Install(command) => {
+        //     // let actions = command
+        // }
         Command::ProcessTransaction(command) => {
             let actions = command
                 .actions
@@ -130,12 +160,12 @@ pub async fn run() -> anyhow::Result<()> {
                 println!("{:?}", message);
             }
         }
-        Command::Strings(StringsCommand { language }) => {
-            let request = Request::new(pb::StringsRequest { language });
+        // Command::Strings(StringsCommand { language }) => {
+        //     let request = Request::new(pb::StringsRequest { language });
 
-            let response = client.strings(request).await?;
-            println!("{:?}", response);
-        }
+        //     let response = client.strings(request).await?;
+        //     println!("{:?}", response);
+        // }
     }
     Ok(())
 }
