@@ -142,14 +142,14 @@ pub(crate) async fn self_update() -> Result<bool, Box<dyn Error>> {
         return Ok(false);
     }
 
-    // Retry 5 times
-    let retries = 5i32;
-    'downloader: for i in 1i32..=retries {
-        log::debug!("Attempt {} of self update...", i);
+    // If update is available, download it.
+    for key in &*SELFUPDATE_KEYS {
+        log::debug!("Downloading self-update package '{}'...", key.to_string());
+        // Retry 5 times
+        let retries = 5i32;
 
-        // If update is available, download it.
-        log::debug!("Downloading self-update package...");
-        for key in &*SELFUPDATE_KEYS {
+        'downloader: for i in 1i32..=retries {
+            log::debug!("Attempt {} of self update...", i);
             let mut stream = store.download(&key);
 
             while let Some(result) = stream.next().await {
