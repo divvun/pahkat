@@ -48,7 +48,7 @@ impl<B: AsRef<[u8]>> TargetExt for pahkat_fbs::Target<B> {
 
 fn build_target<B: AsRef<[u8]>>(
     t: &pahkat_fbs::Target<B>,
-) -> Result<pahkat_types::payload::Target, butte::Error> {
+) -> Result<pahkat_types::payload::Target, fbs::Error> {
     let platform = t.platform()?.to_string();
     let arch = t.arch()?.map(str::to_string);
     let dependencies = t
@@ -106,7 +106,7 @@ fn build_target<B: AsRef<[u8]>>(
 }
 
 impl<'a> TryFrom<&'a pahkat_fbs::Descriptor<&'a [u8]>> for pahkat_types::package::Descriptor {
-    type Error = butte::Error;
+    type Error = fbs::Error;
 
     fn try_from(pkg: &'a pahkat_fbs::Descriptor<&'a [u8]>) -> Result<Self, Self::Error> {
         use std::collections::BTreeMap;
@@ -175,29 +175,29 @@ impl<'a> TryFrom<&'a pahkat_fbs::Descriptor<&'a [u8]>> for pahkat_types::package
 }
 
 pub struct Map<'a, K, V> {
-    keys: butte::Vector<'a, butte::ForwardsUOffset<K>>,
-    values: butte::Vector<'a, butte::ForwardsUOffset<V>>,
+    keys: fbs::Vector<'a, fbs::ForwardsUOffset<K>>,
+    values: fbs::Vector<'a, fbs::ForwardsUOffset<V>>,
     len: usize,
 }
 
 impl<'a, K, V> From<Map<'a, K, V>>
     for std::collections::BTreeMap<
-        <<butte::ForwardsUOffset<K> as butte::Follow<'a>>::Inner as ToOwned>::Owned,
-        <<butte::ForwardsUOffset<V> as butte::Follow<'a>>::Inner as ToOwned>::Owned,
+        <<fbs::ForwardsUOffset<K> as fbs::Follow<'a>>::Inner as ToOwned>::Owned,
+        <<fbs::ForwardsUOffset<V> as fbs::Follow<'a>>::Inner as ToOwned>::Owned,
     >
 where
     K: PartialEq,
-    butte::ForwardsUOffset<K>: butte::Follow<'a>,
-    butte::ForwardsUOffset<V>: butte::Follow<'a>,
-    <butte::ForwardsUOffset<K> as butte::Follow<'a>>::Inner: PartialEq + ToOwned,
-    <<butte::ForwardsUOffset<K> as butte::Follow<'a>>::Inner as ToOwned>::Owned: PartialEq + Ord,
-    <butte::ForwardsUOffset<V> as butte::Follow<'a>>::Inner: ToOwned,
+    fbs::ForwardsUOffset<K>: fbs::Follow<'a>,
+    fbs::ForwardsUOffset<V>: fbs::Follow<'a>,
+    <fbs::ForwardsUOffset<K> as fbs::Follow<'a>>::Inner: PartialEq + ToOwned,
+    <<fbs::ForwardsUOffset<K> as fbs::Follow<'a>>::Inner as ToOwned>::Owned: PartialEq + Ord,
+    <fbs::ForwardsUOffset<V> as fbs::Follow<'a>>::Inner: ToOwned,
 {
     fn from(
         value: Map<'a, K, V>,
     ) -> std::collections::BTreeMap<
-        <<butte::ForwardsUOffset<K> as butte::Follow<'a>>::Inner as ToOwned>::Owned,
-        <<butte::ForwardsUOffset<V> as butte::Follow<'a>>::Inner as ToOwned>::Owned,
+        <<fbs::ForwardsUOffset<K> as fbs::Follow<'a>>::Inner as ToOwned>::Owned,
+        <<fbs::ForwardsUOffset<V> as fbs::Follow<'a>>::Inner as ToOwned>::Owned,
     > {
         let mut out = std::collections::BTreeMap::new();
         for (k, v) in value.iter() {
@@ -210,14 +210,14 @@ where
 impl<'a, K, V> Map<'a, K, V>
 where
     K: PartialEq,
-    butte::ForwardsUOffset<K>: butte::Follow<'a>,
-    butte::ForwardsUOffset<V>: butte::Follow<'a>,
-    <butte::ForwardsUOffset<K> as butte::Follow<'a>>::Inner: PartialEq,
+    fbs::ForwardsUOffset<K>: fbs::Follow<'a>,
+    fbs::ForwardsUOffset<V>: fbs::Follow<'a>,
+    <fbs::ForwardsUOffset<K> as fbs::Follow<'a>>::Inner: PartialEq,
 {
     #[inline]
     fn new(
-        keys: butte::Vector<'a, butte::ForwardsUOffset<K>>,
-        values: butte::Vector<'a, butte::ForwardsUOffset<V>>,
+        keys: fbs::Vector<'a, fbs::ForwardsUOffset<K>>,
+        values: fbs::Vector<'a, fbs::ForwardsUOffset<V>>,
     ) -> Map<'a, K, V> {
         Map {
             keys,
@@ -231,8 +231,8 @@ where
         &self,
     ) -> impl Iterator<
         Item = (
-            <butte::ForwardsUOffset<K> as butte::Follow<'a>>::Inner,
-            <butte::ForwardsUOffset<V> as butte::Follow<'a>>::Inner,
+            <fbs::ForwardsUOffset<K> as fbs::Follow<'a>>::Inner,
+            <fbs::ForwardsUOffset<V> as fbs::Follow<'a>>::Inner,
         ),
     > {
         self.keys
@@ -244,8 +244,8 @@ where
     #[inline]
     pub fn get(
         &self,
-        key: <butte::ForwardsUOffset<K> as butte::Follow<'a>>::Inner,
-    ) -> Option<<butte::ForwardsUOffset<V> as butte::Follow<'a>>::Inner> {
+        key: <fbs::ForwardsUOffset<K> as fbs::Follow<'a>>::Inner,
+    ) -> Option<<fbs::ForwardsUOffset<V> as fbs::Follow<'a>>::Inner> {
         self.keys
             .iter()
             .filter_map(Result::ok)
@@ -256,7 +256,7 @@ where
     #[inline]
     pub fn keys(
         &self,
-    ) -> impl Iterator<Item = <butte::ForwardsUOffset<K> as butte::Follow<'a>>::Inner> {
+    ) -> impl Iterator<Item = <fbs::ForwardsUOffset<K> as fbs::Follow<'a>>::Inner> {
         self.keys.iter().filter_map(Result::ok)
     }
 
@@ -264,7 +264,7 @@ where
     pub fn key(
         &self,
         index: usize,
-    ) -> Option<<butte::ForwardsUOffset<K> as butte::Follow<'a>>::Inner> {
+    ) -> Option<<fbs::ForwardsUOffset<K> as fbs::Follow<'a>>::Inner> {
         if index >= self.len {
             None
         } else {
@@ -276,7 +276,7 @@ where
     pub fn value(
         &self,
         index: usize,
-    ) -> Option<<butte::ForwardsUOffset<V> as butte::Follow<'a>>::Inner> {
+    ) -> Option<<fbs::ForwardsUOffset<V> as fbs::Follow<'a>>::Inner> {
         if index >= self.len {
             None
         } else {

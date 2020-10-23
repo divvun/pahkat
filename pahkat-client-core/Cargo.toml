@@ -22,8 +22,8 @@ cffi = { version = "0.1", optional = true, features = ["url"] }
 
 # The rest
 pahkat-types = { path = "../pahkat-types" }
-butte = { git = "https://github.com/butte-rs/butte" }
-butte-build = { git = "https://github.com/butte-rs/butte" }
+fbs = "0.6"
+fbs-build = "0.1"
 
 reqwest = { version = "0.10.7", features = ["rustls-tls", "blocking", "gzip"], default-features = false }
 serde = { version = "1.0.115", features = ["derive"] }
@@ -73,7 +73,7 @@ iref = "1.2.0"
 
 [build-dependencies]
 anyhow = "1.0.32"
-butte-build = { git = "https://github.com/butte-rs/butte" }
+fbs-build = "0.1"
 
 [features]
 ffi = ["env_logger", "cffi"]

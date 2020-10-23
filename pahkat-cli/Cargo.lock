@@ -196,33 +196,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2e8c087f005730276d1096a652e92a8bacee2e2472bcc9715a74d2bec38b5820"
 
 [[package]]
-name = "butte"
-version = "0.6.0"
-source = "git+https://github.com/butte-rs/butte#359a1a321a94802c863cc1e3a4a69f381a8ad1d9"
-dependencies = [
- "smallvec",
-]
-
-[[package]]
-name = "butte-build"
-version = "0.1.0"
-source = "git+https://github.com/butte-rs/butte#359a1a321a94802c863cc1e3a4a69f381a8ad1d9"
-dependencies = [
- "anyhow",
- "butte",
- "derive_more",
- "heck",
- "hexf-parse",
- "itertools",
- "nom",
- "proc-macro2",
- "quote",
- "structopt",
- "syn",
- "typed-builder 0.6.0",
-]
-
-[[package]]
 name = "bytes"
 version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -314,11 +287,11 @@ checksum = "8aebca1129a03dc6dc2b127edd729435bbc4a37e1d5f4d7513165089ceb02634"
 
 [[package]]
 name = "crc32fast"
-version = "1.2.0"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba125de2af0df55319f41944744ad91c71113bf74a4646efff39afe1f6842db1"
+checksum = "81156fece84ab6a9f2afdb109ce3ae577e42b1228441eded99bd77f627953b1a"
 dependencies = [
- "cfg-if 0.1.10",
+ "cfg-if 1.0.0",
 ]
 
 [[package]]
@@ -451,6 +424,35 @@ name = "fallible-streaming-iterator"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
+
+[[package]]
+name = "fbs"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4792eec4feeb3cb29edc90449f0ffe8e7a061deb6b313e3a79c7771c9ecfe62f"
+dependencies = [
+ "smallvec",
+]
+
+[[package]]
+name = "fbs-build"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd69c41330f38a16587fea5e9fe2a2f784d8b87e211d755f3b2dbbcae25c4ca3"
+dependencies = [
+ "anyhow",
+ "derive_more",
+ "fbs",
+ "heck",
+ "hexf-parse",
+ "itertools",
+ "nom",
+ "proc-macro2",
+ "quote",
+ "structopt",
+ "syn",
+ "typed-builder",
+]
 
 [[package]]
 name = "filetime"
@@ -1162,11 +1164,11 @@ dependencies = [
  "async-stream",
  "async-trait",
  "backtrace",
- "butte",
- "butte-build",
  "chrono",
  "crossbeam-queue",
  "ctor",
+ "fbs",
+ "fbs-build",
  "futures",
  "hashbrown",
  "indexmap",
@@ -1212,7 +1214,7 @@ dependencies = [
  "semver",
  "serde",
  "thiserror",
- "typed-builder 0.7.0",
+ "typed-builder",
  "url",
 ]
 
@@ -1244,9 +1246,9 @@ dependencies = [
 
 [[package]]
 name = "pathos"
-version = "0.2.0-pre.9"
+version = "0.2.0-pre.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "161c58615d2becea3b85d62f69ec583acd5189aecf7a27bd3f7b1213759ca447"
+checksum = "2d6ae7e9637a6785b927ab9cacc7a9985e292c95d940b22cf532924da0a57422"
 dependencies = [
  "eieio",
  "home",
@@ -1590,9 +1592,9 @@ dependencies = [
 
 [[package]]
 name = "rustc-demangle"
-version = "0.1.17"
+version = "0.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2610b7f643d18c87dff3b489950269617e6601a51f1f05aa5daefee36f64f0b"
+checksum = "6e3bad0ee36814ca07d7968269dd4b7ec89ec2da10c4bb613928d3077083c232"
 
 [[package]]
 name = "rustls"
@@ -1806,9 +1808,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "1.0.45"
+version = "1.0.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea9c5432ff16d6152371f808fb5a871cd67368171b09bb21b43df8e4a47a3556"
+checksum = "5ad5de3220ea04da322618ded2c42233d02baca219d6f160a3e9c87cda16c942"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2016,17 +2018,6 @@ name = "try-lock"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
-
-[[package]]
-name = "typed-builder"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85fc4459191c621a53ef6c6ca5642e6e0e5ccc61f3e5b8ad6b6ab5317f0200fb"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
 
 [[package]]
 name = "typed-builder"

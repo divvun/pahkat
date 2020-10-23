@@ -34,5 +34,5 @@ pub use package_store::prefix::PrefixPackageStore;
 pub use package_store::windows::WindowsPackageStore;
 
 pub(crate) mod generated {
-    butte_build::include_fbs!("index");
+    fbs_build::include_fbs!("index");
 }

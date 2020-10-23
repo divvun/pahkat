@@ -1,4 +1,4 @@
-use butte::FlatBufferBuilder;
+use fbs::FlatBufferBuilder;
 use std::borrow::Cow;
 use std::path::Path;
 use typed_builder::TypedBuilder;
@@ -82,24 +82,24 @@ impl<'a> crate::Request for Request<'a> {
 }
 
 fn vectorize_strings<'a>(
-    keys: Vec<butte::WIPOffset<&'a str>>,
+    keys: Vec<fbs::WIPOffset<&'a str>>,
     builder: &mut FlatBufferBuilder<'a>,
-) -> butte::WIPOffset<butte::Vector<'a, butte::WIPOffset<&'a str>>> {
+) -> fbs::WIPOffset<fbs::Vector<'a, fbs::WIPOffset<&'a str>>> {
     let len = keys.len();
-    builder.start_vector::<butte::WIPOffset<&'_ str>>(len);
+    builder.start_vector::<fbs::WIPOffset<&'_ str>>(len);
     for key in keys.into_iter().rev() {
         builder.push(key);
     }
-    builder.end_vector::<butte::WIPOffset<&'_ str>>(len)
+    builder.end_vector::<fbs::WIPOffset<&'_ str>>(len)
 }
 
 fn vectorize_lang_map<'a, 'd>(
     lang_map: &'d pahkat_types::LangTagMap<String>,
-    lang_keys: &mut std::collections::HashMap<&'d str, butte::WIPOffset<&'a str>>,
+    lang_keys: &mut std::collections::HashMap<&'d str, fbs::WIPOffset<&'a str>>,
     builder: &mut FlatBufferBuilder<'a>,
 ) -> (
-    Option<butte::WIPOffset<butte::Vector<'a, butte::WIPOffset<&'a str>>>>,
-    Option<butte::WIPOffset<butte::Vector<'a, butte::WIPOffset<&'a str>>>>,
+    Option<fbs::WIPOffset<fbs::Vector<'a, fbs::WIPOffset<&'a str>>>>,
+    Option<fbs::WIPOffset<fbs::Vector<'a, fbs::WIPOffset<&'a str>>>>,
 ) {
     let (name_keys, name_values): (Vec<_>, Vec<_>) = lang_map
         .iter()
@@ -127,7 +127,7 @@ fn vectorize_lang_map<'a, 'd>(
 fn create_payload_windows_exe<'a>(
     payload: &pahkat_types::payload::windows::Executable,
     builder: &mut FlatBufferBuilder<'a>,
-) -> butte::WIPOffset<butte::UnionWIPOffset> {
+) -> fbs::WIPOffset<fbs::UnionWIPOffset> {
     let url = builder.create_string(payload.url.as_str());
     let product_code = builder.create_string(payload.product_code.as_str());
 
@@ -179,7 +179,7 @@ fn create_payload_windows_exe<'a>(
 fn create_payload_macos_pkg<'a>(
     payload: &pahkat_types::payload::macos::Package,
     builder: &mut FlatBufferBuilder<'a>,
-) -> butte::WIPOffset<butte::UnionWIPOffset> {
+) -> fbs::WIPOffset<fbs::UnionWIPOffset> {
     let url = builder.create_string(payload.url.as_str());
     let pkg_id = builder.create_string(payload.pkg_id.as_str());
 
@@ -224,7 +224,7 @@ fn create_payload_macos_pkg<'a>(
 fn create_payload_tarball_pkg<'a>(
     payload: &pahkat_types::payload::tarball::Package,
     builder: &mut FlatBufferBuilder<'a>,
-) -> butte::WIPOffset<butte::UnionWIPOffset> {
+) -> fbs::WIPOffset<fbs::UnionWIPOffset> {
     log::debug!("Tarball: {}", &payload.url);
     let url = builder.create_string(payload.url.as_str());
     let args = crate::fbs::pahkat::TarballPackageArgs {
@@ -239,7 +239,7 @@ fn create_payload_tarball_pkg<'a>(
 fn create_targets<'d, 'a>(
     targets: &'d Vec<pahkat_types::payload::Target>,
     builder: &mut FlatBufferBuilder<'a>,
-) -> butte::WIPOffset<butte::Vector<'a, butte::WIPOffset<crate::fbs::pahkat::Target<&'a [u8]>>>> {
+) -> fbs::WIPOffset<fbs::Vector<'a, fbs::WIPOffset<crate::fbs::pahkat::Target<&'a [u8]>>>> {
     let targets = targets
         .iter()
         .map(|target| {
@@ -267,7 +267,7 @@ fn create_targets<'d, 'a>(
 
             let arch = target.arch.as_ref().map(|x| builder.create_string(&x));
 
-            use crate::fbs::pahkat::butte_gen::PayloadType;
+            use crate::fbs::pahkat::fbs_gen::PayloadType;
             use pahkat_types::payload::Payload;
 
             let (payload_type, payload) = match &target.payload {
@@ -300,19 +300,19 @@ fn create_targets<'d, 'a>(
         .collect::<Vec<_>>();
 
     let len = targets.len();
-    builder.start_vector::<butte::WIPOffset<crate::fbs::pahkat::Target<&'_ [u8]>>>(len);
+    builder.start_vector::<fbs::WIPOffset<crate::fbs::pahkat::Target<&'_ [u8]>>>(len);
     for target in targets.into_iter().rev() {
         builder.push(target);
     }
-    builder.end_vector::<butte::WIPOffset<crate::fbs::pahkat::Target<&'_ [u8]>>>(len)
+    builder.end_vector::<fbs::WIPOffset<crate::fbs::pahkat::Target<&'_ [u8]>>>(len)
 }
 
 fn create_releases<'d, 'a>(
     releases: &'d Vec<pahkat_types::package::Release>,
-    release_keys: &mut std::collections::HashMap<String, butte::WIPOffset<&'a str>>,
-    str_keys: &mut std::collections::HashMap<&'d str, butte::WIPOffset<&'a str>>,
+    release_keys: &mut std::collections::HashMap<String, fbs::WIPOffset<&'a str>>,
+    str_keys: &mut std::collections::HashMap<&'d str, fbs::WIPOffset<&'a str>>,
     builder: &mut FlatBufferBuilder<'a>,
-) -> butte::WIPOffset<butte::Vector<'a, butte::WIPOffset<crate::fbs::pahkat::Release<&'a [u8]>>>> {
+) -> fbs::WIPOffset<fbs::Vector<'a, fbs::WIPOffset<crate::fbs::pahkat::Release<&'a [u8]>>>> {
     let releases = releases
         .iter()
         .map(|release| {
@@ -374,11 +374,11 @@ fn create_releases<'d, 'a>(
         .collect::<Vec<_>>();
 
     let len = releases.len();
-    builder.start_vector::<butte::WIPOffset<crate::fbs::pahkat::Release<&'_ [u8]>>>(len);
+    builder.start_vector::<fbs::WIPOffset<crate::fbs::pahkat::Release<&'_ [u8]>>>(len);
     for release in releases.into_iter().rev() {
         builder.push(release);
     }
-    builder.end_vector::<butte::WIPOffset<crate::fbs::pahkat::Release<&'_ [u8]>>>(len)
+    builder.end_vector::<fbs::WIPOffset<crate::fbs::pahkat::Release<&'_ [u8]>>>(len)
 }
 
 fn build_index<'a>(
@@ -395,15 +395,15 @@ fn build_index<'a>(
         .map(|id| builder.create_string(id))
         .collect::<Vec<_>>();
 
-    builder.start_vector::<butte::WIPOffset<&'_ str>>(id_refs.len());
+    builder.start_vector::<fbs::WIPOffset<&'_ str>>(id_refs.len());
     for id in id_refs.iter().rev() {
         builder.push(id.clone());
     }
-    let packages_keys = Some(builder.end_vector::<butte::WIPOffset<&'_ str>>(id_refs.len()));
+    let packages_keys = Some(builder.end_vector::<fbs::WIPOffset<&'_ str>>(id_refs.len()));
 
     builder.start_vector::<u8>(id_refs.len());
     for _ in id_refs.iter().rev() {
-        builder.push(crate::fbs::pahkat::butte_gen::PackageType::Descriptor as u8);
+        builder.push(crate::fbs::pahkat::fbs_gen::PackageType::Descriptor as u8);
     }
     let packages_values_types = Some(builder.end_vector::<u8>(id_refs.len()));
 
@@ -430,11 +430,11 @@ fn build_index<'a>(
                     })
                     .collect::<Vec<_>>();
                 let len = tags.len();
-                builder.start_vector::<butte::WIPOffset<&'_ str>>(len);
+                builder.start_vector::<fbs::WIPOffset<&'_ str>>(len);
                 for tag_ref in tags.into_iter().rev() {
                     builder.push(tag_ref);
                 }
-                Some(builder.end_vector::<butte::WIPOffset<&'_ str>>(len))
+                Some(builder.end_vector::<fbs::WIPOffset<&'_ str>>(len))
             };
 
             let (name_keys, name_values) =
@@ -459,12 +459,12 @@ fn build_index<'a>(
         .collect::<Vec<_>>();
 
     builder
-        .start_vector::<butte::WIPOffset<crate::fbs::pahkat::Descriptor<&'_ [u8]>>>(id_refs.len());
+        .start_vector::<fbs::WIPOffset<crate::fbs::pahkat::Descriptor<&'_ [u8]>>>(id_refs.len());
     for package_value in packages_values.into_iter().rev() {
         builder.push(package_value);
     }
     let packages_values = Some(
-        builder.end_vector::<butte::WIPOffset<crate::fbs::pahkat::Descriptor<&'_ [u8]>>>(
+        builder.end_vector::<fbs::WIPOffset<crate::fbs::pahkat::Descriptor<&'_ [u8]>>>(
             id_refs.len(),
         ),
     );
