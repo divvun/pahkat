@@ -386,7 +386,9 @@ impl PackageStore for PrefixPackageStore {
         let config = self.config().read().unwrap().clone();
         let repos = self.repos();
         Box::pin(async move {
+            log::trace!("Calling into refresh repos");
             let (result, errors) = crate::repo::refresh_repos(config).await;
+            log::trace!("Finished refresh repos: {:?}", &errors);
             *repos.write().unwrap() = result;
             if errors.is_empty() {
                 Ok(())

@@ -663,32 +663,36 @@ pub(crate) async fn refresh_repos(
                 acc
             });
 
-        workqueue::work(config, repo_keys, |url, queue, config| {
-            Box::pin(async move {
-                log::trace!("Downloading repo at {:?}…", &url);
-
-                let cache_dir = config.settings().repo_cache_dir();
-                let channel = config.repos().get(&url).and_then(|r| r.channel.clone());
-
-                match LoadedRepository::from_cache_or_url(url, channel, cache_dir).await {
-                    Ok(repo) => {
-                        for url in repo.info().repository.linked_repositories.iter() {
-                            log::trace!("Queuing linked repo: {:?}", &url);
-                            queue.push(url.clone());
-                            // recurse_repo(url.clone(), Arc::clone(&repos), Arc::clone(&config)).await?;
+        if repo_keys.is_empty() {
+            Default::default()
+        } else {
+            workqueue::work(config, repo_keys, |url, queue, config| {
+                Box::pin(async move {
+                    log::trace!("Downloading repo at {:?}…", &url);
+    
+                    let cache_dir = config.settings().repo_cache_dir();
+                    let channel = config.repos().get(&url).and_then(|r| r.channel.clone());
+    
+                    match LoadedRepository::from_cache_or_url(url, channel, cache_dir).await {
+                        Ok(repo) => {
+                            for url in repo.info().repository.linked_repositories.iter() {
+                                log::trace!("Queuing linked repo: {:?}", &url);
+                                queue.push(url.clone());
+                                // recurse_repo(url.clone(), Arc::clone(&repos), Arc::clone(&config)).await?;
+                            }
+    
+                            Ok(repo)
                         }
-
-                        Ok(repo)
+                        Err(e) => {
+                            log::error!("{:?}", e);
+                            Err(e)
+                        }
                     }
-                    Err(e) => {
-                        log::error!("{:?}", e);
-                        Err(e)
-                    }
-                }
+                })
             })
-        })
-        .await
-        .unwrap()
+            .await
+            .unwrap()
+        }
     };
 
     let mut res_map = HashMap::new();
@@ -706,6 +710,8 @@ pub(crate) async fn refresh_repos(
             }
         }
     }
+
+    log::trace!("Finished refreshing");
 
     (res_map, err_map)
 }

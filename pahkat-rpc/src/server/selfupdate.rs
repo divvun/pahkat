@@ -14,7 +14,6 @@ use pahkat_client::Config;
 pub const REPO: Lazy<RepoUrl> =
     Lazy::new(|| "https://pahkat.uit.no/divvun-installer/".parse().unwrap());
 pub const REPO_CHANNEL: Lazy<Option<&'static str>> = Lazy::new(|| {
-    
     let channel = option_env!("CHANNEL");
     match channel {
         Some(x) if x.trim() == "" => None,

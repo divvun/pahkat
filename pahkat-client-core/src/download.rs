@@ -102,8 +102,9 @@ impl DownloadManager {
 
         let tmp_dest_path = cache_dir.join(filename);
 
-        let file = fs::OpenOptions::new()
+        let mut file = fs::OpenOptions::new()
             .append(true)
+            .write(true)
             .open(&tmp_dest_path)
             .or_else(|_| fs::File::create(&tmp_dest_path))
             .map_err(|e| {
@@ -155,10 +156,15 @@ impl DownloadManager {
         log::debug!("Is partial: {}", is_partial);
 
         let total_bytes = if !is_partial {
-            file.set_len(0).map_err(|e| {
-                log::error!("error setting length of file: {:?}", &e);
-                DownloadError::SetFileLengthFailed(e, tmp_dest_path.to_path_buf())
+            std::fs::remove_file(&tmp_dest_path).map_err(|e| {
+                log::error!("error removing temp file: {:?}", &e);
+                DownloadError::TempFileDeleteFailed(e, tmp_dest_path.to_path_buf())
             })?;
+            file = fs::File::create(&tmp_dest_path)
+                .map_err(|e| {
+                    log::error!("{:?}", &e);
+                    DownloadError::TempFileOpenFailed(e, tmp_dest_path.to_path_buf())
+                })?;
             content_len
         } else if content_len > 0 {
             content_len + downloaded_bytes
@@ -255,8 +261,8 @@ pub enum DownloadError {
     #[error("Failed to get metadata for file at path: {}", .1.display())]
     MetadataFailed(#[source] std::io::Error, PathBuf),
 
-    #[error("Could not truncate file length at path: {}", .1.display())]
-    SetFileLengthFailed(#[source] std::io::Error, PathBuf),
+    #[error("Could not delete temporary file at path: {}", .1.display())]
+    TempFileDeleteFailed(#[source] std::io::Error, PathBuf),
 
     #[error("Could not create temporary directory at path: {}", .1.display())]
     TempDirCreateFailed(#[source] std::io::Error, PathBuf),

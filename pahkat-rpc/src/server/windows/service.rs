@@ -155,19 +155,21 @@ define_windows_service!(ffi_service_main, service_main);
 fn service_main(_: Vec<OsString>) {
     use log::Log;
     use tokio::runtime::Runtime;
-    
+
     eventlog::register("Pahkat Service").unwrap_or(());
     let eventlog = eventlog::EventLog::new("Pahkat Service", log::Level::Trace);
     if let Ok(x) = &eventlog {
-        x.log(&log::RecordBuilder::new()
-            .args(format_args!("Starting Pahkat Service"))
-            .level(log::Level::Info)
-            .build());
+        x.log(
+            &log::RecordBuilder::new()
+                .args(format_args!("Starting Pahkat Service"))
+                .level(log::Level::Info)
+                .build(),
+        );
     }
     std::panic::set_hook(Box::new(move |panic_info| {
         let eventlog = match &eventlog {
             Ok(v) => v,
-            Err(_) => return
+            Err(_) => return,
         };
 
         let args = if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
@@ -176,10 +178,12 @@ fn service_main(_: Vec<OsString>) {
             format!("panic occurred")
         };
 
-        eventlog.log(&log::RecordBuilder::new()
-            .args(format_args!("{}", args))
-            .level(log::Level::Error)
-            .build());
+        eventlog.log(
+            &log::RecordBuilder::new()
+                .args(format_args!("{}", args))
+                .level(log::Level::Error)
+                .build(),
+        );
     }));
 
     crate::server::setup_logger("service").unwrap_or(());

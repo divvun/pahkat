@@ -111,7 +111,6 @@ pub async fn run() -> anyhow::Result<()> {
             let result = response.into_inner();
 
             println!("Response: {:?}", &result);
-
         }
         // Command::RepoIndexes(_) => {
         //     let request = Request::new(pb::RepositoryIndexesRequest {});
@@ -159,13 +158,12 @@ pub async fn run() -> anyhow::Result<()> {
             while let Ok(Some(message)) = stream.message().await {
                 println!("{:?}", message);
             }
-        }
-        // Command::Strings(StringsCommand { language }) => {
-        //     let request = Request::new(pb::StringsRequest { language });
+        } // Command::Strings(StringsCommand { language }) => {
+          //     let request = Request::new(pb::StringsRequest { language });
 
-        //     let response = client.strings(request).await?;
-        //     println!("{:?}", response);
-        // }
+          //     let response = client.strings(request).await?;
+          //     println!("{:?}", response);
+          // }
     }
     Ok(())
 }
@@ -215,9 +213,7 @@ where
 
     unsafe fn from_foreign(ptr: cffi::Slice<u8>) -> Result<T, Self::Error> {
         let json_str =
-            <cffi::StrMarshaler<'a> as FromForeign<cffi::Slice<u8>, &'a str>>::from_foreign(
-                ptr,
-            )?;
+            <cffi::StrMarshaler<'a> as FromForeign<cffi::Slice<u8>, &'a str>>::from_foreign(ptr)?;
         log::debug!("JSON: {}, type: {}", &json_str, std::any::type_name::<T>());
 
         let v: Result<T, _> = serde_json::from_str(&json_str);
