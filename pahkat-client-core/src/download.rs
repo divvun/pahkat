@@ -102,28 +102,29 @@ impl DownloadManager {
 
         let tmp_dest_path = cache_dir.join(filename);
 
-        let mut file = fs::OpenOptions::new()
-            .append(true)
-            .write(true)
-            .open(&tmp_dest_path)
-            .or_else(|_| fs::File::create(&tmp_dest_path))
+        // let mut file = fs::OpenOptions::new()
+        //     .append(true)
+        //     .write(true)
+        //     .open(&tmp_dest_path)
+        //     .or_else(|_| )
+        let file = fs::File::create(&tmp_dest_path)
             .map_err(|e| {
-                log::error!("{:?}", &e);
+                log::error!("Open temp file failed: {:?}", &e);
                 DownloadError::TempFileOpenFailed(e, tmp_dest_path.to_path_buf())
             })?;
-        let meta = file.metadata().map_err(|e| {
-            log::error!("metadata error: {:?}", &e);
-            DownloadError::MetadataFailed(e, tmp_dest_path.to_path_buf())
-        })?;
+        // let meta = file.metadata().map_err(|e| {
+        //     log::error!("metadata error: {:?}", &e);
+        //     DownloadError::MetadataFailed(e, tmp_dest_path.to_path_buf())
+        // })?;
 
-        let mut downloaded_bytes = meta.len();
-        log::debug!("Downloaded bytes: {}", downloaded_bytes);
+        // let mut downloaded_bytes = meta.len();
+        // log::debug!("Downloaded bytes: {}", downloaded_bytes);
 
         let client = &self.client;
-        let mut req = client.get(url.as_str());
-        if downloaded_bytes > 0 {
-            req = req.header(header::RANGE, format!("bytes={}-", downloaded_bytes));
-        }
+        let req = client.get(url.as_str());
+        // if downloaded_bytes > 0 {
+        //     req = req.header(header::RANGE, format!("bytes={}-", downloaded_bytes));
+        // }
 
         let req = req
             .build()
@@ -152,29 +153,31 @@ impl DownloadManager {
         log::debug!("Content length: {}", content_len);
 
         // Check if range request was accepted!
-        let is_partial = res.headers().get(header::CONTENT_RANGE).is_some();
-        log::debug!("Is partial: {}", is_partial);
+        // let is_partial = res.headers().get(header::CONTENT_RANGE).is_some();
+        // log::debug!("Is partial: {}", is_partial);
 
-        let total_bytes = if !is_partial {
-            std::fs::remove_file(&tmp_dest_path).map_err(|e| {
-                log::error!("error removing temp file: {:?}", &e);
-                DownloadError::TempFileDeleteFailed(e, tmp_dest_path.to_path_buf())
-            })?;
-            file = fs::File::create(&tmp_dest_path)
-                .map_err(|e| {
-                    log::error!("{:?}", &e);
-                    DownloadError::TempFileOpenFailed(e, tmp_dest_path.to_path_buf())
-                })?;
-            content_len
-        } else if content_len > 0 {
-            content_len + downloaded_bytes
-        } else {
-            // If no content len, having downloaded bytes doesn't mean we have a known total...
-            0
-        };
+        // let total_bytes = if !is_partial {
+        //     std::fs::remove_file(&tmp_dest_path).map_err(|e| {
+        //         log::error!("error removing temp file: {:?}", &e);
+        //         DownloadError::TempFileDeleteFailed(e, tmp_dest_path.to_path_buf())
+        //     })?;
+        //     file = fs::File::create(&tmp_dest_path)
+        //         .map_err(|e| {
+        //             log::error!("{:?}", &e);
+        //             DownloadError::TempFileOpenFailed(e, tmp_dest_path.to_path_buf())
+        //         })?;
+        //     content_len
+        // } else if content_len > 0 {
+        //     content_len + downloaded_bytes
+        // } else {
+        //     // If no content len, having downloaded bytes doesn't mean we have a known total...
+        //     0
+        // };
 
-        log::debug!("Total bytes: {}", total_bytes);
+        // log::debug!("Total bytes: {}", total_bytes);
 
+        let total_bytes = content_len;
+        let mut downloaded_bytes = 0;
         let mut last_progress_event = std::time::Instant::now();
 
         let url = url.to_owned();
