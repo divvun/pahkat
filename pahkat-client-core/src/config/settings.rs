@@ -174,4 +174,34 @@ impl Settings {
     pub fn max_concurrent_downloads(&self) -> u8 {
         self.data.max_concurrent_downloads
     }
+
+    pub fn set_cache_dir(&mut self, cache_dir: ConfigPath) -> Result<(), FileError> {
+        self.data.cache_dir = cache_dir;
+
+        if self.permission == Permission::ReadWrite {
+            return self.data.save(&self.path);
+        }
+
+        Ok(())
+    }
+
+    pub fn set_tmp_dir(&mut self, tmp_dir: ConfigPath) -> Result<(), FileError> {
+        self.data.tmp_dir = tmp_dir;
+
+        if self.permission == Permission::ReadWrite {
+            return self.data.save(&self.path);
+        }
+
+        Ok(())
+    }
+
+    pub fn set_max_concurrent_downloads(&mut self, count: u8) -> Result<(), FileError> {
+        self.data.max_concurrent_downloads = count;
+
+        if self.permission == Permission::ReadWrite {
+            return self.data.save(&self.path);
+        }
+
+        Ok(())
+    }
 }
