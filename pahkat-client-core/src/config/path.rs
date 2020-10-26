@@ -1,5 +1,6 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::convert::TryFrom;
 
 use once_cell::sync::{Lazy, OnceCell};
 use serde::de::{self, Deserializer, Visitor};
@@ -30,6 +31,17 @@ impl ConfigPath {
 
     pub fn to_path_buf(&self) -> Result<PathBuf, pathos::iri::Error> {
         self.0.to_path_buf()
+    }
+}
+
+impl TryFrom<PathBuf> for ConfigPath {
+    type Error = ();
+
+    fn try_from(value: PathBuf) -> Result<Self, Self::Error> {
+        use pathos::path::absolute::AbsolutePathBufExt;
+
+        let iri = value.to_absolute_path_buf().map_err(|_| ())?.to_file_iri().map_err(|_| ())?;
+        Ok(ConfigPath(iri))
     }
 }
 
