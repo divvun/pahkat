@@ -82,7 +82,8 @@ impl PrefixPackageStore {
             .map_err(Error::InvalidPrefixPath)?;
         create_dir_all(&prefix_path.join("pkg")).map_err(Error::CreateDirFailed)?;
 
-        let config = Config::load(&prefix_path, crate::config::Permission::ReadWrite)?;
+        let (config, errors) = Config::load(&prefix_path, crate::config::Permission::ReadWrite);
+        // TODO: handle errors
 
         let db_file_path = PrefixPackageStore::package_db_path(&config);
         let manager = SqliteConnectionManager::file(&db_file_path);
@@ -110,7 +111,8 @@ impl PrefixPackageStore {
             .canonicalize()
             .map_err(Error::InvalidPrefixPath)?;
         log::debug!("{:?}", &prefix_path);
-        let config = Config::load(&prefix_path, crate::config::Permission::ReadWrite)?;
+        let (config, errors) = Config::load(&prefix_path, crate::config::Permission::ReadWrite);
+
 
         let db_file_path = PrefixPackageStore::package_db_path(&config);
         log::debug!("{:?}", &db_file_path);

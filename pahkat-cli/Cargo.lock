@@ -1246,9 +1246,9 @@ dependencies = [
 
 [[package]]
 name = "pathos"
-version = "0.2.0-pre.10"
+version = "0.3.0-pre.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d6ae7e9637a6785b927ab9cacc7a9985e292c95d940b22cf532924da0a57422"
+checksum = "3a622ae1fb6a5ac1fe52cf65d71dc9adb46471a17d2c034b88b7583781089ed4"
 dependencies = [
  "eieio",
  "home",

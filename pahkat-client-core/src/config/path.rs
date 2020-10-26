@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 use thiserror::Error;
 use url::Url;
+use pathos::iri::IriBufExt;
 
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub struct ConfigPath(pub(crate) iref::IriBuf);
@@ -27,52 +28,9 @@ impl ConfigPath {
         ConfigPath(iri)
     }
 
-    pub fn to_path_buf(&self) -> Option<PathBuf> {
-        pathos::user::iri::resolve(&self.0).ok()
+    pub fn to_path_buf(&self) -> Result<PathBuf, pathos::iri::Error> {
+        self.0.to_path_buf()
     }
-    // pub fn from_path<P: AsRef<Path>>(path: P) -> Result<ConfigPath, Error> {
-    //     Url::from_file_path(path)
-    //         .map(|url| ConfigPath::File(url))
-    //         .map_err(|_| Error::InvalidUrl)
-    // }
-
-    // pub fn from_url(url: Url) -> Result<ConfigPath, Error> {
-    //     match url.scheme() {
-    //         "file" => Ok(ConfigPath::File(url)),
-    //         "container" => Ok(ConfigPath::Container(url)),
-    //         scheme => Err(Error::InvalidScheme(scheme.to_string())),
-    //     }
-    // }
-
-    // fn container_to_file(&self) -> Option<Url> {
-    //     log::trace!("container_to_file: {:?}", self);
-    //     let url = match self {
-    //         ConfigPath::File(v) => return Some(v.to_owned()),
-    //         ConfigPath::Container(v) => v,
-    //     };
-
-    //     let container_path = match CONTAINER_PATH.get() {
-    //         Some(v) => v.join(
-    //             url.path_segments()
-    //                 .map(|x| x.collect::<Vec<_>>().join("/"))
-    //                 .unwrap_or("".into()),
-    //         ),
-    //         None => return None,
-    //     };
-
-    //     let url = Url::from_file_path(container_path);
-
-    //     log::trace!("url: {:?}", &url);
-
-    //     url.ok()
-    // }
-
-    // pub fn as_url(&self) -> &Url {
-    //     match self {
-    //         ConfigPath::File(url) => url,
-    //         ConfigPath::Container(url) => url,
-    //     }
-    // }
 }
 
 impl Serialize for ConfigPath {
@@ -108,6 +66,9 @@ impl<'de> Visitor<'de> for ConfigPathVisitor {
     {
         if value.starts_with("file:") || value.starts_with("container:") {
             let url = iref::IriBuf::new(value).map_err(|_| E::custom("Invalid URL"))?;
+            if value.starts_with("file:") {
+                url.to_path_buf().map_err(|_| E::custom("File path not absolute"))?;
+            }
             Ok(ConfigPath(url))
         } else {
             Err(E::custom("Invalid URL"))

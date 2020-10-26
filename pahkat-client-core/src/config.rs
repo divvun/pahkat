@@ -74,37 +74,57 @@ impl Config {
     #[cfg(not(target_os = "android"))]
     pub fn load_default() -> Result<Config, Error> {
         let path = defaults::config_path()?;
-        Self::load(path, Permission::ReadWrite)
+        Ok(Self::load(path, Permission::ReadWrite).0)
     }
 
-    pub fn load<P: AsRef<Path>>(path: P, permission: Permission) -> Result<Config, Error> {
+    pub fn load<P: AsRef<Path>>(path: P, permission: Permission) -> (Config, Vec<Error>) {
+        let mut errors = vec![];
+
         let config_path = path.as_ref();
 
         let settings_path = config_path.join("settings.toml");
 
         let settings = match Settings::load(&settings_path, permission) {
             Ok(v) => v,
-            Err(FileError::Read(_, _)) if permission != Permission::ReadOnly => {
-                Settings::create(&settings_path).map_err(Error::SettingsFile)?
+            Err(_) if permission != Permission::ReadOnly => {
+                match Settings::create(&settings_path).map_err(Error::SettingsFile) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        errors.push(e);
+                        Settings::read_only()
+                    }
+                }
             }
-            Err(e) => return Err(Error::SettingsFile(e)),
+            Err(e) => {
+                errors.push(Error::SettingsFile(e));
+                Settings::read_only()
+            },
         };
 
         let repos_path = config_path.join("repos.toml");
 
         let repos = match Repos::load(&repos_path, permission) {
             Ok(v) => v,
-            Err(FileError::Read(_, _)) if permission != Permission::ReadOnly => {
-                Repos::create(&repos_path).map_err(Error::ReposFile)?
+            Err(_) if permission != Permission::ReadOnly => {
+                match Repos::create(&repos_path).map_err(Error::ReposFile) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        errors.push(e);
+                        Repos::read_only()
+                    }
+                }
             }
-            Err(e) => return Err(Error::ReposFile(e)),
+            Err(e) => {
+                errors.push(Error::ReposFile(e));
+                Repos::read_only()
+            },
         };
 
         let config = Config { repos, settings };
 
         log::trace!("Config loaded: {:#?}", &config);
 
-        Ok(config)
+        (config, errors)
     }
 
     pub fn new(settings: Settings, repos: Repos) -> Config {
