@@ -1,11 +1,7 @@
 name: pahkat-prefix-cli
 
 on:
-  push:
-    branches:
-      - master
-      - develop
-      - release
+  push: {}
 
 env:
   RUST_VERSION: stable
