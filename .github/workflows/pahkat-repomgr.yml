@@ -1,192 +1,195 @@
 name: pahkat-repomgr
+
 on:
-  push:
-    branches:
-      - master
-      - develop
-      - release
-  repository_dispatch:
-    types: release
+  push: {}
 
 env:
   RUST_VERSION: stable
-
   CARGO_INCREMENTAL: 0
   RUSTUP_MAX_RETRIES: 10
   CARGO_NET_RETRY: 10
   RUST_BACKTRACE: full
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macOS-latest]
-
+  build-windows:
+    runs-on: windows-latest
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
-
-    - name: Install Rust toolchain on Linux
-      if: startsWith(matrix.os, 'ubuntu')
+    - name: Setup Divvun CI
+      uses: divvun/actions/setup@master
+      with:
+        key: ${{ secrets.DIVVUN_KEY }}
+    - name: Get version
+      id: version
+      uses: divvun/actions/version@master
+      with:
+        cargo: pahkat-repomgr/Cargo.toml
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Install build dependencies
+      uses: divvun/actions/pahkat/init@master
+      with:
+        repo: https://pahkat.uit.no/devtools/
+        channel: nightly
+        packages: pahkat-uploader
+    - name: Install Rust toolchain
       uses: actions-rs/toolchain@v1
       with:
-        toolchain: ${{ env.RUST_VERSION }}
-        target: x86_64-unknown-linux-musl
+        toolchain: stable
         profile: minimal
         override: true
-        components: clippy, rustfmt
-    - name: Install Rust toolchain on macOS
-      if: startsWith(matrix.os, 'macos')
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: ${{ env.RUST_VERSION }}
-        profile: minimal
-        override: true
-        components: clippy, rustfmt
-    - name: Install Rust toolchain on Windows
-      if: startsWith(matrix.os, 'windows')
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: ${{ env.RUST_VERSION }}
-        profile: minimal
-        override: true
-        components: clippy, rustfmt
-
-    - name: Did this work
+        components: rustfmt
+        target: i686-pc-windows-msvc
+    - name: Build pahkat-repomgr
       run: |
-        rustc --version --verbose
-
-    - name: Ensure rustup is used
-      if: "!startsWith(matrix.os, 'windows')"
-      run: |
-        source $HOME/.cargo/env
-
-    - name: Install MUSL tooling on Linux
-      if: startsWith(matrix.os, 'ubuntu')
-      run: |
-        sudo apt install -y musl musl-tools
-    - name: Uninstall system libyaml on macOS
-      if: startsWith(matrix.os, 'macos')
-      run: |
-        brew uninstall --ignore-dependencies libyaml
-
-    - name: Cache cargo registry
-      uses: actions/cache@v1
-      with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-    - name: Cache cargo index
-      uses: actions/cache@v1
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-    - name: Cache cargo bin dir
-      uses: actions/cache@v1
-      with:
-        path: ~/.cargo/bin
-        key: ${{ runner.os }}-cargo-bin-${{ env.RUST_VERSION }}
-    - name: Cache cargo target dir
-      uses: actions/cache@v1
-      with:
-        path: target
-        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-
-    - name: Update
-      uses: actions-rs/cargo@v1
-      with:
-        command: update
-        
-    - name: Build
-      uses: actions-rs/cargo@v1
+        cd pahkat-repomgr
+        cargo check
+        cargo build --release --target i686-pc-windows-msvc
+        cd ..
       env:
         RUSTC_BOOTSTRAP: 1
+    - name: Create dist
+      run: |
+        mkdir -p dist/bin
+        mv target/i686-pc-windows-msvc/release/repomgr.exe dist/bin/repomgr.exe
+    - name: Sign code
+      uses: divvun/actions/codesign@master
       with:
-        command: build
-        args: --bin repomgr --release
-        toolchain: ${{ env.RUST_VERSION }}
-
-    - name: collect artifact on Linux
-      if: startsWith(matrix.os, 'ubuntu')
-      run: |
-        mkdir -pv dist
-        cp target/release/repomgr dist/pahkat-repomgr
-        cd dist
-        strip pahkat-repomgr
-        tar -caf repomgr.tar.xz pahkat-repomgr
-    - name: collect artifact on macOS
-      if: startsWith(matrix.os, 'macos')
-      run: |
-        mkdir -pv dist
-        cp target/release/repomgr dist/pahkat-repomgr
-        cd dist
-        strip pahkat-repomgr
-        tar -caf repomgr.tar.xz pahkat-repomgr
-    - name: collect artifact on Windows
-      if: startsWith(matrix.os, 'windows')
-      run: |
-        mkdir dist
-        cp target\release\repomgr.exe dist\pahkat-repomgr.exe
-        cd dist
-    - uses: actions/upload-artifact@v1
+        path: dist/bin/repomgr.exe
+    - name: Create tarball package
+      id: installer
+      uses: divvun/actions/create-txz@master
       with:
-        name: repomgr-${{ matrix.os }}
         path: dist
-  release:
-    needs: build
+    - name: Deploy
+      uses: divvun/actions/deploy@master
+      with:
+        package-id: pahkat-repomgr
+        type: TarballPackage
+        platform: windows
+        arch: i686
+        version: ${{ steps.version.outputs.version }}
+        payload-path: ${{ steps.installer.outputs['txz-path'] }}
+        repo: https://pahkat.thetc.se/devtools/
+        channel: ${{ steps.version.outputs.channel }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  build-macos:
+    runs-on: macOS-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+    - name: Setup Divvun CI
+      uses: divvun/actions/setup@master
+      with:
+        key: ${{ secrets.DIVVUN_KEY }}
+    - name: Get version
+      id: version
+      uses: divvun/actions/version@master
+      with:
+        cargo: pahkat-repomgr/Cargo.toml
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Install build dependencies
+      uses: divvun/actions/pahkat/init@master
+      with:
+        repo: https://pahkat.uit.no/devtools/
+        channel: nightly
+        packages: pahkat-uploader
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        profile: minimal
+        components: rustfmt
+        override: true
+    - name: Build pahkat-repomgr
+      run: |
+        cd pahkat-repomgr
+        cargo check
+        cargo build --release
+        cd ..
+    - name: Create dist
+      run: |
+        strip target/release/repomgr
+        mkdir -p dist/bin
+        mv target/release/repomgr dist/bin/repomgr
+    - name: Sign code
+      uses: divvun/actions/codesign@master
+      with:
+        path: dist/bin/repomgr
+    - name: Create tarball package
+      id: installer
+      uses: divvun/actions/create-txz@master
+      with:
+        path: dist
+    - name: Deploy
+      uses: divvun/actions/deploy@master
+      with:
+        package-id: pahkat-repomgr
+        type: TarballPackage
+        platform: macos
+        arch: x86_64
+        version: ${{ steps.version.outputs.version }}
+        payload-path: ${{ steps.installer.outputs['txz-path'] }}
+        repo: https://pahkat.thetc.se/devtools/
+        channel: ${{ steps.version.outputs.channel }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  build-linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
-      - name: Get Package Version
-        run: echo ::set-env name=PACKAGE_VERSION::$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | select(.name == "pahkat-repomgr") | .version')
-      - name: Download Linux Binary
-        uses: actions/download-artifact@v1
-        with:
-          name: repomgr-ubuntu-latest
-      - name: Download Windows Binary
-        uses: actions/download-artifact@v1
-        with:
-          name: repomgr-windows-latest
-      - name: Download macOS Binary
-        uses: actions/download-artifact@v1
-        with:
-          name: repomgr-macOS-latest
-
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ format('v{0}', env.PACKAGE_VERSION) }}
-          release_name: repomgr ${{ env.PACKAGE_VERSION }}
-          draft: true
-
-      - name: Upload artifact Linux
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./repomgr-ubuntu-latest/repomgr.tar.xz
-          asset_name: pahkat_repomgr_${{ env.PACKAGE_VERSION }}_linux_amd64.tar.xz
-          asset_content_type: application/octet-stream
-      - name: Upload artifact Windows
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./repomgr-windows-latest/pahkat-repomgr.exe
-          asset_name: pahkat-repomgr${{ env.PACKAGE_VERSION }}_windows_amd64.exe
-          asset_content_type: application/octet-stream
-      - name: Upload artifact macOS
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./repomgr-macOS-latest/repomgr.tar.xz
-          asset_name: pahkat_repomgr_${{ env.PACKAGE_VERSION }}_macos_amd64.tar.xz
-          asset_content_type: application/octet-stream
+    - name: Checkout repository
+      uses: actions/checkout@v2
+    - name: Setup Divvun CI
+      uses: divvun/actions/setup@master
+      with:
+        key: ${{ secrets.DIVVUN_KEY }}
+    - name: Get version
+      id: version
+      uses: divvun/actions/version@master
+      with:
+        cargo: pahkat-repomgr/Cargo.toml
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Install musl libs and tools
+      run: |
+        sudo apt install -y musl musl-tools
+    - name: Install build dependencies
+      uses: divvun/actions/pahkat/init@master
+      with:
+        repo: https://pahkat.uit.no/devtools/
+        channel: nightly
+        packages: pahkat-uploader
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        target: x86_64-unknown-linux-musl
+        profile: minimal
+        components: rustfmt
+        override: true
+    - name: Build pahkat-repomgr
+      run: |
+        cd pahkat-repomgr
+        cargo check
+        cargo build --release
+        cd ..
+    - name: Create dist
+      run: |
+        strip target/release/repomgr
+        mkdir -p dist/bin
+        mv target/release/repomgr dist/bin/repomgr
+    - name: Create tarball package
+      id: installer
+      uses: divvun/actions/create-txz@master
+      with:
+        path: dist
+    - name: Deploy
+      uses: divvun/actions/deploy@master
+      with:
+        package-id: pahkat-repomgr
+        type: TarballPackage
+        platform: linux
+        arch: x86_64
+        version: ${{ steps.version.outputs.version }}
+        payload-path: ${{ steps.installer.outputs['txz-path'] }}
+        repo: https://pahkat.thetc.se/devtools/
+        channel: ${{ steps.version.outputs.channel }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
