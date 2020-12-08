@@ -291,16 +291,11 @@ impl pb::pahkat_server::Pahkat for Rpc {
             let mut requires_reboot = false;
 
             futures::pin_mut!(request);
-            let (escape_catch_tx, _) = tokio::sync::broadcast::channel(1);
+            let (notifier, mut transactions_complete) = futures::channel::mpsc::channel::<()>(0);
 
             'listener: loop {
-                let escape_catch_tx = escape_catch_tx.clone();
-                let mut rx = escape_catch_tx.subscribe();
-
-                let request = tokio::select! {
-                    request = request.message() => request,
-                    _ = rx.recv() => break 'listener
-                };
+                let notifier = notifier.clone();
+                let request = request.message().await;
 
                 let value = match request {
                     Ok(Some(v)) => match v.value {
@@ -311,7 +306,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
                         log::error!("{:?}", err);
                         return;
                     }
-                    Ok(None) => return,
+                    Ok(None) => break 'listener,
                 };
 
                 let request = match value {
@@ -529,15 +524,12 @@ impl pb::pahkat_server::Pahkat for Rpc {
                     log::trace!("Ending outer stream loop");
 
                     // HACK: this lets us escape the stream.
-                    match escape_catch_tx.send(()) {
-                        Ok(_) => {}
-                        Err(err) => {
-                            log::error!("{:?}", err);
-                        }
-                    }
+                    std::mem::drop(notifier);
                 });
             }
 
+            std::mem::drop(notifier);
+            transactions_complete.next().await;
             let _ = notifications.send(Notification::TransactionUnlocked);
 
             if requires_reboot {
