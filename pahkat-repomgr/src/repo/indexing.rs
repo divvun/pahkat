@@ -84,13 +84,13 @@ impl<'a> crate::Request for Request<'a> {
 fn vectorize_strings<'a>(
     keys: Vec<fbs::WIPOffset<&'a str>>,
     builder: &mut FlatBufferBuilder<'a>,
-) -> fbs::WIPOffset<fbs::Vector<'a, fbs::WIPOffset<&'a str>>> {
+) -> fbs::WIPOffset<fbs::Vector<'a, fbs::ForwardsUOffset<&'a str>>> {
     let len = keys.len();
-    builder.start_vector::<fbs::WIPOffset<&'_ str>>(len);
+    builder.start_vector::<fbs::ForwardsUOffset<&'_ str>>(len);
     for key in keys.into_iter().rev() {
         builder.push(key);
     }
-    builder.end_vector::<fbs::WIPOffset<&'_ str>>(len)
+    builder.end_vector(len)
 }
 
 fn vectorize_lang_map<'a, 'd>(
@@ -98,8 +98,8 @@ fn vectorize_lang_map<'a, 'd>(
     lang_keys: &mut std::collections::HashMap<&'d str, fbs::WIPOffset<&'a str>>,
     builder: &mut FlatBufferBuilder<'a>,
 ) -> (
-    Option<fbs::WIPOffset<fbs::Vector<'a, fbs::WIPOffset<&'a str>>>>,
-    Option<fbs::WIPOffset<fbs::Vector<'a, fbs::WIPOffset<&'a str>>>>,
+    Option<fbs::WIPOffset<fbs::Vector<'a, fbs::ForwardsUOffset<&'a str>>>>,
+    Option<fbs::WIPOffset<fbs::Vector<'a, fbs::ForwardsUOffset<&'a str>>>>,
 ) {
     let (name_keys, name_values): (Vec<_>, Vec<_>) = lang_map
         .iter()
@@ -239,7 +239,7 @@ fn create_payload_tarball_pkg<'a>(
 fn create_targets<'d, 'a>(
     targets: &'d Vec<pahkat_types::payload::Target>,
     builder: &mut FlatBufferBuilder<'a>,
-) -> fbs::WIPOffset<fbs::Vector<'a, fbs::WIPOffset<crate::fbs::pahkat::Target<&'a [u8]>>>> {
+) -> fbs::WIPOffset<fbs::Vector<'a, fbs::ForwardsUOffset<crate::fbs::pahkat::Target<&'a [u8]>>>> {
     let targets = targets
         .iter()
         .map(|target| {
@@ -300,11 +300,11 @@ fn create_targets<'d, 'a>(
         .collect::<Vec<_>>();
 
     let len = targets.len();
-    builder.start_vector::<fbs::WIPOffset<crate::fbs::pahkat::Target<&'_ [u8]>>>(len);
+    builder.start_vector::<fbs::ForwardsUOffset<crate::fbs::pahkat::Target<&'_ [u8]>>>(len);
     for target in targets.into_iter().rev() {
         builder.push(target);
     }
-    builder.end_vector::<fbs::WIPOffset<crate::fbs::pahkat::Target<&'_ [u8]>>>(len)
+    builder.end_vector(len)
 }
 
 fn create_releases<'d, 'a>(
@@ -312,7 +312,7 @@ fn create_releases<'d, 'a>(
     release_keys: &mut std::collections::HashMap<String, fbs::WIPOffset<&'a str>>,
     str_keys: &mut std::collections::HashMap<&'d str, fbs::WIPOffset<&'a str>>,
     builder: &mut FlatBufferBuilder<'a>,
-) -> fbs::WIPOffset<fbs::Vector<'a, fbs::WIPOffset<crate::fbs::pahkat::Release<&'a [u8]>>>> {
+) -> fbs::WIPOffset<fbs::Vector<'a, fbs::ForwardsUOffset<crate::fbs::pahkat::Release<&'a [u8]>>>> {
     let releases = releases
         .iter()
         .map(|release| {
@@ -374,11 +374,11 @@ fn create_releases<'d, 'a>(
         .collect::<Vec<_>>();
 
     let len = releases.len();
-    builder.start_vector::<fbs::WIPOffset<crate::fbs::pahkat::Release<&'_ [u8]>>>(len);
+    builder.start_vector::<fbs::ForwardsUOffset<crate::fbs::pahkat::Release<&'_ [u8]>>>(len);
     for release in releases.into_iter().rev() {
         builder.push(release);
     }
-    builder.end_vector::<fbs::WIPOffset<crate::fbs::pahkat::Release<&'_ [u8]>>>(len)
+    builder.end_vector(len)
 }
 
 fn build_index<'a>(
@@ -395,11 +395,11 @@ fn build_index<'a>(
         .map(|id| builder.create_string(id))
         .collect::<Vec<_>>();
 
-    builder.start_vector::<fbs::WIPOffset<&'_ str>>(id_refs.len());
+    builder.start_vector::<fbs::ForwardsUOffset<&'_ str>>(id_refs.len());
     for id in id_refs.iter().rev() {
         builder.push(id.clone());
     }
-    let packages_keys = Some(builder.end_vector::<fbs::WIPOffset<&'_ str>>(id_refs.len()));
+    let packages_keys = Some(builder.end_vector(id_refs.len()));
 
     builder.start_vector::<u8>(id_refs.len());
     for _ in id_refs.iter().rev() {
@@ -430,11 +430,11 @@ fn build_index<'a>(
                     })
                     .collect::<Vec<_>>();
                 let len = tags.len();
-                builder.start_vector::<fbs::WIPOffset<&'_ str>>(len);
+                builder.start_vector::<fbs::ForwardsUOffset<&'_ str>>(len);
                 for tag_ref in tags.into_iter().rev() {
                     builder.push(tag_ref);
                 }
-                Some(builder.end_vector::<fbs::WIPOffset<&'_ str>>(len))
+                Some(builder.end_vector(len))
             };
 
             let (name_keys, name_values) =
@@ -459,12 +459,12 @@ fn build_index<'a>(
         .collect::<Vec<_>>();
 
     builder
-        .start_vector::<fbs::WIPOffset<crate::fbs::pahkat::Descriptor<&'_ [u8]>>>(id_refs.len());
+        .start_vector::<fbs::ForwardsUOffset<crate::fbs::pahkat::Descriptor<&'_ [u8]>>>(id_refs.len());
     for package_value in packages_values.into_iter().rev() {
         builder.push(package_value);
     }
     let packages_values = Some(
-        builder.end_vector::<fbs::WIPOffset<crate::fbs::pahkat::Descriptor<&'_ [u8]>>>(
+        builder.end_vector(
             id_refs.len(),
         ),
     );
