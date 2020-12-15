@@ -28,6 +28,7 @@ use tokio_named_pipe::{NamedPipeListener, NamedPipeStream};
 use tonic::transport::server::Connected;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
 use url::Url;
+use task_collection::{GlobalTokio02Spawner, TaskCollection};
 
 mod pb {
     tonic::include_proto!("/pahkat");
@@ -291,10 +292,9 @@ impl pb::pahkat_server::Pahkat for Rpc {
             let mut requires_reboot = false;
 
             futures::pin_mut!(request);
-            let (notifier, mut transactions_complete) = futures::channel::mpsc::channel::<()>(0);
+            let collection = TaskCollection::new(GlobalTokio02Spawner);
 
             'listener: loop {
-                let notifier = notifier.clone();
                 let request = request.message().await;
 
                 let value = match request {
@@ -363,7 +363,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
                 let tx = tx.clone();
                 let notifications = notifications.clone();
 
-                tokio::spawn(async move {
+                collection.spawn(async move {
                     // If there is a running transaction, we must block on this transaction and wait
 
                     let tx1 = tx.clone();
@@ -522,14 +522,10 @@ impl pb::pahkat_server::Pahkat for Rpc {
                     }
 
                     log::trace!("Ending outer stream loop");
-
-                    // HACK: this lets us escape the stream.
-                    std::mem::drop(notifier);
                 });
             }
 
-            std::mem::drop(notifier);
-            transactions_complete.next().await;
+            collection.await;
             let _ = notifications.send(Notification::TransactionUnlocked);
 
             if requires_reboot {
