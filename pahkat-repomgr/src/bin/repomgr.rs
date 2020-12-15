@@ -139,6 +139,7 @@ enum NukeCommand {
 #[derive(Debug, StructOpt)]
 enum NukePackageCommand {
     Releases(NukePackageReleasesCommand),
+    Nightlies(NukePackageNightliesCommand),
 }
 
 #[derive(Debug, StructOpt)]
@@ -150,6 +151,24 @@ impl NukePackageReleasesCommand {
     fn to_partial<'a>(&'a self) -> nuke::package::releases::PartialRequest<'a> {
         nuke::package::releases::PartialRequest::builder()
             .repo_path(self.repo_path.as_ref().map(|x| &**x))
+            .build()
+    }
+}
+
+#[derive(Debug, StructOpt)]
+struct NukePackageNightliesCommand {
+    #[structopt(short = "-r", long, parse(from_os_str))]
+    repo_path: Option<PathBuf>,
+
+    #[structopt(short = "-k", long)]
+    keep: Option<u32>
+}
+
+impl NukePackageNightliesCommand {
+    fn to_partial<'a>(&'a self) -> nuke::package::nightlies::PartialRequest<'a> {
+        nuke::package::nightlies::PartialRequest::builder()
+            .repo_path(self.repo_path.as_ref().map(|x| &**x))
+            .keep(self.keep)
             .build()
     }
 }
@@ -193,6 +212,10 @@ fn main() -> anyhow::Result<()> {
                     let req =
                         nuke::package::releases::Request::new_from_user_input(nuke.to_partial())?;
                     nuke::package::releases::nuke_releases(req)?;
+                },
+                NukePackageCommand::Nightlies(nuke) => {
+                    let req = nuke::package::nightlies::Request::new_from_user_input(nuke.to_partial())?;
+                    nuke::package::nightlies::nuke_nightlies(req)?;
                 }
             },
         },
