@@ -6,11 +6,10 @@ members = [
     "pahkat-rpc",
     "pahkat-client-core",
     "pahkat-repomgr",
-    #"pahkat-cli",
+    "pahkat-cli",
 ]
 
 exclude = [
     "pahkat-server",
     "pahkat-uploader",
-    "pahkat-cli",
 ]
