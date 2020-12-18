@@ -16,6 +16,8 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
+#[cfg(windows)]
+use std::os::windows::io::AsRawHandle;
 use tokio::io::{AsyncRead, AsyncWrite};
 #[cfg(unix)]
 use tokio::net::UnixListener;
@@ -29,9 +31,15 @@ use tonic::transport::server::Connected;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
 use url::Url;
 use task_collection::{GlobalTokio02Spawner, TaskCollection};
+use hyper::server::conn::Http;
+use tower::Service;
 
 mod pb {
     tonic::include_proto!("/pahkat");
+}
+
+tokio::task_local! {
+    static IS_ADMIN: bool;
 }
 
 impl From<RepoRecord> for pb::RepoRecord {
@@ -285,6 +293,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
         let notifications = self.notifications.clone();
 
         let (tx, rx) = mpsc::unbounded_channel();
+        let is_admin = IS_ADMIN.get();
         // Get messages
         tokio::spawn(async move {
             let mut has_requested = false;
@@ -365,12 +374,22 @@ impl pb::pahkat_server::Pahkat for Rpc {
 
                 collection.spawn(async move {
                     // If there is a running transaction, we must block on this transaction and wait
-
                     let tx1 = tx.clone();
                     let stream = async_stream::try_stream! {
                         let tx = tx1;
                         use pahkat_client::package_store::DownloadEvent;
                         use pb::transaction_response::*;
+
+                        #[cfg(windows)]
+                        for record in transaction.actions().iter() {
+                            let id = &record.action.id;
+                            if record.action.target == InstallTarget::System && !is_admin {
+                                yield pb::TransactionResponse {
+                                    value: Some(Value::VerificationFailed(VerificationFailed {}))
+                                };
+                                return;
+                            }
+                        }
 
                         log::debug!("Attempting to acquire transaction lock…");
                         let _guard = {
@@ -404,7 +423,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
                             if record.action.action != PackageActionType::Install {
                                 continue;
                             }
-
+                            
                             let id = record.action.id.clone();
                             let mut download = store.download(&record.action.id);
 
@@ -1057,7 +1076,7 @@ pub async fn start(
     log::debug!("Binding named pipe...");
     let mut endpoint = NamedPipeListener::bind(path, Some(config))?;
     // endpoint.set_security_attributes(SecurityAttributes::allow_everyone_create().unwrap());
-    let incoming = endpoint.incoming();
+    let mut incoming = endpoint.incoming();
 
     let store = store(config_path).await?;
     log::debug!("Created store.");
@@ -1081,13 +1100,47 @@ pub async fn start(
         requires_reboot: AtomicBool::new(false),
     };
 
-    Server::builder()
-        .add_service(pb::pahkat_server::PahkatServer::new(rpc))
-        .serve_with_incoming_shutdown(
-            incoming,
-            shutdown_handler(shutdown_rx, notifications, Arc::clone(&current_transaction)),
-        )
-        .await?;
+    let http = Http::new().http2_only(true).clone();
+    let svc = pb::pahkat_server::PahkatServer::new(rpc);
+
+    let (tx, mut rx, mut inner_rx) = server::watch::channel().await;
+
+    let shutdown_transaction = Arc::clone(&current_transaction);
+    let shutdown = async move {
+        shutdown_handler(shutdown_rx, notifications, shutdown_transaction).await;
+        tx.drain().await;
+    };
+
+    tokio::spawn(shutdown);
+
+    while let Some(Ok(conn)) = tokio::select! {next = incoming.next() => next, _ = inner_rx.recv() => None} {
+        let http = http.clone();
+        let svc = svc.clone();
+        let mut rx = rx.clone();
+        tokio::spawn(async move {
+            let svc = svc.clone();
+
+            // for the love of all that is holy don't use this handle for anything other than getting connection metadata.
+            let handle = server::windows::HandleHolder(conn.as_raw_handle());
+            let mut conn = http.serve_connection(
+                conn,
+                hyper::service::service_fn(move |req: hyper::Request<hyper::Body>| {
+                    let mut svc = svc.clone();
+                    let admin = match server::windows::is_connected_user_admin(handle) {
+                        Ok(val) => val,
+                        Err(err) => {
+                            log::error!("{:?}", err);
+                            false
+                        }
+                    };
+                    
+                    async move { IS_ADMIN.scope(admin, async move { svc.call(req).await }).await }
+                }),
+            );
+
+            rx.watch(conn, |conn| conn.graceful_shutdown()).await;
+        });
+    }
 
     log::info!("Shutdown complete!");
     Ok(())
