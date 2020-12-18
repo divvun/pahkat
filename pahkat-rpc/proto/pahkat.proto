@@ -99,7 +99,7 @@ message TransactionResponse {
         uint64 current = 2;
         uint64 total = 3;
     }
-    
+
     message DownloadComplete {
         string package_id = 1;
     }
@@ -107,11 +107,11 @@ message TransactionResponse {
     message InstallStarted {
         string package_id = 1;
     }
-    
+
     message UninstallStarted {
         string package_id = 1;
     }
-    
+
     message TransactionProgress {
         string package_id = 1;
         uint64 current = 2;
@@ -130,6 +130,8 @@ message TransactionResponse {
     }
     message TransactionQueued {
     }
+    message VerificationFailed {
+    }
 
     oneof value {
         TransactionStarted transaction_started = 1;
@@ -143,6 +145,8 @@ message TransactionResponse {
 
         InstallStarted install_started = 14;
         UninstallStarted uninstall_started = 16;
+
+        VerificationFailed verification_failed = 18;
     }
 }
 

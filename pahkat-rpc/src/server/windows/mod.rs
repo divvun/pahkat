@@ -1,12 +1,24 @@
 pub mod cli;
 pub mod service;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use std::fs::OpenOptions;
+use std::os::windows::io::AsRawHandle;
 use std::process::Command;
 use std::{
     path::{Path, PathBuf},
     time::Duration,
+};
+use std::os::windows::io::RawHandle;
+use winapi::um::namedpipeapi::ImpersonateNamedPipeClient;
+use winapi::um::securitybaseapi::RevertToSelf;
+use winapi::um::errhandlingapi::GetLastError;
+use windows_accesstoken::information::TokenElevation;
+use windows_accesstoken::AccessToken;
+use windows_accesstoken::TokenAccessLevel;
+use windows_accesstoken::{
+    information::{Groups, LinkedToken},
+    security::{GroupSidAttributes, SecurityIdentifier, WellKnownSid},
 };
 
 use pahkat_client::{
@@ -88,4 +100,59 @@ pub(crate) async fn self_update(
     }
 
     Ok(())
+}
+
+#[derive(Copy, Clone)]
+pub struct HandleHolder(pub RawHandle);
+
+unsafe impl Send for HandleHolder {}
+
+pub fn is_connected_user_admin(handle: HandleHolder) -> Result<bool> {
+    unsafe {
+        log::trace!("about to impersonate with handle {:?}", handle.0);
+        if ImpersonateNamedPipeClient(handle.0) == 0 {
+            bail!("Error Impersonating client: {}", GetLastError())
+        }
+    }
+
+    log::trace!("opening thread token");
+    let token = AccessToken::open_thread(true, TokenAccessLevel::Query)?;
+    
+    if is_admin_token(&token)? {
+        log::trace!("reverting to self");
+        unsafe { RevertToSelf(); }
+        return Ok(true);
+    }
+
+    if token.token_information::<TokenElevation>()? == Some(TokenElevation::Limited) {
+        log::trace!("getting linked token");
+
+        let token = token.token_information::<LinkedToken>()?;
+
+        if let Some(token) = token {
+            if is_admin_token(&token)? {
+                log::trace!("reverting to self");
+                unsafe { RevertToSelf(); }
+                return Ok(true);
+            }
+        }
+    }
+
+    unsafe { RevertToSelf(); }
+    Ok(false)
+}
+
+fn is_admin_token(token: &AccessToken) -> Result<bool, std::io::Error> {
+    let admin_sid = SecurityIdentifier::from_known(WellKnownSid::WinBuiltinAdministratorsSid)?;
+
+    log::trace!("getting token groups");
+    if let Some(groups) = token.token_information::<Groups>()? {
+        for group in groups {
+            if group.0 == admin_sid && group.1.contains(GroupSidAttributes::SE_GROUP_ENABLED) {
+                return Ok(true);
+            }
+        }
+    }
+
+    return Ok(false);
 }

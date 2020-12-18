@@ -1,4 +1,5 @@
 pub mod selfupdate;
+pub mod watch;
 #[cfg(windows)]
 pub mod windows;
 
