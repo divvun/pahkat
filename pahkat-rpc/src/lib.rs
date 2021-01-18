@@ -283,7 +283,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
         &self,
         request: Request<tonic::Streaming<pb::TransactionRequest>>,
     ) -> Result<Self::ProcessTransactionStream> {
-        let is_admin = request.metadata().contains_key("is-admin-auth");
+        let is_admin = request.has_admin_flag();
         let request = request.into_inner();
         let store: Arc<dyn PackageStore> = Arc::clone(&self.store as _);
         let current_transaction = Arc::clone(&self.current_transaction);
@@ -1124,7 +1124,7 @@ pub async fn start(
                     let mut svc = svc.clone();
                     match server::windows::is_connected_user_admin(handle) {
                         Ok(true) => {
-                            req.headers_mut().insert("is-admin-auth", hyper::header::HeaderValue::from_static("true"));
+                            req.add_admin_flag();
                         },
                         Ok(false) => {}
                         Err(err) => {
@@ -1202,5 +1202,33 @@ impl<T: AsyncRead + AsyncWrite + Unpin> AsyncWrite for StreamBox<T> {
 
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         Pin::new(&mut self.0).poll_shutdown(cx)
+    }
+}
+
+trait AdminCheck {
+    const FLAG: &'static str = "is-admin-path";
+
+    fn add_admin_flag(&mut self);
+
+    fn has_admin_flag(&self) -> bool;
+}
+
+impl<T> AdminCheck for hyper::Request<T> {
+    fn add_admin_flag(&mut self) {
+        self.headers_mut().insert(<Self as AdminCheck>::FLAG, hyper::header::HeaderValue::from_static("true"));
+    }
+
+    fn has_admin_flag(&self) -> bool {
+        self.headers().contains_key(<Self as AdminCheck>::FLAG)
+    }
+}
+
+impl<T> AdminCheck for Request<T> {
+    fn add_admin_flag(&mut self) {
+        self.metadata_mut().insert(<Self as AdminCheck>::FLAG, tonic::metadata::MetadataValue::from_static("true"));
+    }
+
+    fn has_admin_flag(&self) -> bool {
+        self.metadata().contains_key(<Self as AdminCheck>::FLAG)
     }
 }
