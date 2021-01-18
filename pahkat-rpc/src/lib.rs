@@ -38,10 +38,6 @@ mod pb {
     tonic::include_proto!("/pahkat");
 }
 
-tokio::task_local! {
-    static IS_ADMIN: bool;
-}
-
 impl From<RepoRecord> for pb::RepoRecord {
     fn from(repo: RepoRecord) -> pb::RepoRecord {
         pb::RepoRecord {
@@ -287,13 +283,13 @@ impl pb::pahkat_server::Pahkat for Rpc {
         &self,
         request: Request<tonic::Streaming<pb::TransactionRequest>>,
     ) -> Result<Self::ProcessTransactionStream> {
+        let is_admin = request.metadata().contains_key("is-admin-auth");
         let request = request.into_inner();
         let store: Arc<dyn PackageStore> = Arc::clone(&self.store as _);
         let current_transaction = Arc::clone(&self.current_transaction);
         let notifications = self.notifications.clone();
 
         let (tx, rx) = mpsc::unbounded_channel();
-        let is_admin = IS_ADMIN.get();
         // Get messages
         tokio::spawn(async move {
             let mut has_requested = false;
@@ -423,7 +419,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
                             if record.action.action != PackageActionType::Install {
                                 continue;
                             }
-                            
+
                             let id = record.action.id.clone();
                             let mut download = store.download(&record.action.id);
 
@@ -1124,17 +1120,20 @@ pub async fn start(
             let handle = server::windows::HandleHolder(conn.as_raw_handle());
             let mut conn = http.serve_connection(
                 conn,
-                hyper::service::service_fn(move |req: hyper::Request<hyper::Body>| {
+                hyper::service::service_fn(move |mut req: hyper::Request<hyper::Body>| {
                     let mut svc = svc.clone();
-                    let admin = match server::windows::is_connected_user_admin(handle) {
-                        Ok(val) => val,
+                    match server::windows::is_connected_user_admin(handle) {
+                        Ok(true) => {
+                            req.headers_mut().insert("is-admin-auth", hyper::header::HeaderValue::from_static("true"));
+                        },
+                        Ok(false) => {}
                         Err(err) => {
                             log::error!("{:?}", err);
-                            false
                         }
-                    };
+                    }
+
                     
-                    async move { IS_ADMIN.scope(admin, async move { svc.call(req).await }).await }
+                    svc.call(req)
                 }),
             );
 
