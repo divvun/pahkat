@@ -1076,7 +1076,8 @@ pub async fn start(
 
     let store = store(config_path).await?;
     log::debug!("Created store.");
-
+    
+    let skip_admin = store.config().read().unwrap().settings().skip_admin_verification();
     let current_transaction = Arc::new(tokio::sync::Mutex::new(()));
 
     // Notifications
@@ -1122,17 +1123,21 @@ pub async fn start(
                 conn,
                 hyper::service::service_fn(move |mut req: hyper::Request<hyper::Body>| {
                     let mut svc = svc.clone();
-                    match server::windows::is_connected_user_admin(handle) {
-                        Ok(true) => {
-                            req.add_admin_flag();
-                        },
-                        Ok(false) => {}
-                        Err(err) => {
-                            log::error!("{:?}", err);
+
+                    if !skip_admin {
+                        match server::windows::is_connected_user_admin(handle) {
+                            Ok(true) => {
+                                req.add_admin_flag();
+                            },
+                            Ok(false) => {}
+                            Err(err) => {
+                                log::error!("{:?}", err);
+                            }
                         }
+                    } else {
+                        req.add_admin_flag();
                     }
 
-                    
                     svc.call(req)
                 }),
             );
