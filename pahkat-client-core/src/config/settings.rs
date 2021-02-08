@@ -27,6 +27,8 @@ pub struct SettingsData {
     pub tmp_dir: ConfigPath,
     #[serde(default)]
     pub max_concurrent_downloads: u8,
+    #[serde(default)]
+    pub skip_admin_verification: bool,
 }
 
 impl Default for SettingsData {
@@ -35,6 +37,7 @@ impl Default for SettingsData {
             cache_dir: cache_dir_default(),
             tmp_dir: tmp_dir_default(),
             max_concurrent_downloads: 0,
+            skip_admin_verification: false,
         }
     }
 }
@@ -173,6 +176,10 @@ impl Settings {
 
     pub fn max_concurrent_downloads(&self) -> u8 {
         self.data.max_concurrent_downloads
+    }
+
+    pub fn skip_admin_verification(&self) -> bool {
+        self.data.skip_admin_verification
     }
 
     pub fn set_cache_dir(&mut self, cache_dir: ConfigPath) -> Result<(), FileError> {
