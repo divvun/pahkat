@@ -264,6 +264,38 @@ impl pb::pahkat_server::Pahkat for Rpc {
         }))
     }
 
+    async fn dependency_status(&self, request: Request<pb::StatusRequest>) -> Result<pb::DependencyStatusResponse> {
+        let request = request.into_inner();
+        let package_id = PackageKey::try_from(&*request.package_id)
+            .map_err(|e| Status::failed_precondition(format!("{}", e)))?;
+
+        let response = self.store.dependency_status(&package_id, Default::default());
+        
+        let response = match response {
+            Ok(response) => pb::DependencyStatusResponse {
+                value: Some(pb::dependency_status_response::Value::Status(
+                    pb::dependency_status_response::Status {
+                        statuses: response.into_iter().map(|item| (item.0.to_string(), match item.1 {
+                            PackageStatus::NotInstalled => 0,
+                            PackageStatus::UpToDate => 1,
+                            PackageStatus::RequiresUpdate => 2,
+                        })).collect(),
+                    }
+                ))
+            },
+            Err(e) => pb::DependencyStatusResponse {
+                value: Some(pb::dependency_status_response::Value::Error(
+                    pb::dependency_status_response::StatusError {
+                        package_id: e.package(),
+                        error: e.to_string(),
+                    }
+                ))
+            },
+        };
+
+        Ok(Response::new(response))
+    }
+
     async fn repository_indexes(
         &self,
         _request: Request<pb::RepositoryIndexesRequest>,

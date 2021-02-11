@@ -12,13 +12,13 @@ use registry::{Data, Hive, RegKey, Security};
 use url::Url;
 
 use crate::package_store::{ImportError, InstallTarget};
-use crate::repo::{PackageQuery, RepoDownloadError};
+use crate::repo::{PackageQuery, RepoDownloadError, PackageCandidateError};
 use crate::transaction::{
     install::InstallError, install::ProcessError, uninstall::UninstallError, PackageStatus,
-    PackageStatusError, ResolvedDescriptor, ResolvedPackageQuery,
+    PackageStatusError, ResolvedDescriptor, ResolvedPackageQuery, PackageDependencyStatusError,
 };
 use crate::Config;
-use crate::{repo::PayloadError, LoadedRepository, PackageKey, PackageStore};
+use crate::{repo::PayloadError, LoadedRepository, PackageKey, PackageStore, PackageActionType};
 use pahkat_types::{
     package::{Descriptor, Package},
     payload::windows,
@@ -255,6 +255,24 @@ impl PackageStore for WindowsPackageStore {
         };
 
         self.status_impl(key, &descriptor, &release.version, install_target)
+    }
+
+    fn dependency_status(
+        &self,
+        key: &PackageKey,
+        target: InstallTarget,
+    ) -> Result<Vec<(PackageKey, PackageStatus)>, PackageDependencyStatusError> {
+        crate::repo::resolve_package_set(self, &[(PackageActionType::Install, key.clone())], &[target])
+            .map(|dep| dep.into_iter().map(|dep| (dep.package_key, dep.status)).collect())
+            .map_err(|err| match err {
+                PackageCandidateError::Status(p, PackageStatusError::Payload(e)) => PackageDependencyStatusError::Payload(p, e),
+                PackageCandidateError::Status(p, PackageStatusError::WrongPayloadType) => PackageDependencyStatusError::WrongPayloadType(p),
+                PackageCandidateError::Status(p, PackageStatusError::ParsingVersion) => PackageDependencyStatusError::ParsingVersion(p),
+
+                PackageCandidateError::Payload(p, e) => PackageDependencyStatusError::Payload(p, e),
+                PackageCandidateError::UnresolvedId(id) => PackageDependencyStatusError::PackageNotFound(id),
+                PackageCandidateError::UninstallConflict(_) => unreachable!()
+            })
     }
 
     fn find_package_by_key(&self, key: &PackageKey) -> Option<Package> {

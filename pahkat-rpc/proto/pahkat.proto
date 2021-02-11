@@ -63,6 +63,22 @@ message StatusResponse {
     sint32 value = 1;
 }
 
+message DependencyStatusResponse {
+    message StatusError {
+        string package_id = 1;
+        string error = 2;
+
+    }
+    message Status {
+        map<string, sint32> statuses = 1;
+    }
+
+    oneof value {
+        StatusError error = 1;
+        Status status = 2;
+    }
+}
+
 message RepositoryIndexesRequest {}
 
 message RepositoryIndexesResponse {
@@ -216,6 +232,7 @@ service Pahkat {
 
     // Store
     rpc Status(StatusRequest) returns (StatusResponse) {}
+    rpc DependencyStatus(StatusRequest) returns (DependencyStatusResponse) {}
     rpc RepositoryIndexes(RepositoryIndexesRequest) returns (RepositoryIndexesResponse) {}
     rpc ProcessTransaction(stream TransactionRequest) returns (stream TransactionResponse) {}
     rpc Strings(StringsRequest) returns (StringsResponse) {}

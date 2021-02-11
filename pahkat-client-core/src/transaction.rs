@@ -114,6 +114,32 @@ pub enum PackageStatusError {
     ParsingVersion,
 }
 
+#[derive(Debug, thiserror::Error, Clone)]
+pub enum PackageDependencyStatusError {
+    #[error("Payload error")]
+    Payload(PackageKey, #[source] crate::repo::PayloadError),
+
+    #[error("Wrong payload type")]
+    WrongPayloadType(PackageKey),
+
+    #[error("Error parsing version")]
+    ParsingVersion(PackageKey),
+
+    #[error("Package not found: {0}")]
+    PackageNotFound(String),
+}
+
+impl PackageDependencyStatusError {
+    pub fn package(&self) -> String {
+        match self {
+            PackageDependencyStatusError::Payload(p, _) => p.to_string(),
+            PackageDependencyStatusError::WrongPayloadType(p) => p.to_string(),
+            PackageDependencyStatusError::ParsingVersion(p) => p.to_string(),
+            PackageDependencyStatusError::PackageNotFound(p) => p.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum PackageDependencyError {
     #[error("Package not found: {0}")]
