@@ -19,7 +19,7 @@ use url::Url;
 use crate::config::Config;
 use crate::repo::{PackageQuery, RepoDownloadError};
 use crate::transaction::{install::InstallError, uninstall::UninstallError};
-use crate::transaction::{PackageStatus, PackageStatusError, ResolvedPackageQuery};
+use crate::transaction::{PackageStatus, PackageStatusError, ResolvedPackageQuery, PackageDependencyStatusError};
 use crate::types::repo::RepoUrl;
 use crate::{LoadedRepository, PackageKey};
 
@@ -118,6 +118,12 @@ pub trait PackageStore: Send + Sync {
         key: &PackageKey,
         target: InstallTarget,
     ) -> Result<PackageStatus, PackageStatusError>;
+
+    fn dependency_status(
+        &self,
+        key: &PackageKey,
+        target: InstallTarget,
+    ) -> Result<Vec<(PackageKey, PackageStatus)>, PackageDependencyStatusError>;
 
     fn all_statuses(
         &self,

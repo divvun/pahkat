@@ -16,12 +16,12 @@ use url::Url;
 
 use super::{PackageStore, SharedRepoErrors, SharedRepos, SharedStoreConfig};
 use crate::package_store::{ImportError, InstallTarget, LocalizedStrings};
-use crate::repo::{PackageQuery, RepoDownloadError};
+use crate::repo::{PackageQuery, RepoDownloadError, PackageCandidateError};
 use crate::transaction::{install::InstallError, install::ProcessError, uninstall::UninstallError};
 use crate::transaction::{
-    PackageStatus, PackageStatusError, ResolvedDescriptor, ResolvedPackageQuery,
+    PackageStatus, PackageStatusError, ResolvedDescriptor, ResolvedPackageQuery, PackageDependencyStatusError,
 };
-use crate::{cmp, Config, PackageKey};
+use crate::{cmp, Config, PackageKey, PackageActionType};
 
 #[cfg(target_os = "macos")]
 #[inline(always)]
@@ -161,6 +161,24 @@ impl PackageStore for MacOSPackageStore {
         };
 
         self.status_impl(&descriptor, &release, install_target)
+    }
+
+    fn dependency_status(
+        &self,
+        key: &PackageKey,
+        target: InstallTarget,
+    ) -> Result<Vec<(PackageKey, PackageStatus)>, PackageDependencyStatusError> {
+        crate::repo::resolve_package_set(self, &[(PackageActionType::Install, key.clone())], &[target])
+            .map(|dep| dep.into_iter().map(|dep| (dep.package_key, dep.status)).collect())
+            .map_err(|err| match err {
+                PackageCandidateError::Status(p, PackageStatusError::Payload(e)) => PackageDependencyStatusError::Payload(p, e),
+                PackageCandidateError::Status(p, PackageStatusError::WrongPayloadType) => PackageDependencyStatusError::WrongPayloadType(p),
+                PackageCandidateError::Status(p, PackageStatusError::ParsingVersion) => PackageDependencyStatusError::ParsingVersion(p),
+
+                PackageCandidateError::Payload(p, e) => PackageDependencyStatusError::Payload(p, e),
+                PackageCandidateError::UnresolvedId(id) => PackageDependencyStatusError::PackageNotFound(id),
+                PackageCandidateError::UninstallConflict(_) => unreachable!()
+            })
     }
 
     fn all_statuses(
