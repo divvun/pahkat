@@ -321,7 +321,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
         let current_transaction = Arc::clone(&self.current_transaction);
         let notifications = self.notifications.clone();
 
-        let (tx, rx) = mpsc::unbounded_channel();
+        let (mut tx, rx) = mpsc::channel(1);
         // Get messages
         tokio::spawn(async move {
             let mut has_requested = false;
@@ -384,7 +384,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
                                 },
                             )),
                         };
-                        match tx.send(Ok(response)) {
+                        match tx.send(Ok(response)).await {
                             Ok(_) => {}
                             Err(err) => {
                                 log::error!("{:?}", err);
@@ -397,7 +397,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
                 let store = Arc::clone(&store);
                 let current_transaction = Arc::clone(&current_transaction);
 
-                let tx = tx.clone();
+                let mut tx = tx.clone();
                 let notifications = notifications.clone();
 
                 collection.spawn(async move {
@@ -560,7 +560,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
                     futures::pin_mut!(stream);
 
                     while let Some(value) = stream.next().await {
-                        match tx.send(value) {
+                        match tx.send(value).await {
                             Ok(_) => {}
                             Err(err) => {
                                 log::error!("{:?}", err);
