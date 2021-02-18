@@ -40,7 +40,7 @@ pub fn setup_logger(name: &str) -> Result<(), Error> {
             ))
         })
         .level(log::LevelFilter::Info)
-        .level_for("pahkat_rpc", log::LevelFilter::Trace)
+        .level_for("pahkat_rpc", log::LevelFilter::Debug)
         .level_for("pahkat_client", log::LevelFilter::Debug)
         .chain(std::io::stdout())
         .chain(fern::log_file(log_path.join(format!("{}.log", name)))?)
