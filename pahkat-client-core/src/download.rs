@@ -44,7 +44,6 @@ impl DownloadManager {
     #[inline]
     fn client() -> reqwest::Client {
         reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(60))
             .build()
             .unwrap()
     }
