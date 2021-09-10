@@ -36,7 +36,7 @@ url = "2.1.1"
 chrono = "0.4.13"
 crossbeam-channel = "0.4.3"
 thiserror = "1.0.20"
-pathos = "0.3.0-pre.1"
+pathos = "0.3.0-pre.4"
 task-collection = { version = "0.0.3", features = ["tokio_02"] }
 winapi = { version = "0.3", features = ["winnt"]}
 [target.'cfg(target_os="macos")'.dependencies]
