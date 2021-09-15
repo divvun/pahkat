@@ -175,10 +175,12 @@ pub struct JsonMarshaler;
 
 impl InputType for JsonMarshaler {
     type Foreign = <cffi::StringMarshaler as InputType>::Foreign;
+    type ForeignTraitObject = ();
 }
 
 impl ReturnType for JsonMarshaler {
     type Foreign = cffi::Slice<u8>;
+    type ForeignTraitObject = ();
 
     fn foreign_default() -> Self::Foreign {
         cffi::Slice::default()
@@ -203,6 +205,7 @@ pub struct JsonRefMarshaler<'a>(&'a std::marker::PhantomData<()>);
 
 impl<'a> InputType for JsonRefMarshaler<'a> {
     type Foreign = <cffi::StrMarshaler<'a> as InputType>::Foreign;
+    type ForeignTraitObject = ();
 }
 
 impl<'a, T> FromForeign<cffi::Slice<u8>, T> for JsonRefMarshaler<'a>
