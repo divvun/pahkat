@@ -226,9 +226,9 @@ async fn service_runner() -> Result<()> {
         process_id: None,
     })?;
 
-    log::debug!("i'm running");
+    log::debug!("Service is now running.");
     crate::start(Path::new(NAMED_PIPE), None, shutdown_rx).await?;
-    log::info!("Shutting down");
+    log::info!("Service is shutting down...");
 
     // Tell the system that service has stopped.
     status_handle.set_service_status(ServiceStatus {

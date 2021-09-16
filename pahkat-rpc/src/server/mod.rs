@@ -47,5 +47,6 @@ pub fn setup_logger(name: &str) -> Result<(), Error> {
         .apply()?;
 
     log::debug!("logging initialized");
+    log::debug!("Log path: {}", log_path.display());
     Ok(())
 }

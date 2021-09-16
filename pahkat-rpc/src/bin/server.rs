@@ -8,6 +8,8 @@ async fn main() -> anyhow::Result<()> {
         format!("/tmp/pahkat")
     };
 
+    pahkat_rpc::server::setup_logger("service").unwrap();
+
     pahkat_rpc::start(
         Path::new(&path),
         config_path(),

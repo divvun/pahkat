@@ -32,14 +32,16 @@ macro_rules! user_dir {
 pub fn config_path() -> Result<&'static Path, pathos::Error> {
     #[cfg(windows)]
     {
-        if cfg!(windows) && whoami::username() == "SYSTEM" {
+        let user = whoami::username();
+        if cfg!(windows) && (user == "SYSTEM" || user == "СИСТЕМА") {
             return sys_dir!(|x| x.config_dir());
         }
     }
 
     #[cfg(target_os = "macos")]
     {
-        if cfg!(target_os = "macos") && whoami::username() == "root" {
+        let user = whoami::username();
+        if cfg!(target_os = "macos") && user == "root" {
             return sys_dir!(|x| x.config_dir());
         }
     }
@@ -52,7 +54,8 @@ pub fn config_path() -> Result<&'static Path, pathos::Error> {
 fn raw_cache_dir() -> Result<&'static Path, pathos::Error> {
     #[cfg(windows)]
     {
-        if whoami::username() == "SYSTEM" {
+        let user = whoami::username();
+        if user == "SYSTEM" || user == "СИСТЕМА" {
             return sys_dir!(|x| x.cache_dir());
         }
     }
@@ -72,7 +75,8 @@ fn raw_cache_dir() -> Result<&'static Path, pathos::Error> {
 pub fn log_path() -> Result<&'static Path, pathos::Error> {
     #[cfg(windows)]
     {
-        if whoami::username() == "SYSTEM" {
+        let user = whoami::username();
+        if user == "SYSTEM" || user == "СИСТЕМА" {
             return sys_dir!(|x| x.log_dir());
         }
     }
@@ -90,7 +94,8 @@ pub fn log_path() -> Result<&'static Path, pathos::Error> {
 pub fn cache_dir() -> Result<ConfigPath, pathos::Error> {
     #[cfg(windows)]
     {
-        if whoami::username() == "SYSTEM" {
+        let user = whoami::username();
+        if user == "SYSTEM" || user == "СИСТЕМА" {
             return Ok(ConfigPath(pathos::system::iri::app_cache_dir(APP_PATH)?));
         }
     }
@@ -108,7 +113,8 @@ pub fn cache_dir() -> Result<ConfigPath, pathos::Error> {
 pub fn tmp_dir() -> Result<ConfigPath, pathos::Error> {
     #[cfg(windows)]
     {
-        if whoami::username() == "SYSTEM" {
+        let user = whoami::username();
+        if user == "SYSTEM" || user == "СИСТЕМА" {
             return Ok(ConfigPath(pathos::system::iri::app_temporary_dir(APP_PATH)?));
         }
     }

@@ -701,7 +701,7 @@ pub(crate) async fn refresh_repos(
     for (key, value) in repo_data.into_iter() {
         match value {
             Ok(v) => {
-                log::debug!("Resolved repository: {:?}", &key);
+                log::debug!("Resolved repository: {}", &key);
                 res_map.insert(key, v);
             }
             Err(e) => {
