@@ -750,7 +750,7 @@ async fn store(config_path: Option<&Path>) -> anyhow::Result<Arc<dyn PackageStor
 #[cfg(feature = "macos")]
 async fn store(config_path: Option<&Path>) -> anyhow::Result<Arc<dyn PackageStore>> {
     let config = match config_path {
-        Some(v) => pahkat_client::Config::load(&v, pahkat_client::Permission::ReadWrite)?,
+        Some(v) => pahkat_client::Config::load(&v, pahkat_client::Permission::ReadWrite).0,
         None => pahkat_client::Config::load_default()?,
     };
     log::debug!("{:?}", &config);
