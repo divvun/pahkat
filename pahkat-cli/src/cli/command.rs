@@ -1,6 +1,7 @@
 pub(crate) mod config;
 
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use structopt::StructOpt;
 
 use crate::cli::constants::*;
@@ -23,11 +24,62 @@ pub struct Download {
     global_opts: super::GlobalOpts,
 }
 
+#[derive(Debug)]
+pub struct PackageSpec {
+    pub id: String,
+    pub version: Option<String>,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ParsePackageSpecError {
+    #[error("No id found in package specification: {0}")]
+    MissingId(String),
+
+    #[error("Found an @ but did not find a version: {0}")]
+    MissingVersion(String),
+}
+
+impl std::fmt::Display for PackageSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.version {
+            Some(version) => f.write_fmt(format_args!("{}@{}", self.id, version)),
+            None => f.write_str(&self.id)
+        }
+    }
+}
+
+impl FromStr for PackageSpec {
+    type Err = ParsePackageSpecError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.contains("@") {
+            let mut chunks = s.split("@");
+            let id = chunks
+                .next()
+                .ok_or_else(|| ParsePackageSpecError::MissingId(s.to_string()))?
+                .to_string();
+            let version = chunks
+                .next()
+                .ok_or_else(|| ParsePackageSpecError::MissingVersion(s.to_string()))?
+                .to_string();
+            Ok(PackageSpec {
+                id,
+                version: Some(version),
+            })
+        } else {
+            Ok(PackageSpec {
+                id: s.to_string(),
+                version: None,
+            })
+        }
+    }
+}
+
 #[derive(Debug, StructOpt)]
 #[structopt(about = "Install packages from configured repositories")]
 pub struct Install {
     #[structopt(required = true, help = "Packages to install")]
-    pub packages: Vec<String>,
+    pub packages: Vec<PackageSpec>,
     #[structopt(flatten)]
     global_opts: super::GlobalOpts,
 }

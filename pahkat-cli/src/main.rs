@@ -23,7 +23,6 @@ fn config_path(holder: &dyn ConfigPath) -> Result<PathBuf> {
         .with_context(|| "No default config path could be found")
 }
 
-
 #[inline(always)]
 #[cfg(feature = "windows")]
 async fn store(config_path: Option<&Path>) -> anyhow::Result<Arc<dyn PackageStore>> {

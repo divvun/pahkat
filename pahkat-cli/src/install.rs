@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use futures::stream::StreamExt;
 
-use crate::Platform;
+use crate::{Platform, cli::command::PackageSpec};
 use pahkat_client::{
     package_store::InstallTarget,
     transaction::{PackageAction, PackageTransaction},
@@ -12,20 +12,24 @@ use pahkat_client::{
 
 pub(crate) async fn install<'a>(
     store: Arc<dyn PackageStore>,
-    packages: &'a Vec<String>,
+    packages: &'a Vec<PackageSpec>,
     target: InstallTarget,
     args: &'a crate::Args,
 ) -> Result<(), anyhow::Error> {
     let keys: Vec<PackageKey> = packages
         .iter()
-        .map(|id| {
+        .map(|PackageSpec { id, version } | {
             let mut key: PackageKey = store
-                .find_package_by_id(id)
+                .find_package_by_id(&id)
                 .map(|x| x.0)
                 .ok_or_else(|| anyhow::anyhow!("Could not find package for: `{}`", id))?;
 
             if let Some(platform) = args.platform() {
                 key.query.platform = Some(platform.to_string());
+            }
+
+            if let Some(version) = version {
+                key.query.version = Some(version.to_string());
             }
 
             Ok(key)
