@@ -79,13 +79,6 @@ impl<'a> VersionQuery<'a> {
     fn any_semantic() -> Self {
         VersionQuery::Semantic(semver::VersionReq::parse("*").unwrap())
     }
-
-    fn matches(&self, version: &Version) -> bool {
-        match (self, version) {
-            (VersionQuery::Semantic(mask), Version::Semantic(v)) => mask.matches(v),
-            _ => false,
-        }
-    }
 }
 
 #[inline(always)]
@@ -107,6 +100,34 @@ pub(crate) struct ReleaseQueryResponse<'a> {
 
 impl<'a> ReleaseQueryIter<'a> {
     #[inline(always)]
+    fn is_version_match(&mut self, release: &Release) -> bool {
+        if self.query.versions.is_empty() {
+            return true;
+        }
+
+        let mut is_match = true;
+
+        for version in self.query.versions.iter() {
+            match (version, &release.version) {
+                (VersionQuery::Match(s), Version::Semantic(v)) => if s != &v.to_string() {
+                    log::trace!("Skipping (release version does not literal match)");
+                    is_match = false;
+                },
+                (VersionQuery::Semantic(x), Version::Semantic(v)) => if !x.matches(&*v) {
+                    log::trace!("Skipping (release version does not semver match)");
+                    is_match = false;
+                },
+                _ => {
+                    log::trace!("Skipping (unhandled values)");
+                    is_match = false;
+                }
+            }
+        }
+
+        is_match
+    }
+
+    #[inline(always)]
     fn next_release(&mut self) -> Option<ReleaseQueryResponse<'a>> {
         log::trace!("Beginning release query iter: {:?}", &self.query);
 
@@ -126,6 +147,11 @@ impl<'a> ReleaseQueryIter<'a> {
                 }
             } else if release.channel.is_some() && !self.query.channels.is_empty() {
                 log::trace!("Skipping (query channels not empty and no match)");
+                self.next_release += 1;
+                continue;
+            }
+
+            if !self.is_version_match(release) {
                 self.next_release += 1;
                 continue;
             }

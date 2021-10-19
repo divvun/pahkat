@@ -407,7 +407,6 @@ impl PackageTransaction {
 
         let store = Arc::clone(&self.store);
         let actions: Arc<Vec<ResolvedAction>> = Arc::clone(&self.actions);
-        log::debug!("beginning transaction process NNNNN");
 
         let stream = async_stream::stream! {
             for record in actions.iter() {
