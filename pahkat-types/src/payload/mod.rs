@@ -84,15 +84,9 @@ impl Payload {
 
     pub fn url(&self) -> &url::Url {
         match self {
-            Payload::WindowsExecutable(x) => {
-                &x.url
-            }
-            Payload::MacOSPackage(x) => {
-                &x.url
-            }
-            Payload::TarballPackage(x) => {
-                &x.url
-            }
+            Payload::WindowsExecutable(x) => &x.url,
+            Payload::MacOSPackage(x) => &x.url,
+            Payload::TarballPackage(x) => &x.url,
         }
     }
 }

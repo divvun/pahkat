@@ -261,10 +261,7 @@ where
     }
 
     #[inline]
-    pub fn key(
-        &self,
-        index: usize,
-    ) -> Option<<fbs::ForwardsUOffset<K> as fbs::Follow<'a>>::Inner> {
+    pub fn key(&self, index: usize) -> Option<<fbs::ForwardsUOffset<K> as fbs::Follow<'a>>::Inner> {
         if index >= self.len {
             None
         } else {

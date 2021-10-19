@@ -132,8 +132,7 @@ pub enum Error {
     NoRepo(#[from] FindRepoError),
 }
 
-pub fn nuke_nightlies<'a>(request: Request<'a>) -> Result<(), Error>
-{
+pub fn nuke_nightlies<'a>(request: Request<'a>) -> Result<(), Error> {
     log::debug!("{:?}", request);
 
     let pkgs_dir = find_repo(&request.repo_path)?.join("packages");
@@ -153,31 +152,33 @@ pub fn nuke_nightlies<'a>(request: Request<'a>) -> Result<(), Error>
         let mut descriptor: pahkat_types::package::Descriptor =
             toml::from_str(&pkg_file).map_err(|e| Error::ReadToml(pkg_path.clone(), e))?;
 
-        descriptor.release = descriptor.release
-        .into_iter()
-        .scan(0, |state, release| {
-            if let Some(channel) = &release.channel {
-                if channel == "nightly" {
-                    *state = *state + 1;
-                }
-            }
-
-            Some((release, *state))
-        })
-        .filter(|(release, nightly_count)| {
-            if let Some(channel) = &release.channel {
-                if channel == "nightly" && *nightly_count > request.keep {
-                    for url in release.target.iter().map(|t| t.payload.url().to_string()) {
-                        println!("{}", url);
+        descriptor.release = descriptor
+            .release
+            .into_iter()
+            .scan(0, |state, release| {
+                if let Some(channel) = &release.channel {
+                    if channel == "nightly" {
+                        *state = *state + 1;
                     }
-
-                    return false;
                 }
-            }
 
-            return true;
-        })
-        .map(|(release, _)| release).collect();
+                Some((release, *state))
+            })
+            .filter(|(release, nightly_count)| {
+                if let Some(channel) = &release.channel {
+                    if channel == "nightly" && *nightly_count > request.keep {
+                        for url in release.target.iter().map(|t| t.payload.url().to_string()) {
+                            println!("{}", url);
+                        }
+
+                        return false;
+                    }
+                }
+
+                return true;
+            })
+            .map(|(release, _)| release)
+            .collect();
 
         // Write the toml
         let data = toml::to_string_pretty(&descriptor)

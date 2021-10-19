@@ -91,9 +91,7 @@ pub extern "C" fn pahkat_config_settings_config_dir(
 
 #[cfg(target_os = "android")]
 #[cffi::marshal]
-pub extern "C" fn pahkat_android_init(
-    #[marshal(cffi::PathBufMarshaler)] container_path: PathBuf,
-) {
+pub extern "C" fn pahkat_android_init(#[marshal(cffi::PathBufMarshaler)] container_path: PathBuf) {
     pathos::android::user::set_container_path(container_path);
 
     std::panic::set_hook(Box::new(|info| {

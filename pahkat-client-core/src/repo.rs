@@ -433,11 +433,7 @@ pub(crate) fn download<'a>(
     let (target, _, _) = match resolve_payload(package_key, &query, repos) {
         Ok(v) => v,
         Err(e) => {
-            log::error!(
-                "Failed to resolve: {} {:?}",
-                &package_key,
-                &query
-            );
+            log::error!("Failed to resolve: {} {:?}", &package_key, &query);
             return Box::pin(async_stream::stream! {
                 yield crate::package_store::DownloadEvent::Error(crate::download::DownloadError::Payload(e));
             });
@@ -669,10 +665,10 @@ pub(crate) async fn refresh_repos(
             workqueue::work(config, repo_keys, |url, queue, config| {
                 Box::pin(async move {
                     log::trace!("Downloading repo at {:?}…", &url);
-    
+
                     let cache_dir = config.settings().repo_cache_dir();
                     let channel = config.repos().get(&url).and_then(|r| r.channel.clone());
-    
+
                     match LoadedRepository::from_cache_or_url(url, channel, cache_dir).await {
                         Ok(repo) => {
                             for url in repo.info().repository.linked_repositories.iter() {
@@ -680,7 +676,7 @@ pub(crate) async fn refresh_repos(
                                 queue.push(url.clone());
                                 // recurse_repo(url.clone(), Arc::clone(&repos), Arc::clone(&config)).await?;
                             }
-    
+
                             Ok(repo)
                         }
                         Err(e) => {

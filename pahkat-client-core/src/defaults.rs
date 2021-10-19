@@ -1,16 +1,17 @@
 use crate::config::ConfigPath;
+use once_cell::sync::Lazy;
 use std::path::{Path, PathBuf};
 use url::Url;
-use once_cell::sync::Lazy;
 // use
 
 const APP_PATH: &str = "Pahkat";
 
-
 use pathos::AppDirs as _;
 
-static SYS_DIRS: Lazy<Result<pathos::system::AppDirs, pathos::Error>> = Lazy::new(|| pathos::system::AppDirs::new(APP_PATH));
-static USER_DIRS: Lazy<Result<pathos::user::AppDirs, pathos::Error>> = Lazy::new(|| pathos::user::AppDirs::new(APP_PATH));
+static SYS_DIRS: Lazy<Result<pathos::system::AppDirs, pathos::Error>> =
+    Lazy::new(|| pathos::system::AppDirs::new(APP_PATH));
+static USER_DIRS: Lazy<Result<pathos::user::AppDirs, pathos::Error>> =
+    Lazy::new(|| pathos::user::AppDirs::new(APP_PATH));
 
 macro_rules! sys_dir {
     (| $x:ident | $($input:tt)*) => {
@@ -115,14 +116,18 @@ pub fn tmp_dir() -> Result<ConfigPath, pathos::Error> {
     {
         let user = whoami::username();
         if user == "SYSTEM" || user == "СИСТЕМА" {
-            return Ok(ConfigPath(pathos::system::iri::app_temporary_dir(APP_PATH)?));
+            return Ok(ConfigPath(pathos::system::iri::app_temporary_dir(
+                APP_PATH,
+            )?));
         }
     }
 
     #[cfg(target_os = "macos")]
     {
         if whoami::username() == "root" {
-            return Ok(ConfigPath(pathos::system::iri::app_temporary_dir(APP_PATH)?));
+            return Ok(ConfigPath(pathos::system::iri::app_temporary_dir(
+                APP_PATH,
+            )?));
         }
     }
 

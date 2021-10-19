@@ -44,10 +44,9 @@ impl<'a> FromForeign<cffi::Slice<u8>, PackageKey> for PackageKeyMarshaler<'a> {
     type Error = Box<dyn Error>;
 
     unsafe fn from_foreign(string: cffi::Slice<u8>) -> Result<PackageKey, Self::Error> {
-        let s =
-            <cffi::StrMarshaler<'a> as FromForeign<cffi::Slice<u8>, &'a str>>::from_foreign(
-                string,
-            )?;
+        let s = <cffi::StrMarshaler<'a> as FromForeign<cffi::Slice<u8>, &'a str>>::from_foreign(
+            string,
+        )?;
         PackageKey::try_from(s).box_err()
     }
 }

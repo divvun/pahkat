@@ -1,15 +1,15 @@
+use std::convert::TryFrom;
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::convert::TryFrom;
 
 use once_cell::sync::{Lazy, OnceCell};
+use pathos::iri::IriBufExt;
 use serde::de::{self, Deserializer, Visitor};
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 use thiserror::Error;
 use url::Url;
-use pathos::iri::IriBufExt;
 
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub struct ConfigPath(pub(crate) iref::IriBuf);
@@ -40,7 +40,11 @@ impl TryFrom<PathBuf> for ConfigPath {
     fn try_from(value: PathBuf) -> Result<Self, Self::Error> {
         use pathos::path::absolute::AbsolutePathBufExt;
 
-        let iri = value.to_absolute_path_buf().map_err(|_| ())?.to_file_iri().map_err(|_| ())?;
+        let iri = value
+            .to_absolute_path_buf()
+            .map_err(|_| ())?
+            .to_file_iri()
+            .map_err(|_| ())?;
         Ok(ConfigPath(iri))
     }
 }
@@ -79,7 +83,8 @@ impl<'de> Visitor<'de> for ConfigPathVisitor {
         if value.starts_with("file:") || value.starts_with("container:") {
             let url = iref::IriBuf::new(value).map_err(|_| E::custom("Invalid URL"))?;
             if value.starts_with("file:") {
-                url.to_path_buf().map_err(|_| E::custom("File path not absolute"))?;
+                url.to_path_buf()
+                    .map_err(|_| E::custom("File path not absolute"))?;
             }
             Ok(ConfigPath(url))
         } else {

@@ -24,7 +24,7 @@ pub enum Error {
     SettingsFile(#[source] FileError),
 
     #[error("An error occurred managing app paths")]
-    PathError(#[from] pathos::Error)
+    PathError(#[from] pathos::Error),
 }
 
 #[derive(Debug, Error)]
@@ -98,7 +98,7 @@ impl Config {
             Err(e) => {
                 errors.push(Error::SettingsFile(e));
                 Settings::read_only()
-            },
+            }
         };
 
         let repos_path = config_path.join("repos.toml");
@@ -117,7 +117,7 @@ impl Config {
             Err(e) => {
                 errors.push(Error::ReposFile(e));
                 Repos::read_only()
-            },
+            }
         };
 
         let config = Config { repos, settings };

@@ -43,9 +43,7 @@ impl DownloadManager {
 
     #[inline]
     fn client() -> reqwest::Client {
-        reqwest::Client::builder()
-            .build()
-            .unwrap()
+        reqwest::Client::builder().build().unwrap()
     }
 
     pub async fn download<P: AsRef<Path>>(
@@ -106,11 +104,10 @@ impl DownloadManager {
         //     .write(true)
         //     .open(&tmp_dest_path)
         //     .or_else(|_| )
-        let file = fs::File::create(&tmp_dest_path)
-            .map_err(|e| {
-                log::error!("Open temp file failed: {:?}", &e);
-                DownloadError::TempFileOpenFailed(e, tmp_dest_path.to_path_buf())
-            })?;
+        let file = fs::File::create(&tmp_dest_path).map_err(|e| {
+            log::error!("Open temp file failed: {:?}", &e);
+            DownloadError::TempFileOpenFailed(e, tmp_dest_path.to_path_buf())
+        })?;
         // let meta = file.metadata().map_err(|e| {
         //     log::error!("metadata error: {:?}", &e);
         //     DownloadError::MetadataFailed(e, tmp_dest_path.to_path_buf())

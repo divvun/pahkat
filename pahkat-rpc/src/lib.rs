@@ -4,6 +4,7 @@ pub mod client;
 pub mod server;
 
 use futures::stream::{StreamExt, TryStreamExt};
+use hyper::server::conn::Http;
 use log::{error, info, warn};
 use pahkat_client::{
     config::RepoRecord, package_store::InstallTarget, PackageAction, PackageActionType, PackageKey,
@@ -11,13 +12,14 @@ use pahkat_client::{
 };
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
+#[cfg(windows)]
+use std::os::windows::io::AsRawHandle;
 use std::pin::Pin;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
-#[cfg(windows)]
-use std::os::windows::io::AsRawHandle;
+use task_collection::{GlobalTokio02Spawner, TaskCollection};
 use tokio::io::{AsyncRead, AsyncWrite};
 #[cfg(unix)]
 use tokio::net::UnixListener;
@@ -29,10 +31,8 @@ use tokio::sync::mpsc;
 use tokio_named_pipe::{NamedPipeListener, NamedPipeStream};
 use tonic::transport::server::Connected;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
-use url::Url;
-use task_collection::{GlobalTokio02Spawner, TaskCollection};
-use hyper::server::conn::Http;
 use tower::Service;
+use url::Url;
 
 mod pb {
     tonic::include_proto!("/pahkat");
@@ -264,32 +264,45 @@ impl pb::pahkat_server::Pahkat for Rpc {
         }))
     }
 
-    async fn dependency_status(&self, request: Request<pb::StatusRequest>) -> Result<pb::DependencyStatusResponse> {
+    async fn dependency_status(
+        &self,
+        request: Request<pb::StatusRequest>,
+    ) -> Result<pb::DependencyStatusResponse> {
         let request = request.into_inner();
         let package_id = PackageKey::try_from(&*request.package_id)
             .map_err(|e| Status::failed_precondition(format!("{}", e)))?;
 
-        let response = self.store.dependency_status(&package_id, Default::default());
-        
+        let response = self
+            .store
+            .dependency_status(&package_id, Default::default());
+
         let response = match response {
             Ok(response) => pb::DependencyStatusResponse {
                 value: Some(pb::dependency_status_response::Value::Status(
                     pb::dependency_status_response::Status {
-                        statuses: response.into_iter().map(|item| (item.0.to_string(), match item.1 {
-                            PackageStatus::NotInstalled => 0,
-                            PackageStatus::UpToDate => 1,
-                            PackageStatus::RequiresUpdate => 2,
-                        })).collect(),
-                    }
-                ))
+                        statuses: response
+                            .into_iter()
+                            .map(|item| {
+                                (
+                                    item.0.to_string(),
+                                    match item.1 {
+                                        PackageStatus::NotInstalled => 0,
+                                        PackageStatus::UpToDate => 1,
+                                        PackageStatus::RequiresUpdate => 2,
+                                    },
+                                )
+                            })
+                            .collect(),
+                    },
+                )),
             },
             Err(e) => pb::DependencyStatusResponse {
                 value: Some(pb::dependency_status_response::Value::Error(
                     pb::dependency_status_response::StatusError {
                         package_id: e.package(),
                         error: e.to_string(),
-                    }
-                ))
+                    },
+                )),
             },
         };
 
@@ -1108,8 +1121,13 @@ pub async fn start(
 
     let store = store(config_path).await?;
     log::debug!("Created store.");
-    
-    let skip_admin = store.config().read().unwrap().settings().skip_admin_verification();
+
+    let skip_admin = store
+        .config()
+        .read()
+        .unwrap()
+        .settings()
+        .skip_admin_verification();
     let current_transaction = Arc::new(tokio::sync::Mutex::new(()));
 
     // Notifications
@@ -1142,7 +1160,9 @@ pub async fn start(
 
     tokio::spawn(shutdown);
 
-    while let Some(Ok(conn)) = tokio::select! {next = incoming.next() => next, _ = inner_rx.recv() => None} {
+    while let Some(Ok(conn)) =
+        tokio::select! {next = incoming.next() => next, _ = inner_rx.recv() => None}
+    {
         let http = http.clone();
         let svc = svc.clone();
         let mut rx = rx.clone();
@@ -1160,7 +1180,7 @@ pub async fn start(
                         match server::windows::is_connected_user_admin(handle) {
                             Ok(true) => {
                                 req.add_admin_flag();
-                            },
+                            }
                             Ok(false) => {}
                             Err(err) => {
                                 log::error!("{:?}", err);
@@ -1252,7 +1272,10 @@ trait AdminCheck {
 
 impl<T> AdminCheck for hyper::Request<T> {
     fn add_admin_flag(&mut self) {
-        self.headers_mut().insert(<Self as AdminCheck>::FLAG, hyper::header::HeaderValue::from_static("true"));
+        self.headers_mut().insert(
+            <Self as AdminCheck>::FLAG,
+            hyper::header::HeaderValue::from_static("true"),
+        );
     }
 
     fn has_admin_flag(&self) -> bool {
@@ -1262,7 +1285,10 @@ impl<T> AdminCheck for hyper::Request<T> {
 
 impl<T> AdminCheck for Request<T> {
     fn add_admin_flag(&mut self) {
-        self.metadata_mut().insert(<Self as AdminCheck>::FLAG, tonic::metadata::MetadataValue::from_static("true"));
+        self.metadata_mut().insert(
+            <Self as AdminCheck>::FLAG,
+            tonic::metadata::MetadataValue::from_static("true"),
+        );
     }
 
     fn has_admin_flag(&self) -> bool {

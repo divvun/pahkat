@@ -59,9 +59,7 @@ where
 
     unsafe fn from_foreign(ptr: cffi::Slice<u8>) -> Result<T, Self::Error> {
         let json_str =
-            <cffi::StrMarshaler<'a> as FromForeign<cffi::Slice<u8>, &'a str>>::from_foreign(
-                ptr,
-            )?;
+            <cffi::StrMarshaler<'a> as FromForeign<cffi::Slice<u8>, &'a str>>::from_foreign(ptr)?;
         log::debug!("JSON: {}, type: {}", &json_str, std::any::type_name::<T>());
 
         let v: Result<T, _> = serde_json::from_str(&json_str);

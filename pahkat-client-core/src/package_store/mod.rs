@@ -19,7 +19,9 @@ use url::Url;
 use crate::config::Config;
 use crate::repo::{PackageQuery, RepoDownloadError};
 use crate::transaction::{install::InstallError, uninstall::UninstallError};
-use crate::transaction::{PackageStatus, PackageStatusError, ResolvedPackageQuery, PackageDependencyStatusError};
+use crate::transaction::{
+    PackageDependencyStatusError, PackageStatus, PackageStatusError, ResolvedPackageQuery,
+};
 use crate::types::repo::RepoUrl;
 use crate::{LoadedRepository, PackageKey};
 

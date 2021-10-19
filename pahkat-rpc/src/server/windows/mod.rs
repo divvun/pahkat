@@ -4,15 +4,15 @@ pub mod service;
 use anyhow::{bail, Result};
 use std::fs::OpenOptions;
 use std::os::windows::io::AsRawHandle;
+use std::os::windows::io::RawHandle;
 use std::process::Command;
 use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
-use std::os::windows::io::RawHandle;
+use winapi::um::errhandlingapi::GetLastError;
 use winapi::um::namedpipeapi::ImpersonateNamedPipeClient;
 use winapi::um::securitybaseapi::RevertToSelf;
-use winapi::um::errhandlingapi::GetLastError;
 use windows_accesstoken::information::TokenElevation;
 use windows_accesstoken::AccessToken;
 use windows_accesstoken::TokenAccessLevel;
@@ -117,10 +117,12 @@ pub fn is_connected_user_admin(handle: HandleHolder) -> Result<bool> {
 
     log::trace!("opening thread token");
     let token = AccessToken::open_thread(true, TokenAccessLevel::Query)?;
-    
+
     if is_admin_token(&token)? {
         log::trace!("reverting to self");
-        unsafe { RevertToSelf(); }
+        unsafe {
+            RevertToSelf();
+        }
         return Ok(true);
     }
 
@@ -132,13 +134,17 @@ pub fn is_connected_user_admin(handle: HandleHolder) -> Result<bool> {
         if let Some(token) = token {
             if is_admin_token(&token)? {
                 log::trace!("reverting to self");
-                unsafe { RevertToSelf(); }
+                unsafe {
+                    RevertToSelf();
+                }
                 return Ok(true);
             }
         }
     }
 
-    unsafe { RevertToSelf(); }
+    unsafe {
+        RevertToSelf();
+    }
     Ok(false)
 }
 

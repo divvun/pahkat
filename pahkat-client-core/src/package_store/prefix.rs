@@ -1,9 +1,9 @@
 #![cfg(feature = "prefix")]
 
-use std::{collections::BTreeMap, unreachable};
 use std::fs::{create_dir_all, read_dir, remove_dir, remove_file, File};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
+use std::{collections::BTreeMap, unreachable};
 
 use hashbrown::HashMap;
 use pahkat_types::package::{Descriptor, Package};
@@ -12,10 +12,10 @@ use r2d2_sqlite::SqliteConnectionManager;
 use xz2::bufread::XzDecoder;
 
 use super::InstallTarget;
-use crate::{PackageActionType, package_store::{SharedRepoErrors, SharedRepos, SharedStoreConfig}, repo::PackageCandidateError};
 use crate::repo::RepoDownloadError;
 use crate::transaction::{
-    install::InstallError, uninstall::UninstallError, PackageDependencyError, ResolvedPackageQuery, PackageDependencyStatusError,
+    install::InstallError, uninstall::UninstallError, PackageDependencyError,
+    PackageDependencyStatusError, ResolvedPackageQuery,
 };
 use crate::{
     cmp,
@@ -27,6 +27,11 @@ use crate::{
     transaction::PackageStatusError,
     transaction::{PackageStatus, ResolvedDescriptor},
     Config, PackageKey, PackageStore,
+};
+use crate::{
+    package_store::{SharedRepoErrors, SharedRepos, SharedStoreConfig},
+    repo::PackageCandidateError,
+    PackageActionType,
 };
 
 // type Result<T> = std::result::Result<T, Error>;
@@ -112,7 +117,6 @@ impl PrefixPackageStore {
             .map_err(Error::InvalidPrefixPath)?;
         log::debug!("{:?}", &prefix_path);
         let (config, errors) = Config::load(&prefix_path, crate::config::Permission::ReadWrite);
-
 
         let db_file_path = PrefixPackageStore::package_db_path(&config);
         log::debug!("{:?}", &db_file_path);
@@ -367,17 +371,33 @@ impl PackageStore for PrefixPackageStore {
         key: &PackageKey,
         target: InstallTarget,
     ) -> Result<Vec<(PackageKey, PackageStatus)>, PackageDependencyStatusError> {
-        crate::repo::resolve_package_set(self, &[(PackageActionType::Install, key.clone())], &[target])
-            .map(|dep| dep.into_iter().map(|dep| (dep.package_key, dep.status)).collect())
-            .map_err(|err| match err {
-                PackageCandidateError::Status(p, PackageStatusError::Payload(e)) => PackageDependencyStatusError::Payload(p, e),
-                PackageCandidateError::Status(p, PackageStatusError::WrongPayloadType) => PackageDependencyStatusError::WrongPayloadType(p),
-                PackageCandidateError::Status(p, PackageStatusError::ParsingVersion) => PackageDependencyStatusError::ParsingVersion(p),
+        crate::repo::resolve_package_set(
+            self,
+            &[(PackageActionType::Install, key.clone())],
+            &[target],
+        )
+        .map(|dep| {
+            dep.into_iter()
+                .map(|dep| (dep.package_key, dep.status))
+                .collect()
+        })
+        .map_err(|err| match err {
+            PackageCandidateError::Status(p, PackageStatusError::Payload(e)) => {
+                PackageDependencyStatusError::Payload(p, e)
+            }
+            PackageCandidateError::Status(p, PackageStatusError::WrongPayloadType) => {
+                PackageDependencyStatusError::WrongPayloadType(p)
+            }
+            PackageCandidateError::Status(p, PackageStatusError::ParsingVersion) => {
+                PackageDependencyStatusError::ParsingVersion(p)
+            }
 
-                PackageCandidateError::Payload(p, e) => PackageDependencyStatusError::Payload(p, e),
-                PackageCandidateError::UnresolvedId(id) => PackageDependencyStatusError::PackageNotFound(id),
-                PackageCandidateError::UninstallConflict(_) => unreachable!()
-            })
+            PackageCandidateError::Payload(p, e) => PackageDependencyStatusError::Payload(p, e),
+            PackageCandidateError::UnresolvedId(id) => {
+                PackageDependencyStatusError::PackageNotFound(id)
+            }
+            PackageCandidateError::UninstallConflict(_) => unreachable!(),
+        })
     }
 
     fn all_statuses(

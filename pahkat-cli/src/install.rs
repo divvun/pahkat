@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use futures::stream::StreamExt;
 
-use crate::{Platform, cli::command::PackageSpec};
+use crate::{cli::command::PackageSpec, Platform};
 use pahkat_client::{
     package_store::InstallTarget,
     transaction::{PackageAction, PackageTransaction},
@@ -18,7 +18,7 @@ pub(crate) async fn install<'a>(
 ) -> Result<(), anyhow::Error> {
     let keys: Vec<PackageKey> = packages
         .iter()
-        .map(|PackageSpec { id, version } | {
+        .map(|PackageSpec { id, version }| {
             let mut key: PackageKey = store
                 .find_package_by_id(&id)
                 .map(|x| x.0)

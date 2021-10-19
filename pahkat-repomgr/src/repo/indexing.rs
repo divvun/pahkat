@@ -458,16 +458,13 @@ fn build_index<'a>(
         })
         .collect::<Vec<_>>();
 
-    builder
-        .start_vector::<fbs::ForwardsUOffset<crate::fbs::pahkat::Descriptor<&'_ [u8]>>>(id_refs.len());
+    builder.start_vector::<fbs::ForwardsUOffset<crate::fbs::pahkat::Descriptor<&'_ [u8]>>>(
+        id_refs.len(),
+    );
     for package_value in packages_values.into_iter().rev() {
         builder.push(package_value);
     }
-    let packages_values = Some(
-        builder.end_vector(
-            id_refs.len(),
-        ),
-    );
+    let packages_values = Some(builder.end_vector(id_refs.len()));
 
     let args = crate::fbs::pahkat::PackagesArgs {
         packages_values_types,

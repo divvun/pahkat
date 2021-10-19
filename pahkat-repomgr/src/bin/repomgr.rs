@@ -161,7 +161,7 @@ struct NukePackageNightliesCommand {
     repo_path: Option<PathBuf>,
 
     #[structopt(short = "-k", long)]
-    keep: Option<u32>
+    keep: Option<u32>,
 }
 
 impl NukePackageNightliesCommand {
@@ -212,9 +212,10 @@ fn main() -> anyhow::Result<()> {
                     let req =
                         nuke::package::releases::Request::new_from_user_input(nuke.to_partial())?;
                     nuke::package::releases::nuke_releases(req)?;
-                },
+                }
                 NukePackageCommand::Nightlies(nuke) => {
-                    let req = nuke::package::nightlies::Request::new_from_user_input(nuke.to_partial())?;
+                    let req =
+                        nuke::package::nightlies::Request::new_from_user_input(nuke.to_partial())?;
                     nuke::package::nightlies::nuke_nightlies(req)?;
                 }
             },
