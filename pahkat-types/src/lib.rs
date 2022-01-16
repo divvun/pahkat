@@ -5,7 +5,7 @@ pub mod repo;
 pub mod synth;
 
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
+use std::{str::FromStr, fmt::Display, convert::Infallible};
 use url::Url;
 
 /// Will be replaced with a validating Map in the future.
@@ -15,6 +15,8 @@ pub type LangTagMap<T> = std::collections::BTreeMap<String, T>;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
+#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::OneOf))]
+#[cfg_attr(feature = "poem-openapi", oai(property_name = "type"))]
 pub enum DependencyKey {
     Remote(Url),
     Local(String),
@@ -29,8 +31,16 @@ impl DependencyKey {
     }
 }
 
+impl Display for DependencyKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.as_str().fmt(f)
+    }
+}
+
+
+
 impl FromStr for DependencyKey {
-    type Err = ();
+    type Err = Infallible;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(s.into())
@@ -313,4 +323,8 @@ mod tests {
             serde_json::to_string_pretty(&[&package1, &package2]).unwrap()
         );
     }
+}
+
+pub mod fbs {
+    include!(concat!(env!("OUT_DIR"), "/index.rs"));
 }

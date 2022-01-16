@@ -7,7 +7,8 @@ use url::Url;
 
 use crate::repo::RepoUrl;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, serde::Deserialize, Clone, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Object))]
 pub struct PackageKeyParams {
     pub channel: Option<String>,
     pub platform: Option<String>,

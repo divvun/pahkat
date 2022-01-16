@@ -10,6 +10,8 @@ use super::parse_set;
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Enum))]
+#[cfg_attr(feature = "poem-openapi", oai(rename = "MacOSRebootSpec", rename_all = "lowercase"))]
 pub enum RebootSpec {
     Install,
     Uninstall,
@@ -33,26 +35,17 @@ impl FromStr for RebootSpec {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-#[serde(transparent)]
-#[repr(transparent)]
-struct PayloadType(String);
-
-impl Default for PayloadType {
-    fn default() -> Self {
-        PayloadType("MacOSPackage".into())
-    }
-}
-
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
 #[cfg_attr(feature = "structopt", derive(structopt::StructOpt))]
+#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Object))]
+#[cfg_attr(feature = "poem-openapi", oai(rename = "MacOSPackage"))]
 pub struct Package {
-    #[builder(default, setter(skip))]
+    #[builder(default = "MacOSPackage".into(), setter(skip))]
     #[serde(rename = "type")]
     #[cfg_attr(feature = "structopt", structopt(skip))]
-    _type: PayloadType,
+    _type: String,
 
     #[cfg_attr(feature = "structopt", structopt(short, long))]
     pub url: url::Url,
@@ -85,6 +78,8 @@ impl super::AsDownloadUrl for Package {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, Hash, Eq)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Enum))]
+#[cfg_attr(feature = "poem-openapi", oai(rename_all = "lowercase"))]
 pub enum InstallTarget {
     System,
     User,

@@ -10,6 +10,8 @@ use super::parse_set;
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Enum))]
+#[cfg_attr(feature = "poem-openapi", oai(rename = "WindowsRebootSpec", rename_all = "lowercase"))]
 pub enum RebootSpec {
     Install,
     Uninstall,
@@ -33,26 +35,18 @@ impl FromStr for RebootSpec {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-#[serde(transparent)]
-#[repr(transparent)]
-struct PayloadType(String);
-
-impl Default for PayloadType {
-    fn default() -> Self {
-        PayloadType("WindowsExecutable".into())
-    }
-}
-
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
 #[cfg_attr(feature = "structopt", derive(structopt::StructOpt))]
+#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Object))]
+#[cfg_attr(feature = "poem-openapi", oai(rename = "WindowsExecutable"))]
 pub struct Executable {
-    #[builder(default, setter(skip))]
+    #[builder(default = "WindowsExecutable".into(), setter(skip))]
     #[serde(rename = "type")]
+    #[cfg_attr(feature = "poem-openapi", oai(rename = "type"))]
     #[cfg_attr(feature = "structopt", structopt(skip))]
-    _type: PayloadType,
+    _type: String,
 
     #[cfg_attr(feature = "structopt", structopt(short, long))]
     pub url: url::Url,
