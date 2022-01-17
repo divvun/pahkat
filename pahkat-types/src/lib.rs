@@ -15,8 +15,8 @@ pub type LangTagMap<T> = std::collections::BTreeMap<String, T>;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
-#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::OneOf))]
-#[cfg_attr(feature = "poem-openapi", oai(property_name = "type"))]
+#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Union))]
+#[cfg_attr(feature = "poem-openapi", oai(discriminator_name = "type"))]
 pub enum DependencyKey {
     Remote(Url),
     Local(String),

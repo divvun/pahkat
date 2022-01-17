@@ -13,7 +13,8 @@ chrono = { version = "0.4.15", features = ["serde"] }
 thiserror = "1.0.20"
 typed-builder = "0.9.0"
 structopt = { version = "0.3.16", optional = true }
-poem-openapi = { path = "../../../bbqsrc/poem/poem-openapi", features = ["url"], optional = true } # { version = "1", optional = true }
+poem = "1.2.36"
+poem-openapi = { version = "1.2.36", features = ["swagger-ui", "url"], optional = true }
 fbs = "0.6"
 fbs-build = "0.1"
 

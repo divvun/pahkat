@@ -44,8 +44,8 @@ pub(crate) fn parse_dep_map(s: &str) -> Result<DependencyMap, &'static str> {
 #[serde(untagged)] // #[serde(tag = "_type")]
 #[non_exhaustive]
 #[cfg_attr(feature = "structopt", derive(structopt::StructOpt))]
-#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::OneOf))]
-#[cfg_attr(feature = "poem-openapi", oai(property_name = "type"))]
+#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Union))]
+#[cfg_attr(feature = "poem-openapi", oai(discriminator_name = "type"))]
 pub enum Payload {
     WindowsExecutable(windows::Executable),
     #[cfg_attr(feature = "structopt", structopt(name = "macos-package"))]
