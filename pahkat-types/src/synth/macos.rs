@@ -3,6 +3,7 @@ use typed_builder::TypedBuilder;
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
+#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Object))]
 pub struct PackageRef {
     #[serde(rename = "type")]
     #[builder(default = "MacOSPackageRef".into())]
@@ -19,6 +20,7 @@ pub struct PackageRef {
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
+#[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Object))]
 pub struct PathRef {
     #[serde(rename = "type")]
     #[builder(default = "MacOSPathRef".into())]
