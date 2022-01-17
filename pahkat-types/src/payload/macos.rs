@@ -45,6 +45,7 @@ pub struct Package {
     #[builder(default = "MacOSPackage".into(), setter(skip))]
     #[serde(rename = "type")]
     #[cfg_attr(feature = "structopt", structopt(skip))]
+    #[cfg_attr(feature = "poem-openapi", oai(rename = "type"))]
     _type: String,
 
     #[cfg_attr(feature = "structopt", structopt(short, long))]

@@ -7,6 +7,7 @@ use typed_builder::TypedBuilder;
 pub struct RegistryKey {
     #[serde(rename = "type")]
     #[builder(default = "WindowsRegistryKey".into())]
+    #[cfg_attr(feature = "poem-openapi", oai(rename = "type"))]
     _type: String,
 
     pub path: String,
