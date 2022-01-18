@@ -56,25 +56,35 @@ async fn main() -> anyhow::Result<()> {
             let json: Release = toml::from_str(&release)?;
 
             let client = reqwest::Client::new();
+            let mut retries = 0;
 
-            let response = client
-                .patch(&upload.url)
-                .json(&json)
-                .header("authorization", format!("Bearer {}", auth))
-                .send()
-                .await?;
+            while retries <= 3 {
+                let response = client
+                    .patch(&upload.url)
+                    .json(&json)
+                    .header("authorization", format!("Bearer {}", auth))
+                    .send()
+                    .await?;
 
-            match response.error_for_status_ref() {
-                Ok(_) => {
-                    println!("Response: {}", response.text().await?);
-                }
-                Err(err) => {
-                    eprintln!("Errored with status {}", err.status().unwrap());
-                    match response.text().await {
-                        Ok(v) => eprintln!("{}", v),
-                        Err(_) => {}
+                match response.error_for_status_ref() {
+                    Ok(_) => {
+                        println!("Response: {}", response.text().await?);
                     }
-                    std::process::exit(1);
+                    Err(err) => {
+                        eprintln!("Errored with status {}", err.status().unwrap());
+                        match response.text().await {
+                            Ok(v) => eprintln!("{}", v),
+                            Err(_) => {}
+                        }
+                        match err.status().unwrap().as_u16() {
+                            500..=599 => {
+                                eprintln!("Retrying");
+                                retries += 1;
+                                continue;
+                            }
+                            _ => std::process::exit(1),
+                        }
+                    }
                 }
             }
         }
