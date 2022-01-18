@@ -10,11 +10,6 @@ struct Upload {
     pub release_meta_path: PathBuf,
 }
 
-#[derive(Serialize, Deserialize)]
-struct PackageUpdateRequest {
-    release: Release,
-}
-
 #[derive(StructOpt)]
 enum Args {
     Release(Release),
@@ -58,9 +53,7 @@ async fn main() -> anyhow::Result<()> {
             let auth = std::env::var("PAHKAT_API_KEY")?;
 
             let release = std::fs::read_to_string(upload.release_meta_path)?;
-            let release: Release = toml::from_str(&release)?;
-
-            let json = PackageUpdateRequest { release };
+            let json: Release = toml::from_str(&release)?;
 
             let client = reqwest::Client::new();
 
