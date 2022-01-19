@@ -108,6 +108,7 @@ pub struct Target {
     #[serde(default)]
     #[builder(default)]
     #[cfg_attr(feature = "structopt", structopt(default_value = "", short, long, parse(try_from_str = parse_dep_map)))]
+    #[cfg_attr(feature = "poem-openapi", oai(default))]
     pub dependencies: DependencyMap,
     #[cfg_attr(feature = "structopt", structopt(subcommand))]
     pub payload: Payload,

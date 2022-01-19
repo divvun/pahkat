@@ -56,11 +56,13 @@ pub struct Package {
 
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     #[cfg_attr(feature = "structopt", structopt(default_value = "", short, long, parse(try_from_str = parse_set)))]
+    #[cfg_attr(feature = "poem-openapi", oai(default))]
     #[builder(default)]
     pub targets: BTreeSet<InstallTarget>,
 
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     #[cfg_attr(feature = "structopt", structopt(default_value = "", short, long, parse(try_from_str = parse_set)))]
+    #[cfg_attr(feature = "poem-openapi", oai(default))]
     #[builder(default)]
     pub requires_reboot: BTreeSet<RebootSpec>,
 
