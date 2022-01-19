@@ -69,6 +69,7 @@ async fn main() -> anyhow::Result<()> {
                 match response.error_for_status_ref() {
                     Ok(_) => {
                         println!("Response: {}", response.text().await?);
+                        break;
                     }
                     Err(err) => {
                         eprintln!("Errored with status {}", err.status().unwrap());
