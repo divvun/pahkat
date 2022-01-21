@@ -41,7 +41,7 @@ pub(crate) fn parse_dep_map(s: &str) -> Result<DependencyMap, &'static str> {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-#[serde(untagged)] // #[serde(tag = "_type")]
+#[serde(tag = "type")]
 #[non_exhaustive]
 #[cfg_attr(feature = "structopt", derive(structopt::StructOpt))]
 #[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Union))]

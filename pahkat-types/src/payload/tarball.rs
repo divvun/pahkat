@@ -8,12 +8,6 @@ use typed_builder::TypedBuilder;
 #[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Object))]
 #[cfg_attr(feature = "poem-openapi", oai(rename = "TarballPackage"))]
 pub struct Package {
-    #[builder(default = "TarballPackage".into(), setter(skip))]
-    #[serde(rename = "type")]
-    #[cfg_attr(feature = "structopt", structopt(skip))]
-    #[cfg_attr(feature = "poem-openapi", oai(rename = "type"))]
-    _type: String,
-
     #[cfg_attr(feature = "structopt", structopt(short, long))]
     pub url: url::Url,
 
