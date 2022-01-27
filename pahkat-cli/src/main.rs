@@ -27,7 +27,7 @@ fn config_path(holder: &dyn ConfigPath) -> Result<PathBuf> {
 #[cfg(feature = "windows")]
 async fn store(config_path: Option<&Path>) -> anyhow::Result<Arc<dyn PackageStore>> {
     let config = match config_path {
-        Some(v) => pahkat_client::Config::load(&v, pahkat_client::Permission::ReadWrite)?,
+        Some(v) => pahkat_client::Config::load(&v, pahkat_client::Permission::ReadWrite).0,
         None => pahkat_client::Config::load_default()?,
     };
     let store = pahkat_client::WindowsPackageStore::new(config).await;
