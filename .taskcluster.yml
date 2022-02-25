@@ -37,7 +37,9 @@ tasks:
           name: Decision task
           description: ''
           owner: ${event.sender.login}@users.noreply.github.com
-          source: ${event.repository.url}
+          source: ${event.compare}
+        tags:
+          git_ref: ${event.ref}
         projectId: "divvun"
         taskQueueId: divvun/linux
         deadline:
@@ -52,26 +54,12 @@ tasks:
           features:
             # Needed for the decision task to create other tasks
             taskclusterProxy: true
-          artifacts:
-            public/repo.bundle:
-              type: file
-              path: /repo.bundle
-              expires: {$fromNow: '1 day'}
-            public/ci.bundle:
-              type: file
-              path: /ci.bundle
-              expires: {$fromNow: '1 day'}
           command:
             - /bin/bash
             - '--login'
             - '-e'
             - '-c'
             - >-
-              git init repo &&
-              cd repo &&
-              git fetch --depth 1 "$GIT_URL" "$GIT_REF" &&
-              git reset --hard "$GIT_SHA" &&
-              cd .. &&
               git init ci &&
               cd ci &&
               git fetch --depth 1 "$CI_REPO_URL" "$CI_REPO_REF" &&
