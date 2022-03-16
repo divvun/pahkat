@@ -44,7 +44,7 @@ impl LoadedRepository {
         url: RepoUrl,
         channel: Option<String>,
     ) -> Result<LoadedRepository, RepoDownloadError> {
-        const USER_AGENT: &str = concat!("pahkat-client/", env!("VERGEN_GIT_SEMVER_LIGHTWEIGHT"), " (", env!("VERGEN_CARGO_TARGET_TRIPLE"), ")");
+        const USER_AGENT: &str = concat!("pahkat-client/", env!("GIT_VERSION"), " (", env!("CARGO_TARGET_TRIPLE"), ")");
         let (tx, rx) = tokio::sync::oneshot::channel();
 
         tokio::spawn(async move {

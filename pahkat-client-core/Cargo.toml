@@ -74,13 +74,10 @@ android_log = { git = "https://github.com/bbqsrc/android_log-rs" }
 [build-dependencies]
 anyhow = "1.0.32"
 fbs-build = "0.1"
-vergen = "7"
-# We're not using it immediately but we need to enable the vendored feature on
-# it for windows
-git2 = { version = "0.14", default-features = false }
+git-version = "0.3.5"
 
 [features]
 ffi = ["env_logger", "cffi"]
 prefix = ["tar", "xz2", "rusqlite", "r2d2_sqlite", "r2d2"]
-windows = ["git2/vendored-libgit2"]
+windows = []
 macos = []
