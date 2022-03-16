@@ -56,24 +56,25 @@ whoami = "0.9.0"
 pathos = "0.3.0-pre.4"
 iref = "1.2.0"
 
-    # MacOS-specific
-    [target.'cfg(target_os="macos")'.dependencies]
-    plist = { version = "1.0.0" }
+# MacOS-specific
+[target.'cfg(target_os="macos")'.dependencies]
+plist = { version = "1.0.0" }
 
-    # Windows-specific
-    [target.'cfg(target_os="windows")'.dependencies]
-    winapi = { version = "0.3", features = ["shellapi"] }
-    registry = "1.0"
+# Windows-specific
+[target.'cfg(target_os="windows")'.dependencies]
+winapi = { version = "0.3", features = ["shellapi"] }
+registry = "1.0"
 
-    # Android-specific
-    [target.'cfg(target_os="android")'.dependencies]
-    backtrace = "0.3.50"
-    ctor = "0.1.15"
-    android_log = { git = "https://github.com/bbqsrc/android_log-rs" }
+# Android-specific
+[target.'cfg(target_os="android")'.dependencies]
+backtrace = "0.3.50"
+ctor = "0.1.15"
+android_log = { git = "https://github.com/bbqsrc/android_log-rs" }
 
 [build-dependencies]
 anyhow = "1.0.32"
 fbs-build = "0.1"
+vergen = "7"
 
 [features]
 ffi = ["env_logger", "cffi"]
