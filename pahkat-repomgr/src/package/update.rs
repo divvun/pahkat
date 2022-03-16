@@ -1,9 +1,9 @@
 use std::borrow::Cow;
-use std::fs::{self, create_dir_all};
+use std::fs::{self};
 use std::io;
 use std::path::{Path, PathBuf};
 
-use pahkat_types::{package::Version, payload::Payload};
+use pahkat_types::{package::Version};
 use typed_builder::TypedBuilder;
 
 #[non_exhaustive]
@@ -219,7 +219,7 @@ pub fn update<'a>(request: Request<'a>) -> Result<(), Error> {
     let channel = request.channel.as_ref().map(|x| x.deref().to_string());
 
     // Check if a release exists that meets this criteria
-    let mut release = match descriptor
+    let release = match descriptor
         .release
         .iter_mut()
         .find(|x| &x.version == &*request.version && x.channel == channel)
@@ -243,7 +243,7 @@ pub fn update<'a>(request: Request<'a>) -> Result<(), Error> {
     };
 
     // Check if a target exists that meets this criteria
-    let mut target = match release
+    let target = match release
         .target
         .iter_mut()
         .find(|x| x.platform == request.target.platform)

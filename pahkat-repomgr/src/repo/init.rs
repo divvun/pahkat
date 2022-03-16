@@ -1,6 +1,6 @@
 use std::borrow::Cow;
-use std::fs::{self, create_dir_all, File};
-use std::io::{self, Read, Write};
+use std::fs::{self, create_dir_all};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
