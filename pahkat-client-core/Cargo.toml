@@ -77,7 +77,7 @@ fbs-build = "0.1"
 vergen = "7"
 # We're not using it immediately but we need to enable the vendored feature on
 # it for windows
-git2 = "0.14"
+git2 = { version = "0.14", default-features = false }
 
 [features]
 ffi = ["env_logger", "cffi"]
