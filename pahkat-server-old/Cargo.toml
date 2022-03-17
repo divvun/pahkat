@@ -1,6 +1,6 @@
 [package]
 name = "pahkat-server"
-version = "0.6.0"
+version = "2.1.0"
 authors = [
     "projektir <oprojektir@gmail.com>",
     "Brendan Molloy <brendan@bbqsrc.net>",
