@@ -8,7 +8,7 @@ async fn main() -> anyhow::Result<()> {
         format!("/tmp/pahkat")
     };
 
-    match crate::server::setup_logger("service") {
+    match pahkat_rpc::server::setup_logger("service") {
         Ok(_) => log::debug!("Logging started."),
         Err(e) => {
             eprintln!("Error setting up logging:");
