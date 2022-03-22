@@ -11,9 +11,9 @@ async fn main() -> anyhow::Result<()> {
     match crate::server::setup_logger("service") {
         Ok(_) => log::debug!("Logging started."),
         Err(e) => {
-            log::error!("Error setting up logging:");
-            log::error!("{:?}", e);
-            log::error!("Attempting env_logger...");
+            eprintln!("Error setting up logging:");
+            eprintln!("{:?}", e);
+            eprintln!("Attempting env_logger...");
             env_logger::try_init()?;
         }
     }
