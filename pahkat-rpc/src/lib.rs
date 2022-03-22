@@ -999,16 +999,6 @@ pub async fn start(
     config_path: Option<&Path>,
     shutdown_rx: mpsc::UnboundedReceiver<()>,
 ) -> std::result::Result<(), anyhow::Error> {
-    match server::setup_logger("service") {
-        Ok(_) => log::debug!("Logging started."),
-        Err(e) => {
-            log::error!("Error setting up logging:");
-            log::error!("{:?}", e);
-            log::error!("Attempting env_logger...");
-            env_logger::try_init()?;
-        }
-    }
-
     log::info!(
         "Starting {} {}...",
         env!("CARGO_PKG_NAME"),

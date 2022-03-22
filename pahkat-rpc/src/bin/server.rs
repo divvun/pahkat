@@ -8,7 +8,16 @@ async fn main() -> anyhow::Result<()> {
         format!("/tmp/pahkat")
     };
 
-    pahkat_rpc::server::setup_logger("service").unwrap();
+    match crate::server::setup_logger("service") {
+        Ok(_) => log::debug!("Logging started."),
+        Err(e) => {
+            log::error!("Error setting up logging:");
+            log::error!("{:?}", e);
+            log::error!("Attempting env_logger...");
+            env_logger::try_init()?;
+        }
+    }
+
 
     pahkat_rpc::start(
         Path::new(&path),
