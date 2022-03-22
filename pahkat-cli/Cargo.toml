@@ -1,6 +1,6 @@
 [package]
 name = "pahkat-cli"
-version = "2.1.0"
+version = "2.1.1"
 authors = ["Brendan Molloy <brendan@bbqsrc.net>"]
 license = "GPL-3.0"
 edition = "2018"
