@@ -23,10 +23,12 @@ pub struct TargetMarshaler;
 
 impl InputType for TargetMarshaler {
     type Foreign = <cffi::StringMarshaler as InputType>::Foreign;
+    type ForeignTraitObject = ();
 }
 
 impl ReturnType for TargetMarshaler {
     type Foreign = cffi::Slice<u8>;
+    type ForeignTraitObject = ();
 
     fn foreign_default() -> Self::Foreign {
         cffi::Slice::default()

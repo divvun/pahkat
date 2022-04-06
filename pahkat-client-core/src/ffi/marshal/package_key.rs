@@ -22,10 +22,12 @@ pub struct PackageKeyMarshaler<'a>(&'a std::marker::PhantomData<()>);
 
 impl<'a> InputType for PackageKeyMarshaler<'a> {
     type Foreign = <cffi::StrMarshaler<'a> as InputType>::Foreign;
+    type ForeignTraitObject = ();
 }
 
 impl<'a> ReturnType for PackageKeyMarshaler<'a> {
     type Foreign = <cffi::StringMarshaler as ReturnType>::Foreign;
+    type ForeignTraitObject = ();
 
     fn foreign_default() -> Self::Foreign {
         Default::default()
