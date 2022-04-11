@@ -258,7 +258,6 @@ impl PackageStore for MacOSPackageStore {
 }
 
 impl MacOSPackageStore {
-    #[must_use]
     pub async fn new(config: Config) -> MacOSPackageStore {
         let store = MacOSPackageStore {
             repos: Arc::new(RwLock::new(HashMap::new())),

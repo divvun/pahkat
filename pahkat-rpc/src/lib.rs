@@ -19,7 +19,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
-use task_collection::{GlobalTokio02Spawner, TaskCollection};
+use task_collection::{GlobalTokioSpawner, TaskCollection};
 use tokio::io::{AsyncRead, AsyncWrite};
 #[cfg(unix)]
 use tokio::net::UnixListener;
@@ -35,7 +35,7 @@ use tower::Service;
 use url::Url;
 
 mod pb {
-    tonic::include_proto!("/pahkat");
+    tonic::include_proto!("pahkat");
 }
 
 impl From<RepoRecord> for pb::RepoRecord {
@@ -342,7 +342,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
             let mut requires_reboot = false;
 
             futures::pin_mut!(request);
-            let collection = TaskCollection::new(GlobalTokio02Spawner);
+            let collection = TaskCollection::new(GlobalTokioSpawner);
 
             'listener: loop {
                 let request = request.message().await;
@@ -384,7 +384,6 @@ impl pb::pahkat_server::Pahkat for Rpc {
                     .into_iter()
                     .map(|x| PackageAction::from(x))
                     .collect::<Vec<_>>();
-                println!("{:?}", &actions);
 
                 let transaction = match PackageTransaction::new(Arc::clone(&store) as _, actions) {
                     Ok(v) => v,
@@ -595,7 +594,10 @@ impl pb::pahkat_server::Pahkat for Rpc {
             log::trace!("Ended entire listener loop");
         });
 
-        Ok(Response::new(Box::pin(rx) as Self::ProcessTransactionStream))
+        Ok(Response::new(
+            Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx))
+                as Self::ProcessTransactionStream,
+        ))
     }
 
     async fn set_repo(
@@ -874,7 +876,7 @@ fn create_background_update_service(
             let notifications = notifications.clone();
             interval.tick().await;
 
-            time::delay_for(Duration::from_secs(2)).await;
+            time::sleep(Duration::from_secs(2)).await;
             let _ = store.refresh_repos().await;
 
             log::info!("Running self-update check…");
@@ -1032,7 +1034,7 @@ pub async fn start(
     Server::builder()
         .add_service(pb::pahkat_server::PahkatServer::new(rpc))
         .serve_with_incoming_shutdown(
-            endpoint.incoming().map_ok(StreamBox),
+            tokio_stream::wrappers::UnixListenerStream::new(endpoint),
             shutdown_handler(shutdown_rx, notifications, Arc::clone(&current_transaction))?,
         )
         .await?;
@@ -1050,13 +1052,13 @@ fn shutdown_handler(
     mut broadcast_tx: broadcast::Sender<Notification>,
     current_transaction: Arc<tokio::sync::Mutex<()>>,
 ) -> anyhow::Result<Pin<Box<dyn std::future::Future<Output = ()>>>, anyhow::Error> {
-    let sigint_listener = signal(SignalKind::interrupt())?.into_future();
-    let sigterm_listener = signal(SignalKind::terminate())?.into_future();
-    let sigquit_listener = signal(SignalKind::quit())?.into_future();
+    let mut sigint_listener = signal(SignalKind::interrupt())?;
+    let mut sigterm_listener = signal(SignalKind::terminate())?;
+    let mut sigquit_listener = signal(SignalKind::quit())?;
 
     // SIGUSR1 and SIGUSR2 do nothing, just swallow events.
-    let _sigusr1_listener = signal(SignalKind::user_defined1())?.into_future();
-    let _sigusr2_listener = signal(SignalKind::user_defined2())?.into_future();
+    let _sigusr1_listener = signal(SignalKind::user_defined1())?;
+    let _sigusr2_listener = signal(SignalKind::user_defined2())?;
 
     Ok(Box::pin(async move {
         log::debug!("Created signal listeners for: SIGINT, SIGTERM, SIGQUIT, SIGUSR1, SIGUSR2.");
@@ -1065,13 +1067,13 @@ fn shutdown_handler(
             _ = shutdown_rx.recv() => {
                 log::info!("Shutdown signal received; gracefully shutting down.");
             }
-            _ = sigint_listener => {
+            _ = sigint_listener.recv() => {
                 log::info!("SIGINT received; gracefully shutting down.");
             }
-            _ = sigterm_listener => {
+            _ = sigterm_listener.recv() => {
                 log::info!("SIGTERM received; gracefully shutting down.");
             }
-            _ = sigquit_listener => {
+            _ = sigquit_listener.recv() => {
                 log::info!("SIGQUIT received; gracefully shutting down.");
             }
         };
@@ -1219,38 +1221,38 @@ fn shutdown_handler(
     }
 }
 
-#[derive(Debug)]
-pub struct StreamBox<T: AsyncRead + AsyncWrite>(pub T);
+// #[derive(Debug)]
+// pub struct StreamBox<T: AsyncRead + AsyncWrite>(pub T);
 
-impl<T: AsyncRead + AsyncWrite> Connected for StreamBox<T> {}
+// impl<T: AsyncRead + AsyncWrite> Connected for StreamBox<T> {}
 
-impl<T: AsyncRead + AsyncWrite + Unpin> AsyncRead for StreamBox<T> {
-    fn poll_read(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<std::io::Result<usize>> {
-        Pin::new(&mut self.0).poll_read(cx, buf)
-    }
-}
+// impl<T: AsyncRead + AsyncWrite + Unpin> AsyncRead for StreamBox<T> {
+//     fn poll_read(
+//         mut self: Pin<&mut Self>,
+//         cx: &mut Context<'_>,
+//         buf: &mut [u8],
+//     ) -> Poll<std::io::Result<usize>> {
+//         Pin::new(&mut self.0).poll_read(cx, buf)
+//     }
+// }
 
-impl<T: AsyncRead + AsyncWrite + Unpin> AsyncWrite for StreamBox<T> {
-    fn poll_write(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<std::io::Result<usize>> {
-        Pin::new(&mut self.0).poll_write(cx, buf)
-    }
+// impl<T: AsyncRead + AsyncWrite + Unpin> AsyncWrite for StreamBox<T> {
+//     fn poll_write(
+//         mut self: Pin<&mut Self>,
+//         cx: &mut Context<'_>,
+//         buf: &[u8],
+//     ) -> Poll<std::io::Result<usize>> {
+//         Pin::new(&mut self.0).poll_write(cx, buf)
+//     }
 
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        Pin::new(&mut self.0).poll_flush(cx)
-    }
+//     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+//         Pin::new(&mut self.0).poll_flush(cx)
+//     }
 
-    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        Pin::new(&mut self.0).poll_shutdown(cx)
-    }
-}
+//     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+//         Pin::new(&mut self.0).poll_shutdown(cx)
+//     }
+// }
 
 trait AdminCheck {
     const FLAG: &'static str = "is-admin-path";

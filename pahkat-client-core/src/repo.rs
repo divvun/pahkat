@@ -720,7 +720,6 @@ where
     Ok(completed)
 }
 
-#[must_use]
 pub(crate) async fn refresh_repos(
     config: Config,
 ) -> (

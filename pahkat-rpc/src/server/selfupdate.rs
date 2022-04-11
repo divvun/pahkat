@@ -162,7 +162,7 @@ pub(crate) async fn self_update() -> Result<bool, Box<dyn Error>> {
                             log::error!("Downloading failed {} times; aborting!", retries);
                             return Ok(false);
                         }
-                        tokio::time::delay_for(std::time::Duration::from_secs(2)).await;
+                        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                         continue 'downloader;
                     }
                     DownloadEvent::Complete(_) => {

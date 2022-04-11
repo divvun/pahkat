@@ -8,10 +8,13 @@ use std::{
 };
 use structopt::StructOpt;
 use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::mpsc;
-use tonic::transport::server::Connected;
-use tonic::transport::{Endpoint, Uri};
-use tonic::{transport::Server, Request, Response, Status, Streaming};
+use tokio_stream::wrappers::{ReceiverStream, UnboundedReceiverStream, UnixListenerStream};
+use tonic::{
+    transport::{server::Connected, Endpoint, Server, Uri},
+    Request, Response, Status, Streaming,
+};
 use tower::service_fn;
 
 use crate::pb;
@@ -70,16 +73,29 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+#[cfg(windows)]
 async fn new_client() -> anyhow::Result<PahkatClient> {
     let channel = Endpoint::try_from("file://tmp/pahkat")?
         .connect_with_connector(service_fn(|_: Uri| {
-            let path = if cfg!(windows) {
-                format!("//./pipe/pahkat")
-            } else {
-                format!("/tmp/pahkat.sock")
-            };
+            let path = format!("//./pipe/pahkat");
 
-            parity_tokio_ipc::Endpoint::connect(path)
+            // parity_tokio_ipc::Endpoint::connect(path)
+            todo!()
+        }))
+        .await?;
+    // todo!();
+
+    let mut client = PahkatClient::new(channel);
+    Ok(client)
+}
+
+#[cfg(unix)]
+async fn new_client() -> anyhow::Result<PahkatClient> {
+    let channel = Endpoint::try_from("file://tmp/pahkat.sock")?
+        .connect_with_connector(service_fn(move |_: Uri| async move {
+            let path = format!("/tmp/pahkat.sock");
+            let uds = UnixStream::connect(path).await?;
+            Ok::<_, std::io::Error>(uds)
         }))
         .await?;
 
@@ -429,7 +445,7 @@ pub extern "C" fn pahkat_rpc_process_transaction(
     let mut global_tx = CURRENT_CANCEL_TX.lock().unwrap();
     *global_tx.borrow_mut() = Some(tx.clone());
 
-    let request = Request::new(rx);
+    let request = Request::new(UnboundedReceiverStream::new(rx));
 
     spawn(async move {
         let mut stream = {
@@ -471,9 +487,7 @@ static CURRENT_CANCEL_TX: Lazy<
 
 static BASIC_RUNTIME: Lazy<std::sync::RwLock<tokio::runtime::Runtime>> = Lazy::new(|| {
     std::sync::RwLock::new(
-        tokio::runtime::Builder::new()
-            .threaded_scheduler()
-            // .basic_scheduler()
+        tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
             .expect("failed to build tokio runtime"),

@@ -18,7 +18,6 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-
     pahkat_rpc::start(
         Path::new(&path),
         config_path(),

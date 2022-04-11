@@ -90,7 +90,7 @@ impl Default for InstallTarget {
     }
 }
 
-pub type Stream<T> = Pin<Box<dyn futures::stream::Stream<Item = T> + Send + 'static>>;
+pub type Stream<T> = Pin<Box<dyn futures::stream::Stream<Item = T> + Send + Sync + 'static>>;
 pub type Future<T> = Pin<Box<dyn std::future::Future<Output = T> + Send + Sync + 'static>>;
 
 pub trait PackageStore: Send + Sync {
@@ -98,7 +98,6 @@ pub trait PackageStore: Send + Sync {
     fn errors(&self) -> SharedRepoErrors;
     fn config(&self) -> SharedStoreConfig;
 
-    #[must_use]
     fn download(&self, key: &PackageKey) -> Stream<DownloadEvent>;
 
     fn import(&self, key: &PackageKey, installer_path: &Path) -> Result<PathBuf, ImportError>;

@@ -9,7 +9,7 @@ use std::task::{self, Poll};
 
 pub async fn channel() -> (Signal, Watch, watch::Receiver<()>) {
     let (tx, mut rx) = watch::channel(());
-    rx.recv().await;
+    rx.changed().await;
     (Signal { tx }, Watch { rx: rx.clone() }, rx)
 }
 
@@ -41,7 +41,7 @@ enum State<F> {
 
 impl Signal {
     pub fn drain(mut self) -> Draining {
-        let _ = self.tx.broadcast(());
+        let _ = self.tx.send(());
         Draining(Box::pin(async move { self.tx.closed().await }))
     }
 }
@@ -66,7 +66,7 @@ impl Watch {
             future,
             state: State::Watch(on_drain),
             watch: Box::pin(async move {
-                let _ = rx.recv().await;
+                let _ = rx.changed().await;
             }),
             // Keep the receiver alive until the future completes, so that
             // dropping it can signal that draining has completed.
