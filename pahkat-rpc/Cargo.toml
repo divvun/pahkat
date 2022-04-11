@@ -11,14 +11,12 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 pahkat-client = { path = "../pahkat-client-core" }
 tonic = "0.7.1"
 pin-project = "1.0"
-hyper = "0.13"
+hyper = "0.14"
 prost = "0.10"
 tokio = { version = "1.6", features = ["rt-multi-thread", "time", "fs", "macros", "sync", "signal"] }
 futures = { version = "0.3", default-features = false, features = ["alloc"] }
 async-stream = "0.3.0"
-tower = "0.3"
-# parity-tokio-ipc = { git = "https://github.com/bbqsrc/parity-tokio-ipc", features = ["tonic"] }
-# tokio-named-pipe = { git = "https://github.com/bbqsrc/tokio-named-pipe", features = ["tonic"] }
+tower = "0.4.12"
 log = "0.4.11"
 env_logger = "0.7.1"
 cffi = { version = "0.1.7", features = ["url"] }
