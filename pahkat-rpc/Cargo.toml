@@ -48,10 +48,6 @@ tokio-named-pipe = { git = "https://github.com/bbqsrc/tokio-named-pipe" }
 tonic-build = "0.7"
 
 [features]
-default = ["windows"]
-# default = ["server"]
-# server = []
-# client = []
 windows = ["pahkat-client/windows"]
 prefix = ["pahkat-client/prefix"]
 macos = ["pahkat-client/macos"]
