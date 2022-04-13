@@ -98,7 +98,7 @@ pub(crate) fn requires_update(store: &dyn PackageStore) -> bool {
 pub async fn install(store: &dyn PackageStore) -> Result<(), Box<dyn Error>> {
     super::windows::initiate_self_update()?;
     // Wait some time for the impending shutdown
-    tokio::time::delay_for(std::time::Duration::from_secs(10)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
     Ok(())
 }
 

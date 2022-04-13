@@ -33,7 +33,7 @@ thiserror = "1.0.20"
 pathos = "0.3.0-pre.6"
 task-collection = { version = "0.0.4", features = ["tokio"] }
 winapi = { version = "0.3", features = ["winnt"]}
-tokio-stream = { version = "0.1.8", features = ["net"] }
+tokio-stream = { version = "0.1.8", features = ["net", "sync"] }
 
 [target.'cfg(target_os="macos")'.dependencies]
 raunch = { version = "1.0.0", optional = true }
@@ -42,11 +42,13 @@ raunch = { version = "1.0.0", optional = true }
 windows-service = "0.4"
 windows-accesstoken = "0.1"
 eventlog = "0.1.0"
+tokio-named-pipe = { git = "https://github.com/bbqsrc/tokio-named-pipe" }
 
 [build-dependencies]
 tonic-build = "0.7"
 
 [features]
+default = ["windows"]
 # default = ["server"]
 # server = []
 # client = []

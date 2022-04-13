@@ -41,7 +41,7 @@ pub async fn run_service_command(opts: &ServiceOpts) -> Result<()> {
             // for example services.msc
             let mut retries: i32 = 5;
             loop {
-                tokio::time::delay_for(Duration::from_secs(1)).await;
+                tokio::time::sleep(Duration::from_secs(1)).await;
                 if let Err(e) = service::install_service(&exe_path) {
                     if retries <= 0 {
                         log::error!("Failed to install service: {:?}", e);

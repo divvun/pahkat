@@ -8,9 +8,12 @@ use std::{
 };
 use structopt::StructOpt;
 use tokio::io::{AsyncRead, AsyncWrite};
+#[cfg(unix)]
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::mpsc;
-use tokio_stream::wrappers::{ReceiverStream, UnboundedReceiverStream, UnixListenerStream};
+#[cfg(unix)]
+use tokio_stream::wrappers::UnixListenerStream;
+use tokio_stream::wrappers::{ReceiverStream, UnboundedReceiverStream};
 use tonic::{
     transport::{server::Connected, Endpoint, Server, Uri},
     Request, Response, Status, Streaming,
@@ -75,17 +78,18 @@ use tokio::sync::RwLock;
 
 #[cfg(windows)]
 async fn new_client() -> anyhow::Result<PahkatClient> {
+    use tokio::net::windows::named_pipe::ClientOptions;
+
     let channel = Endpoint::try_from("file://tmp/pahkat")?
-        .connect_with_connector(service_fn(|_: Uri| {
+        .connect_with_connector(service_fn(|_: Uri| async move {
             let path = format!("//./pipe/pahkat");
 
-            // parity_tokio_ipc::Endpoint::connect(path)
-            todo!()
+            let pipe = ClientOptions::new().open(path)?;
+            Ok::<_, std::io::Error>(pipe)
         }))
         .await?;
-    // todo!();
 
-    let mut client = PahkatClient::new(channel);
+    let client = PahkatClient::new(channel);
     Ok(client)
 }
 
@@ -99,7 +103,7 @@ async fn new_client() -> anyhow::Result<PahkatClient> {
         }))
         .await?;
 
-    let mut client = PahkatClient::new(channel);
+    let client = PahkatClient::new(channel);
     Ok(client)
 }
 

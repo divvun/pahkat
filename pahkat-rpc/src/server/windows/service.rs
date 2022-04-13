@@ -69,7 +69,7 @@ pub async fn uninstall_service() -> Result<()> {
             // Service can't accept control commands, try again
             Err(Winapi(e)) if e.raw_os_error() == Some(1061) => {
                 warn!("Service can't accept control commands, trying again");
-                tokio::time::delay_for(Duration::from_secs(1)).await;
+                tokio::time::sleep(Duration::from_secs(1)).await;
             }
             Ok(_) => return Ok(()),
             e => {
@@ -105,14 +105,14 @@ pub async fn stop_service() -> Result<()> {
             }
             Err(Winapi(e)) if e.raw_os_error() == Some(1061) => {
                 info!("service can't accept control commands, trying again");
-                tokio::time::delay_for(Duration::from_secs(1)).await;
+                tokio::time::sleep(Duration::from_secs(1)).await;
             }
             e => {
                 e?;
             }
         };
         // Wait for service to stop
-        tokio::time::delay_for(Duration::from_secs(1)).await;
+        tokio::time::sleep(Duration::from_secs(1)).await;
     }
 
     Ok(())
@@ -139,7 +139,7 @@ pub async fn start_service() -> Result<()> {
         }
 
         // Wait for service to start
-        tokio::time::delay_for(Duration::from_secs(1)).await;
+        tokio::time::sleep(Duration::from_secs(1)).await;
     }
 
     Ok(())

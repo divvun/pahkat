@@ -77,7 +77,7 @@ pub(crate) async fn self_update(
             .open(&service_executable)
         {
             log::info!("err {:?}", e);
-            tokio::time::delay_for(std::time::Duration::from_secs(1)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
     })
     .await?;

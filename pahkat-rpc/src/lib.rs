@@ -27,8 +27,6 @@ use tokio::net::UnixListener;
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
-#[cfg(windows)]
-use tokio_named_pipe::{NamedPipeListener, NamedPipeStream};
 use tonic::transport::server::Connected;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
 use tower::Service;
@@ -1100,16 +1098,14 @@ pub async fn start(
     );
 
     log::debug!("Creating security descriptor for world...");
-    let mut descriptor = tokio_named_pipe::secattr::SecurityDescriptor::world()?;
+    let descriptor = tokio_named_pipe::secattr::SecurityDescriptor::world()?;
     log::debug!("Creating endpoint config...");
-    let mut config = tokio_named_pipe::NamedPipeConfig::default();
+    let mut config = tokio_named_pipe::config::NamedPipeConfig::default();
     log::debug!("Creating security attributes...");
     config.security_attributes =
-        tokio_named_pipe::secattr::SecurityAttributes::new(&mut descriptor, false);
+        tokio_named_pipe::secattr::SecurityAttributes::new(descriptor, false);
     log::debug!("Binding named pipe...");
-    let mut endpoint = NamedPipeListener::bind(path, Some(config))?;
-    // endpoint.set_security_attributes(SecurityAttributes::allow_everyone_create().unwrap());
-    let mut incoming = endpoint.incoming();
+    let mut incoming = tokio_named_pipe::NamedPipeServerListener::bind(path.to_path_buf(), config)?;
 
     let store = store(config_path).await?;
     log::debug!("Created store.");
@@ -1126,6 +1122,8 @@ pub async fn start(
     let (notifications, mut notif_rx) = broadcast::channel(5);
 
     // Create the background updater
+
+    use futures::pin_mut;
     create_background_update_service(
         Arc::clone(&store),
         Arc::clone(&current_transaction),
@@ -1152,8 +1150,14 @@ pub async fn start(
 
     tokio::spawn(shutdown);
 
+    pin_mut!(incoming);
+    pin_mut!(inner_rx);
+
     while let Some(Ok(conn)) =
-        tokio::select! {next = incoming.next() => next, _ = inner_rx.recv() => None}
+        tokio::select! {
+            next = incoming.next() => next,
+            _ = inner_rx.next() => None
+        }
     {
         let http = http.clone();
         let svc = svc.clone();
