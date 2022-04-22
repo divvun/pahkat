@@ -1,7 +1,6 @@
 /target/
 **/*.rs.bk
 /dev/
-Cargo.lock
 /.cargo
 target
 dist
