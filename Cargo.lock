@@ -3937,7 +3937,8 @@ dependencies = [
 [[package]]
 name = "windows-service"
 version = "0.4.0"
-source = "git+https://github.com/mullvad/windows-service-rs#3a41950d4e432f784ab229cf8dfddc04bd925713"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c643e10139d127d30d6d753398c8a6f0a43532e8370f6c9d29ebbff29b984ab"
 dependencies = [
  "bitflags",
  "err-derive",

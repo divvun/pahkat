@@ -39,7 +39,7 @@ winapi = { version = "0.3", features = ["winnt"]}
 raunch = { version = "1.0.0", optional = true }
 
 [target.'cfg(target_os="windows")'.dependencies]
-windows-service = { git = "https://github.com/mullvad/windows-service-rs" }
+windows-service = "0.4"
 windows-accesstoken = "0.1"
 eventlog = "0.1.0"
 
