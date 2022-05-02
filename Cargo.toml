@@ -2,7 +2,6 @@
 members = [
     "pahkat-types",
     # "pahkat-common",
-    # "pahkat-server",
     "pahkat-rpc",
     "pahkat-client-core",
     "pahkat-repomgr",
@@ -10,6 +9,5 @@ members = [
 ]
 
 exclude = [
-    "pahkat-server",
     "pahkat-uploader",
 ]

@@ -1,3 +1,0 @@
-artifacts_dir = "artifacts"
-url_prefix = "https://pahkat.uit.no/artifacts"
-db_path = "db.sqlite"
