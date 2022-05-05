@@ -1,5 +1,6 @@
 use std::mem;
 
+use futures::StreamExt;
 use pin_project::pin_project;
 use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
@@ -10,8 +11,9 @@ use std::task::{self, Poll};
 
 pub async fn channel() -> (Signal, Watch, WatchStream<()>) {
     let (tx, mut rx) = watch::channel(());
-    rx.changed().await;
-    (Signal { tx }, Watch { rx: rx.clone() }, WatchStream::new(rx))
+    let mut watch_stream = WatchStream::new(rx.clone());
+    watch_stream.next().await;
+    (Signal { tx }, Watch { rx }, watch_stream)
 }
 
 pub struct Signal {
