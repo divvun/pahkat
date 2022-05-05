@@ -2989,7 +2989,7 @@ dependencies = [
 [[package]]
 name = "tokio-named-pipe"
 version = "0.2.0"
-source = "git+https://github.com/bbqsrc/tokio-named-pipe#d15682b9241849137d6636c6fc863fe8b85c27e3"
+source = "git+https://github.com/bbqsrc/tokio-named-pipe#998b2eb755795d19f01e285a1705710785cf0012"
 dependencies = [
  "futures",
  "log",

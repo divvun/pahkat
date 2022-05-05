@@ -1098,12 +1098,12 @@ pub async fn start(
     );
 
     log::debug!("Creating security descriptor for world...");
-    let descriptor = tokio_named_pipe::secattr::SecurityDescriptor::world()?;
+    let mut descriptor = tokio_named_pipe::secattr::SecurityDescriptor::world()?;
     log::debug!("Creating endpoint config...");
     let mut config = tokio_named_pipe::config::NamedPipeConfig::default();
     log::debug!("Creating security attributes...");
     config.security_attributes =
-        tokio_named_pipe::secattr::SecurityAttributes::new(descriptor, false);
+        tokio_named_pipe::secattr::SecurityAttributes::new(&mut descriptor, false);
     log::debug!("Binding named pipe...");
     let mut incoming = tokio_named_pipe::NamedPipeServerListener::bind(path.to_path_buf(), config)?;
 
