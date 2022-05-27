@@ -1894,9 +1894,9 @@ dependencies = [
 
 [[package]]
 name = "pathos"
-version = "0.3.0-pre.5"
+version = "0.3.0-pre.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47ee3a140cf7cd2df1db4bd604419bc47a6869b0f75048f3593d3f2b64b3ba19"
+checksum = "dd0754fe2734846847204e57e8a79e4b506bd3155baf5ddb591b7d62b6f21f59"
 dependencies = [
  "eieio",
  "fruity__bbqsrc",
