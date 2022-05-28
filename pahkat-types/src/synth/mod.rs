@@ -25,6 +25,7 @@ pub struct SyntheticData {
 #[cfg_attr(feature = "async-graphql", graphql(name = "SynthDescriptor"))]
 #[non_exhaustive]
 pub struct Descriptor {
+    #[cfg_attr(feature = "async-graphql", graphql(flatten))]
     pub synthetic: SyntheticData,
     #[serde(default)]
     #[builder(default)]

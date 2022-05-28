@@ -119,6 +119,7 @@ pub struct DescriptorData {
 #[non_exhaustive]
 pub struct Descriptor {
     // Tables have to come last in TOML
+    #[cfg_attr(feature = "async-graphql", graphql(flatten))]
     pub package: DescriptorData,
 
     #[serde(default)]

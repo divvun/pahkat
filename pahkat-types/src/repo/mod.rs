@@ -54,6 +54,7 @@ pub struct RepositoryData {
 ///
 /// This struct represents the `index.toml` file at the base of a Pahkat repository.
 pub struct Index {
+    #[cfg_attr(feature = "async-graphql", graphql(flatten))]
     pub repository: RepositoryData,
 
     #[serde(default)]
