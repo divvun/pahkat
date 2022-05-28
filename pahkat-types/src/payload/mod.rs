@@ -102,6 +102,7 @@ impl Payload {
 #[cfg_attr(feature = "structopt", derive(structopt::StructOpt))]
 #[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Object))]
 #[cfg_attr(feature = "async-graphql", derive(async_graphql::SimpleObject))]
+#[cfg_attr(feature = "async-graphql", graphql(name = "PayloadTarget"))]
 pub struct Target {
     #[cfg_attr(feature = "structopt", structopt(short, long))]
     pub platform: String,

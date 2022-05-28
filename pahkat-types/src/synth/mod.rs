@@ -41,6 +41,7 @@ pub struct Descriptor {
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
 #[cfg_attr(feature = "async-graphql", derive(async_graphql::SimpleObject))]
+#[cfg_attr(feature = "async-graphql", graphql(name = "SynthTarget"))]
 #[non_exhaustive]
 pub struct Target {
     pub platform: String,
