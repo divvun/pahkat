@@ -16,6 +16,7 @@ use super::parse_set;
     oai(rename = "WindowsRebootSpec", rename_all = "lowercase")
 )]
 #[cfg_attr(feature = "async-graphql", derive(async_graphql::Enum))]
+#[cfg_attr(feature = "async-graphql", graphql(name = "WindowsRebootSpec"))]
 pub enum RebootSpec {
     Install,
     Uninstall,

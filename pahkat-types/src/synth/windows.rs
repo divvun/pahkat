@@ -10,6 +10,7 @@ pub struct RegistryKey {
     #[serde(rename = "type")]
     #[builder(default = "WindowsRegistryKey".into())]
     #[cfg_attr(feature = "poem-openapi", oai(rename = "type"))]
+    #[cfg_attr(feature = "async-graphql", graphql(name = "type"))]
     _type: String,
 
     pub path: String,

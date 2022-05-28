@@ -9,6 +9,7 @@ pub struct PackageRef {
     #[serde(rename = "type")]
     #[builder(default = "MacOSPackageRef".into())]
     #[cfg_attr(feature = "poem-openapi", oai(rename = "type"))]
+    #[cfg_attr(feature = "async-graphql", graphql(name = "type"))]
     _type: String,
 
     pub pkg_id: String,
@@ -27,6 +28,7 @@ pub struct PathRef {
     #[serde(rename = "type")]
     #[builder(default = "MacOSPathRef".into())]
     #[cfg_attr(feature = "poem-openapi", oai(rename = "type"))]
+    #[cfg_attr(feature = "async-graphql", graphql(name = "type"))]
     _type: String,
 
     pub app_paths: Vec<String>,
