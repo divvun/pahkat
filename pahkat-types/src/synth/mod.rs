@@ -22,6 +22,7 @@ pub struct SyntheticData {
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
 #[cfg_attr(feature = "async-graphql", derive(async_graphql::SimpleObject))]
+#[cfg_attr(feature = "async-graphql", graphql(name = "SynthDescriptor"))]
 #[non_exhaustive]
 pub struct Descriptor {
     pub synthetic: SyntheticData,

@@ -115,6 +115,7 @@ pub struct DescriptorData {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, TypedBuilder)]
 #[cfg_attr(feature = "async-graphql", derive(async_graphql::SimpleObject))]
+#[cfg_attr(feature = "async-graphql", graphql(name = "PackageDescriptor"))]
 #[non_exhaustive]
 pub struct Descriptor {
     // Tables have to come last in TOML
