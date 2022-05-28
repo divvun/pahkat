@@ -57,6 +57,7 @@ pub struct Target {
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
 #[cfg_attr(feature = "async-graphql", derive(async_graphql::SimpleObject))]
+#[cfg_attr(feature = "async-graphql", graphql(name = "SynthRelease"))]
 #[non_exhaustive]
 pub struct Release {
     pub version: String,
