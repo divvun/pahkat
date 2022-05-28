@@ -5,7 +5,7 @@ pub mod repo;
 pub mod synth;
 
 use serde::{Deserialize, Serialize};
-use std::{str::FromStr, fmt::Display, convert::Infallible};
+use std::{convert::Infallible, fmt::Display, str::FromStr};
 use url::Url;
 
 /// Will be replaced with a validating Map in the future.
@@ -22,6 +22,21 @@ pub enum DependencyKey {
     Local(String),
 }
 
+#[cfg(feature = "async-graphql")]
+#[cfg_attr(feature = "async-graphql", async_graphql::Scalar)]
+impl async_graphql::ScalarType for DependencyKey {
+    fn parse(_value: async_graphql::Value) -> async_graphql::InputValueResult<Self> {
+        todo!()
+    }
+
+    fn to_value(&self) -> async_graphql::Value {
+        match self {
+            DependencyKey::Remote(x) => async_graphql::Value::String(x.to_string()),
+            DependencyKey::Local(x) => async_graphql::Value::String(x.to_string()),
+        }
+    }
+}
+
 impl DependencyKey {
     pub fn as_str(&self) -> &str {
         match self {
@@ -36,8 +51,6 @@ impl Display for DependencyKey {
         self.as_str().fmt(f)
     }
 }
-
-
 
 impl FromStr for DependencyKey {
     type Err = Infallible;

@@ -9,6 +9,18 @@ use thiserror::Error;
 #[repr(transparent)]
 pub struct SemanticVersion(semver::Version);
 
+#[cfg(feature = "async-graphql")]
+#[cfg_attr(feature = "async-graphql", async_graphql::Scalar)]
+impl async_graphql::ScalarType for SemanticVersion {
+    fn parse(_value: async_graphql::Value) -> async_graphql::InputValueResult<Self> {
+        todo!()
+    }
+
+    fn to_value(&self) -> async_graphql::Value {
+        async_graphql::Value::String(self.to_string())
+    }
+}
+
 impl FromStr for SemanticVersion {
     type Err = semver::SemVerError;
 
@@ -38,6 +50,18 @@ impl std::ops::Deref for SemanticVersion {
 #[non_exhaustive]
 pub enum Version {
     Semantic(SemanticVersion),
+}
+
+#[cfg(feature = "async-graphql")]
+#[cfg_attr(feature = "async-graphql", async_graphql::Scalar)]
+impl async_graphql::ScalarType for Version {
+    fn parse(_value: async_graphql::Value) -> async_graphql::InputValueResult<Self> {
+        todo!()
+    }
+
+    fn to_value(&self) -> async_graphql::Value {
+        async_graphql::Value::String(self.to_string())
+    }
 }
 
 #[derive(Debug, Clone, Error)]

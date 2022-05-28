@@ -9,6 +9,7 @@ use crate::{DependencyMap, LangTagMap};
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::SimpleObject))]
 #[non_exhaustive]
 pub struct SyntheticData {
     pub id: String,
@@ -20,6 +21,7 @@ pub struct SyntheticData {
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::SimpleObject))]
 #[non_exhaustive]
 pub struct Descriptor {
     pub synthetic: SyntheticData,
@@ -37,6 +39,7 @@ pub struct Descriptor {
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::SimpleObject))]
 #[non_exhaustive]
 pub struct Target {
     pub platform: String,
@@ -52,6 +55,7 @@ pub struct Target {
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::SimpleObject))]
 #[non_exhaustive]
 pub struct Release {
     pub version: String,
@@ -62,6 +66,7 @@ pub struct Release {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(untagged)]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::Union))]
 #[non_exhaustive]
 pub enum Verifier {
     WindowsRegistryKey(windows::RegistryKey),

@@ -11,7 +11,11 @@ use super::parse_set;
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[serde(rename_all = "lowercase")]
 #[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Enum))]
-#[cfg_attr(feature = "poem-openapi", oai(rename = "MacOSRebootSpec", rename_all = "lowercase"))]
+#[cfg_attr(
+    feature = "poem-openapi",
+    oai(rename = "MacOSRebootSpec", rename_all = "lowercase")
+)]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::Enum))]
 pub enum RebootSpec {
     Install,
     Uninstall,
@@ -41,6 +45,8 @@ impl FromStr for RebootSpec {
 #[cfg_attr(feature = "structopt", derive(structopt::StructOpt))]
 #[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Object))]
 #[cfg_attr(feature = "poem-openapi", oai(rename = "MacOSPackage"))]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::SimpleObject))]
+#[cfg_attr(feature = "async-graphql", graphql(name = "MacOSPackage"))]
 pub struct Package {
     #[cfg_attr(feature = "structopt", structopt(short, long))]
     pub url: url::Url,
@@ -77,6 +83,7 @@ impl super::AsDownloadUrl for Package {
 #[serde(rename_all = "lowercase")]
 #[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Enum))]
 #[cfg_attr(feature = "poem-openapi", oai(rename_all = "lowercase"))]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::Enum))]
 pub enum InstallTarget {
     System,
     User,

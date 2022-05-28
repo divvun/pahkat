@@ -9,6 +9,7 @@ use crate::repo::RepoUrl;
 
 #[derive(Debug, serde::Deserialize, Clone, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Object))]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::SimpleObject))]
 pub struct PackageKeyParams {
     pub channel: Option<String>,
     pub platform: Option<String>,
@@ -17,6 +18,7 @@ pub struct PackageKeyParams {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::SimpleObject))]
 pub struct PackageKey {
     pub repository_url: RepoUrl,
     pub id: String,

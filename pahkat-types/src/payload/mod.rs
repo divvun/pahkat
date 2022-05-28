@@ -2,8 +2,10 @@ pub mod macos;
 pub mod tarball;
 pub mod windows;
 
+#[cfg(feature = "structopt")]
 use std::collections::BTreeSet;
 use std::convert::TryFrom;
+#[cfg(feature = "structopt")]
 use std::str::FromStr;
 
 use crate::DependencyMap;
@@ -46,6 +48,7 @@ pub(crate) fn parse_dep_map(s: &str) -> Result<DependencyMap, &'static str> {
 #[cfg_attr(feature = "structopt", derive(structopt::StructOpt))]
 #[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Union))]
 #[cfg_attr(feature = "poem-openapi", oai(discriminator_name = "type"))]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::Union))]
 pub enum Payload {
     WindowsExecutable(windows::Executable),
     #[cfg_attr(feature = "structopt", structopt(name = "macos-package"))]
@@ -98,6 +101,7 @@ impl Payload {
 )]
 #[cfg_attr(feature = "structopt", derive(structopt::StructOpt))]
 #[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Object))]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::SimpleObject))]
 pub struct Target {
     #[cfg_attr(feature = "structopt", structopt(short, long))]
     pub platform: String,

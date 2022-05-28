@@ -4,6 +4,7 @@ use typed_builder::TypedBuilder;
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
 #[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Object))]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::SimpleObject))]
 pub struct PackageRef {
     #[serde(rename = "type")]
     #[builder(default = "MacOSPackageRef".into())]
@@ -21,6 +22,7 @@ pub struct PackageRef {
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
 #[cfg_attr(feature = "poem-openapi", derive(poem_openapi::Object))]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::SimpleObject))]
 pub struct PathRef {
     #[serde(rename = "type")]
     #[builder(default = "MacOSPathRef".into())]

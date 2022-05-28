@@ -9,6 +9,7 @@ use typed_builder::TypedBuilder;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[serde(untagged)]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::Union))]
 #[non_exhaustive]
 pub enum Repository {
     Index(Index),
@@ -18,6 +19,7 @@ pub enum Repository {
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::SimpleObject))]
 #[non_exhaustive]
 pub struct RepositoryData {
     pub url: RepoUrl,
@@ -46,6 +48,7 @@ pub struct RepositoryData {
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::SimpleObject))]
 #[non_exhaustive]
 /// The base repository index. All fields may be optionally present except `url` and `agent`.
 ///
@@ -67,6 +70,7 @@ pub struct Index {
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::SimpleObject))]
 #[non_exhaustive]
 pub struct Agent {
     pub name: String,
@@ -87,6 +91,7 @@ pub struct Localisation {
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::SimpleObject))]
 #[non_exhaustive]
 pub struct RedirectData {
     pub url: RepoUrl,
@@ -95,6 +100,7 @@ pub struct RedirectData {
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::SimpleObject))]
 #[non_exhaustive]
 pub struct Redirect {
     pub redirect: RedirectData,

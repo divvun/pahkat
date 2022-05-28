@@ -9,6 +9,7 @@ use crate::LangTagMap;
 pub use version::Version;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::Union))]
 #[serde(untagged)] // #[serde(tag = "_type")]
 pub enum Package {
     #[serde(rename = "Package")]
@@ -103,6 +104,7 @@ impl<'a> TryFrom<&'a Package> for &'a Redirect {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, TypedBuilder)]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::SimpleObject))]
 #[non_exhaustive]
 pub struct DescriptorData {
     pub id: String,
@@ -112,6 +114,7 @@ pub struct DescriptorData {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, TypedBuilder)]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::SimpleObject))]
 #[non_exhaustive]
 pub struct Descriptor {
     // Tables have to come last in TOML
@@ -143,6 +146,7 @@ impl Ord for Descriptor {
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::SimpleObject))]
 #[non_exhaustive]
 pub struct RedirectData {
     pub id: String,
@@ -152,12 +156,14 @@ pub struct RedirectData {
 #[derive(
     Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, TypedBuilder,
 )]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::SimpleObject))]
 #[non_exhaustive]
 pub struct Redirect {
     pub redirect: RedirectData,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, TypedBuilder)]
+#[cfg_attr(feature = "async-graphql", derive(async_graphql::SimpleObject))]
 #[non_exhaustive]
 pub struct Release {
     pub version: Version,

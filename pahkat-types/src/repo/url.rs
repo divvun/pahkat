@@ -7,6 +7,18 @@ use serde::{de, de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 #[repr(transparent)]
 pub struct RepoUrl(Url);
 
+#[cfg(feature = "async-graphql")]
+#[cfg_attr(feature = "async-graphql", async_graphql::Scalar)]
+impl async_graphql::ScalarType for RepoUrl {
+    fn parse(_value: async_graphql::Value) -> async_graphql::InputValueResult<Self> {
+        todo!()
+    }
+
+    fn to_value(&self) -> async_graphql::Value {
+        async_graphql::Value::String(self.0.to_string())
+    }
+}
+
 impl std::fmt::Display for RepoUrl {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
