@@ -202,6 +202,7 @@ impl PackageStore for PrefixPackageStore {
     ) -> std::pin::Pin<
         Box<
             dyn futures::stream::Stream<Item = crate::package_store::DownloadEvent>
+                + Sync
                 + Send
                 + 'static,
         >,

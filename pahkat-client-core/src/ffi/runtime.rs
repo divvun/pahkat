@@ -21,11 +21,10 @@ use crate::{Config, PackageKey};
 
 static BASIC_RUNTIME: Lazy<Mutex<tokio::runtime::Runtime>> = Lazy::new(|| {
     Mutex::new(
-        tokio::runtime::Builder::new()
-            .basic_scheduler()
+        tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
-            .expect("failed to build tokio runtime"),
+            .unwrap()
     )
 });
 
