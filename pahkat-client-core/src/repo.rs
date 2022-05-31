@@ -6,10 +6,10 @@ pub use repository::{LoadedRepository, RepoDownloadError};
 
 use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
+use std::hash::Hash;
 use std::path::Path;
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
-use std::hash::Hash;
 
 use crossbeam_queue::SegQueue;
 use futures::future::FutureExt;
@@ -113,14 +113,18 @@ impl<'a> ReleaseQueryIter<'a> {
 
         for version in self.query.versions.iter() {
             match (version, &release.version) {
-                (VersionQuery::Match(s), Version::Semantic(v)) => if s != &v.to_string() {
-                    log::trace!("Skipping (release version does not literal match)");
-                    is_match = false;
-                },
-                (VersionQuery::Semantic(x), Version::Semantic(v)) => if !x.matches(&*v) {
-                    log::trace!("Skipping (release version does not semver match)");
-                    is_match = false;
-                },
+                (VersionQuery::Match(s), Version::Semantic(v)) => {
+                    if s != &v.to_string() {
+                        log::trace!("Skipping (release version does not literal match)");
+                        is_match = false;
+                    }
+                }
+                (VersionQuery::Semantic(x), Version::Semantic(v)) => {
+                    if !x.matches(&*v) {
+                        log::trace!("Skipping (release version does not semver match)");
+                        is_match = false;
+                    }
+                }
                 _ => {
                     log::trace!("Skipping (unhandled values)");
                     is_match = false;

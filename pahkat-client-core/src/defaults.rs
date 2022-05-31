@@ -1,10 +1,9 @@
 use crate::config::ConfigPath;
 use once_cell::sync::Lazy;
-use std::path::{Path, PathBuf};
 use pathos::AppDirs as _;
+use std::path::{Path, PathBuf};
 
 const APP_PATH: &str = "Pahkat";
-
 
 #[cfg(not(target_os = "android"))]
 static SYS_DIRS: Lazy<Result<pathos::system::AppDirs, pathos::Error>> =
