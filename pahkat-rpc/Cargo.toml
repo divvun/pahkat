@@ -11,7 +11,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 pahkat-client = { path = "../pahkat-client-core" }
 tonic = { version = "0.3.0", features = ["prost"] }
 pin-project = "1.0"
-hyper = "0.13"
+hyper = "0.14"
 prost = "0.6"
 tokio = { version = "0.2", features = ["rt-threaded", "rt-util", "time", "stream", "fs", "macros", "uds", "sync", "blocking", "signal"] }
 futures = { version = "0.3", default-features = false, features = ["alloc"] }

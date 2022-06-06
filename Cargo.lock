@@ -1875,7 +1875,7 @@ dependencies = [
  "eventlog",
  "fern",
  "futures",
- "hyper 0.13.10",
+ "hyper 0.14.17",
  "log",
  "once_cell",
  "pahkat-client",
