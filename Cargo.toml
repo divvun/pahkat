@@ -11,3 +11,6 @@ members = [
 exclude = [
     "pahkat-uploader",
 ]
+
+[patch.crates-io]
+windows-accesstoken = { git = "https://github.com/Eijebong/windows-accesstoken", branch = "fix-64-bits-builds" }

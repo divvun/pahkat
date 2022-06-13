@@ -3511,8 +3511,7 @@ dependencies = [
 [[package]]
 name = "windows-accesstoken"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d826fb65b06a884bb3fa0badde75ba368a0cd8f699bdfd73981c9f58b5de570"
+source = "git+https://github.com/Eijebong/windows-accesstoken?branch=fix-64-bits-builds#da89357d43ee60c114e32b14344b2d35ff86ddbc"
 dependencies = [
  "bitflags",
  "winapi",
