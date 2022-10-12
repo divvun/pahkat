@@ -17,9 +17,25 @@ pub enum Error {
     SetLoggerError(#[from] log::SetLoggerError),
 }
 
+#[cfg(unix)]
+fn fix_path_perms(path: &std::path::Path) -> Result<(), Error> {
+    use std::{fs::Permissions, os::unix::fs::PermissionsExt};
+
+    let meta = std::fs::metadata(path)?;
+    let mut perms = meta.permissions();
+    perms.set_mode(0o755);
+    std::fs::set_permissions(path, perms)
+}
+
+#[cfg(not(unix))]
+fn fix_path_perms(_path: &std::path::Path) -> Result<(), Error> {
+    Ok(())
+}
+
 pub fn setup_logger(name: &str) -> Result<(), Error> {
     let log_path = pahkat_client::defaults::log_path()?;
     std::fs::create_dir_all(&log_path)?;
+    fix_path_perms(&log_path)?;
 
     fern::Dispatch::new()
         .format(|out, message, record| {
