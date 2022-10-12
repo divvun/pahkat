@@ -1029,7 +1029,7 @@ pub async fn start(
         requires_reboot: AtomicBool::new(false),
     };
 
-    Server::builder()
+    tonic::transport::Server::builder()
         .add_service(pb::pahkat_server::PahkatServer::new(rpc))
         .serve_with_incoming_shutdown(
             tokio_stream::wrappers::UnixListenerStream::new(endpoint),
