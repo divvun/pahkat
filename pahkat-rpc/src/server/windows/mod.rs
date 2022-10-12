@@ -3,12 +3,11 @@ pub mod service;
 
 use anyhow::{bail, Result};
 use std::fs::OpenOptions;
-use std::os::windows::io::AsRawHandle;
+
 use std::os::windows::io::RawHandle;
 use std::process::Command;
 use std::{
-    path::{Path, PathBuf},
-    time::Duration,
+    path::{Path},
 };
 use winapi::um::errhandlingapi::GetLastError;
 use winapi::um::namedpipeapi::ImpersonateNamedPipeClient;
@@ -22,8 +21,7 @@ use windows_accesstoken::{
 };
 
 use pahkat_client::{
-    config::RepoRecord, package_store::InstallTarget, Config, PackageAction, PackageActionType,
-    PackageKey, PackageStatus, PackageStore, PackageTransaction,
+    package_store::InstallTarget, PackageStatus, PackageStore,
 };
 
 const SELF_UPDATE_TIMEOUT: u64 = 30;

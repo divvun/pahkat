@@ -169,7 +169,7 @@ fn service_main(_: Vec<OsString>) {
     crate::server::setup_logger("service").unwrap_or(());
 
     // Create the runtime
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     // Execute the future, blocking the current thread until completion
     rt.block_on(async {
         service_runner().await.unwrap();

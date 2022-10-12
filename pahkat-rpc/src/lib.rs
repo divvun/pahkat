@@ -27,7 +27,7 @@ use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 
-use tonic::{transport::Server, Request, Response, Status};
+use tonic::{Request, Response, Status};
 
 use url::Url;
 
@@ -326,7 +326,8 @@ impl pb::pahkat_server::Pahkat for Rpc {
         &self,
         request: Request<tonic::Streaming<pb::TransactionRequest>>,
     ) -> Result<Self::ProcessTransactionStream> {
-        let _is_admin = request.has_admin_flag();
+        #[cfg(windows)]
+        let is_admin = request.has_admin_flag();
         let request = request.into_inner();
         let store: Arc<dyn PackageStore> = Arc::clone(&self.store as _);
         let current_transaction = Arc::clone(&self.current_transaction);
@@ -420,7 +421,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
 
                         #[cfg(windows)]
                         for record in transaction.actions().iter() {
-                            let id = &record.action.id;
+                            let _id = &record.action.id;
                             if record.action.target == InstallTarget::System && !is_admin {
                                 yield pb::TransactionResponse {
                                     value: Some(Value::VerificationFailed(VerificationFailed {}))
@@ -1104,7 +1105,7 @@ pub async fn start(
     config.security_attributes =
         tokio_named_pipe::secattr::SecurityAttributes::new(&mut descriptor, false);
     log::debug!("Binding named pipe...");
-    let mut incoming = tokio_named_pipe::NamedPipeServerListener::bind(path.to_path_buf(), config)?;
+    let incoming = tokio_named_pipe::NamedPipeServerListener::bind(path.to_path_buf(), config)?;
 
     let store = store(config_path).await?;
     log::debug!("Created store.");
@@ -1118,7 +1119,7 @@ pub async fn start(
     let current_transaction = Arc::new(tokio::sync::Mutex::new(()));
 
     // Notifications
-    let (notifications, mut notif_rx) = broadcast::channel(5);
+    let (notifications, _notif_rx) = broadcast::channel(5);
 
     // Create the background updater
 
@@ -1136,10 +1137,10 @@ pub async fn start(
         requires_reboot: AtomicBool::new(false),
     };
 
-    let http = Http::new().http2_only(true).clone();
+    let http = hyper::server::conn::Http::new().http2_only(true).clone();
     let svc = pb::pahkat_server::PahkatServer::new(rpc);
 
-    let (tx, mut rx, mut inner_rx) = server::watch::channel().await;
+    let (tx, rx, inner_rx) = server::watch::channel().await;
 
     let shutdown_transaction = Arc::clone(&current_transaction);
     let shutdown = async move {
@@ -1158,13 +1159,13 @@ pub async fn start(
     } {
         let http = http.clone();
         let svc = svc.clone();
-        let mut rx = rx.clone();
+        let rx = rx.clone();
         tokio::spawn(async move {
             let svc = svc.clone();
 
             // for the love of all that is holy don't use this handle for anything other than getting connection metadata.
             let handle = server::windows::HandleHolder(conn.as_raw_handle());
-            let mut conn = http.serve_connection(
+            let conn = http.serve_connection(
                 conn,
                 hyper::service::service_fn(move |mut req: hyper::Request<hyper::Body>| {
                     let mut svc = svc.clone();
@@ -1183,11 +1184,12 @@ pub async fn start(
                         req.add_admin_flag();
                     }
 
+                    use tonic::codegen::Service;
                     svc.call(req)
                 }),
             );
 
-            rx.watch(conn, |conn| conn.graceful_shutdown()).await;
+            let _shutdown = rx.watch(conn, |conn| conn.graceful_shutdown()).await;
         });
     }
 
@@ -1198,7 +1200,7 @@ pub async fn start(
 #[cfg(windows)]
 fn shutdown_handler(
     mut shutdown_rx: mpsc::UnboundedReceiver<()>,
-    mut broadcast_tx: broadcast::Sender<Notification>,
+    broadcast_tx: broadcast::Sender<Notification>,
     current_transaction: Arc<tokio::sync::Mutex<()>>,
 ) -> impl std::future::Future<Output = ()> {
     let ctrl_c = tokio::signal::ctrl_c();
@@ -1214,7 +1216,7 @@ fn shutdown_handler(
         };
 
         log::info!("Attempting to attain transaction lock...");
-        current_transaction.lock().await;
+        let _guard = current_transaction.lock().await;
         log::info!("Lock attained!");
 
         let _ = broadcast_tx.send(Notification::RpcStopping);
