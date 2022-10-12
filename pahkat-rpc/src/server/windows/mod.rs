@@ -5,10 +5,8 @@ use anyhow::{bail, Result};
 use std::fs::OpenOptions;
 
 use std::os::windows::io::RawHandle;
+use std::path::Path;
 use std::process::Command;
-use std::{
-    path::{Path},
-};
 use winapi::um::errhandlingapi::GetLastError;
 use winapi::um::namedpipeapi::ImpersonateNamedPipeClient;
 use winapi::um::securitybaseapi::RevertToSelf;
@@ -20,9 +18,7 @@ use windows_accesstoken::{
     security::{GroupSidAttributes, SecurityIdentifier, WellKnownSid},
 };
 
-use pahkat_client::{
-    package_store::InstallTarget, PackageStatus, PackageStore,
-};
+use pahkat_client::{package_store::InstallTarget, PackageStatus, PackageStore};
 
 const SELF_UPDATE_TIMEOUT: u64 = 30;
 const UPDATER_FILE_NAME: &str = "pahkat-updater.exe";

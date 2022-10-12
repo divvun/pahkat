@@ -3,7 +3,7 @@ use std::fs::{self};
 use std::io;
 use std::path::{Path, PathBuf};
 
-use pahkat_types::{package::Version};
+use pahkat_types::package::Version;
 use typed_builder::TypedBuilder;
 
 #[non_exhaustive]

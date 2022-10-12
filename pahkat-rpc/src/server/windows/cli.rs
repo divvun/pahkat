@@ -1,14 +1,7 @@
 use super::service;
-use anyhow::{Result};
+use anyhow::Result;
 
-
-
-
-
-use std::{
-    path::{PathBuf},
-    time::Duration,
-};
+use std::{path::PathBuf, time::Duration};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::{env, process::Command};
 
-fn main() -> Result<()> {    
+fn main() -> Result<()> {
     let is_macos = env::var("CARGO_FEATURE_MACOS").ok().is_some();
     let is_windows = env::var("CARGO_FEATURE_WINDOWS").ok().is_some();
     let is_prefix = env::var("CARGO_FEATURE_PREFIX").ok().is_some();
