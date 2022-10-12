@@ -207,5 +207,5 @@ pub(crate) fn payloads() -> &'static [&'static str] {
         not(feature = "macos"),
         not(feature = "prefix")
     ))]
-    compile_error!("One of the above features must be enabled");
+    &[]
 }

@@ -2,14 +2,12 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use once_cell::sync::{Lazy, OnceCell};
 use pathos::iri::IriBufExt;
 use serde::de::{self, Deserializer, Visitor};
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 use thiserror::Error;
-use url::Url;
 
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub struct ConfigPath(pub(crate) iref::IriBuf);

@@ -1,22 +1,16 @@
 use futures::stream::{self, TryStreamExt};
-use futures::Stream;
+
 use std::convert::TryFrom;
-use std::{
-    pin::Pin,
-    task::{Context, Poll},
-    time::Duration,
-};
+
 use structopt::StructOpt;
-use tokio::io::{AsyncRead, AsyncWrite};
+
 #[cfg(unix)]
-use tokio::net::{UnixListener, UnixStream};
-use tokio::sync::mpsc;
-#[cfg(unix)]
-use tokio_stream::wrappers::UnixListenerStream;
-use tokio_stream::wrappers::{ReceiverStream, UnboundedReceiverStream};
+use tokio::net::UnixStream;
+
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{
-    transport::{server::Connected, Endpoint, Server, Uri},
-    Request, Response, Status, Streaming,
+    transport::{Endpoint, Uri},
+    Request,
 };
 use tower::service_fn;
 
@@ -72,7 +66,7 @@ type PahkatClient = pb::pahkat_client::PahkatClient<tonic::transport::channel::C
 
 use once_cell::sync::Lazy;
 use std::error::Error;
-use std::path::PathBuf;
+
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -311,7 +305,7 @@ pub extern "C" fn pahkat_rpc_status(
 
 #[no_mangle]
 extern "C" fn pahkat_rpc_cancel_callback() {
-    let mut tx = CURRENT_CANCEL_TX.lock().unwrap();
+    let tx = CURRENT_CANCEL_TX.lock().unwrap();
     let cb = tx.borrow_mut().take();
     match cb {
         Some(tx) => tx
@@ -381,7 +375,7 @@ pub extern "C" fn pahkat_rpc_remove_repo(
 #[cffi::marshal]
 pub extern "C" fn pahkat_rpc_notifications(
     #[marshal(cffi::ArcRefMarshaler::<RwLock<PahkatClient>>)] client: Arc<RwLock<PahkatClient>>,
-    callback: extern "C" fn(i32),
+    callback: unsafe extern "C" fn(i32),
 ) {
     let request = Request::new(pb::NotificationsRequest {});
 
@@ -442,11 +436,11 @@ pub extern "C" fn pahkat_rpc_process_transaction(
 
     #[marshal(JsonRefMarshaler)] actions: Vec<pb::PackageAction>,
 
-    callback: extern "C" fn(cffi::Slice<u8>),
+    callback: unsafe extern "C" fn(cffi::Slice<u8>),
 ) -> Result<(), Box<dyn Error>> {
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
-    let mut global_tx = CURRENT_CANCEL_TX.lock().unwrap();
+    let global_tx = CURRENT_CANCEL_TX.lock().unwrap();
     *global_tx.borrow_mut() = Some(tx.clone());
 
     let request = Request::new(UnboundedReceiverStream::new(rx));

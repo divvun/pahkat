@@ -22,7 +22,7 @@ impl async_graphql::ScalarType for SemanticVersion {
 }
 
 impl FromStr for SemanticVersion {
-    type Err = semver::SemVerError;
+    type Err = semver::Error;
 
     #[inline(always)]
     fn from_str(s: &str) -> Result<Self, Self::Err> {

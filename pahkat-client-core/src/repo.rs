@@ -79,12 +79,6 @@ pub enum VersionQuery<'a> {
     Semantic(semver::VersionReq),
 }
 
-impl<'a> VersionQuery<'a> {
-    fn any_semantic() -> Self {
-        VersionQuery::Semantic(semver::VersionReq::parse("*").unwrap())
-    }
-}
-
 #[inline(always)]
 fn empty_payloads() -> &'static [&'static str] {
     &[]

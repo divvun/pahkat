@@ -71,9 +71,9 @@ async fn create_store(config_path: Option<&Path>) -> anyhow::Result<Arc<dyn Pack
 #[inline(always)]
 #[cfg(feature = "macos")]
 async fn store(config_path: Option<&Path>) -> anyhow::Result<Arc<dyn PackageStore>> {
-    let config = match config_path {
-        Some(v) => pahkat_client::Config::load(&v, pahkat_client::Permission::ReadWrite)?,
-        None => pahkat_client::Config::load_default()?,
+    let (config, _errors) = match config_path {
+        Some(v) => pahkat_client::Config::load(&v, pahkat_client::Permission::ReadWrite),
+        None => (pahkat_client::Config::load_default()?, vec![]),
     };
     let store = pahkat_client::MacOSPackageStore::new(config).await;
     let store = Arc::new(store);

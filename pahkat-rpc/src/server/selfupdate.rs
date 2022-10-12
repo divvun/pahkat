@@ -1,10 +1,9 @@
-use futures::stream::{StreamExt, TryStreamExt};
+use futures::stream::StreamExt;
 use once_cell::sync::Lazy;
 use pahkat_client::package_store::DownloadEvent;
 use pahkat_client::types::repo::RepoUrl;
 use pahkat_client::{
-    config::RepoRecord, package_store::InstallTarget, PackageAction, PackageActionType, PackageKey,
-    PackageStatus, PackageStore, PackageTransaction,
+    config::RepoRecord, package_store::InstallTarget, PackageKey, PackageStatus, PackageStore,
 };
 use std::convert::TryFrom;
 use std::error::Error;
@@ -72,7 +71,7 @@ pub(crate) fn requires_update(store: &dyn PackageStore) -> bool {
 
         log::trace!("requires_update store.status: {:?}", status);
 
-        let is_requiring_update = match status {
+        let _is_requiring_update = match status {
             Ok(status) => match status {
                 PackageStatus::NotInstalled => {
                     log::error!(
@@ -103,7 +102,7 @@ pub async fn install(store: &dyn PackageStore) -> Result<(), Box<dyn Error>> {
 }
 
 #[cfg(all(feature = "macos", not(feature = "launchd")))]
-pub async fn install(store: &dyn PackageStore) -> Result<(), Box<dyn Error>> {
+pub async fn install(_store: &dyn PackageStore) -> Result<(), Box<dyn Error>> {
     log::info!("No doing anything, in test mode.");
     Ok(())
 }

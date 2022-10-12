@@ -339,5 +339,6 @@ mod tests {
 }
 
 pub mod fbs {
+    #![allow(unused_imports)]
     include!(concat!(env!("OUT_DIR"), "/index.rs"));
 }

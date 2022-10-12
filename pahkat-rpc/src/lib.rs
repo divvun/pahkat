@@ -3,9 +3,8 @@
 pub mod client;
 pub mod server;
 
-use futures::stream::{StreamExt, TryStreamExt};
-use hyper::server::conn::Http;
-use log::{error, info, warn};
+use futures::stream::StreamExt;
+
 use pahkat_client::{
     config::RepoRecord, package_store::InstallTarget, PackageAction, PackageActionType, PackageKey,
     PackageStatus, PackageStore, PackageTransaction,
@@ -17,19 +16,19 @@ use std::os::windows::io::AsRawHandle;
 use std::pin::Pin;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use std::task::{Context, Poll};
+
 use std::time::Duration;
 use task_collection::{GlobalTokioSpawner, TaskCollection};
-use tokio::io::{AsyncRead, AsyncWrite};
+
 #[cfg(unix)]
 use tokio::net::UnixListener;
 #[cfg(unix)]
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
-use tonic::transport::server::Connected;
-use tonic::{transport::Server, Request, Response, Status, Streaming};
-use tower::Service;
+
+use tonic::{transport::Server, Request, Response, Status};
+
 use url::Url;
 
 mod pb {
@@ -179,7 +178,8 @@ impl pb::pahkat_server::Pahkat for Rpc {
                 yield pb::NotificationResponse { value: ValueType::TransactionLocked as i32 };
             }
 
-            while let response = rx.recv().await {
+            loop {
+                let response = rx.recv().await;
                 match response {
                     Ok(response) => {
                         match response {
@@ -201,7 +201,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
                             }
                         }
                     },
-                    Err(err) => {
+                    Err(_err) => {
                         break;
                     }
                 }
@@ -211,7 +211,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
         Ok(Response::new(Box::pin(stream) as Self::NotificationsStream))
     }
 
-    async fn refresh(&self, request: Request<pb::RefreshRequest>) -> Result<pb::RefreshResponse> {
+    async fn refresh(&self, _request: Request<pb::RefreshRequest>) -> Result<pb::RefreshResponse> {
         let errors = match self.store.force_refresh_repos().await {
             Ok(_) => HashMap::new(),
             Err(e) => e.into_iter().collect(),
@@ -326,13 +326,13 @@ impl pb::pahkat_server::Pahkat for Rpc {
         &self,
         request: Request<tonic::Streaming<pb::TransactionRequest>>,
     ) -> Result<Self::ProcessTransactionStream> {
-        let is_admin = request.has_admin_flag();
+        let _is_admin = request.has_admin_flag();
         let request = request.into_inner();
         let store: Arc<dyn PackageStore> = Arc::clone(&self.store as _);
         let current_transaction = Arc::clone(&self.current_transaction);
         let notifications = self.notifications.clone();
 
-        let (mut tx, rx) = mpsc::channel(1);
+        let (tx, rx) = mpsc::channel(1);
         // Get messages
         tokio::spawn(async move {
             let mut has_requested = false;
@@ -407,7 +407,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
                 let store = Arc::clone(&store);
                 let current_transaction = Arc::clone(&current_transaction);
 
-                let mut tx = tx.clone();
+                let tx = tx.clone();
                 let notifications = notifications.clone();
 
                 collection.spawn(async move {
@@ -456,7 +456,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
                         };
 
                         for record in transaction.actions().iter() {
-                            let tx = tx.clone();
+                            let _tx = tx.clone();
 
                             if record.action.action != PackageActionType::Install {
                                 continue;
@@ -499,7 +499,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
                         }
                         log::trace!("Ending download stream");
 
-                        let (canceler, mut tx_stream) = transaction.process();
+                        let (_canceler, mut tx_stream) = transaction.process();
                         let mut is_completed = false;
 
                         while let Some(event) = tx_stream.next().await {
@@ -559,8 +559,6 @@ impl pb::pahkat_server::Pahkat for Rpc {
                                     error: "user cancelled".to_string(),
                                 }))
                             };
-                        } else {
-                            let mut is_reboot_required = false;
                         }
 
                         log::trace!("Ending transaction stream");
@@ -618,7 +616,7 @@ impl pb::pahkat_server::Pahkat for Rpc {
         let config = self.store.config();
         {
             let mut config = config.write().unwrap();
-            let mut repos = config.repos_mut();
+            let repos = config.repos_mut();
 
             let mut record = RepoRecord::default();
 
@@ -640,8 +638,8 @@ impl pb::pahkat_server::Pahkat for Rpc {
 
         let _ = self.notifications.send(Notification::RepositoriesChanged);
 
-        let mut config = config.read().unwrap();
-        let mut repos = config.repos();
+        let config = config.read().unwrap();
+        let repos = config.repos();
 
         Ok(tonic::Response::new(pb::SetRepoResponse {
             records: repos
@@ -694,9 +692,9 @@ impl pb::pahkat_server::Pahkat for Rpc {
 
         let config = self.store.config();
 
-        let is_success = {
+        let _is_success = {
             let mut config = config.write().unwrap();
-            let mut repos = config.repos_mut();
+            let repos = config.repos_mut();
             repos
                 .remove(&url)
                 .map_err(|e| Status::failed_precondition(format!("{}", e)))?
@@ -709,8 +707,8 @@ impl pb::pahkat_server::Pahkat for Rpc {
 
         let _ = self.notifications.send(Notification::RepositoriesChanged);
 
-        let mut config = config.read().unwrap();
-        let mut repos = config.repos();
+        let config = config.read().unwrap();
+        let repos = config.repos();
 
         Ok(tonic::Response::new(pb::RemoveRepoResponse {
             records: repos
@@ -825,7 +823,7 @@ fn endpoint(path: &Path) -> std::result::Result<UnixListener, anyhow::Error> {
     use std::os::unix::fs::PermissionsExt;
 
     let socket = tokio::net::UnixListener::bind(&path).unwrap();
-    let mut meta = std::fs::metadata(&path)?;
+    let meta = std::fs::metadata(&path)?;
     let mut permissions = meta.permissions();
     permissions.set_mode(0o777);
     std::fs::set_permissions(&path, permissions)?;
@@ -867,7 +865,8 @@ fn create_background_update_service(
         // let current_transaction = Arc::clone(&current_transaction);
         // let store = Arc::clone(&store);
 
-        use tokio::time::{self, Duration};
+        use tokio::time;
+
         let mut interval = time::interval(UPDATE_INTERVAL);
 
         'main: loop {
@@ -898,7 +897,7 @@ fn create_background_update_service(
 
                 let mut updates = vec![];
 
-                for (url, repo) in repos.iter() {
+                for (url, _repo) in repos.iter() {
                     log::debug!("## Repo: {:?}", &url);
                     let statuses = store.all_statuses(url, pahkat_client::InstallTarget::System);
 
@@ -979,7 +978,7 @@ fn create_background_update_service(
                 }
             }
 
-            let (_canceler, mut stream) = transaction.process();
+            let (_canceler, stream) = transaction.process();
 
             futures::pin_mut!(stream);
 
@@ -1005,7 +1004,7 @@ pub async fn start(
         env!("CARGO_PKG_VERSION")
     );
 
-    let mut endpoint = endpoint(path)?;
+    let endpoint = endpoint(path)?;
     log::debug!("Endpoint created successfully.");
     let store = store(config_path).await?;
     log::debug!("Created store.");
@@ -1013,7 +1012,7 @@ pub async fn start(
     let current_transaction = Arc::new(tokio::sync::Mutex::new(()));
 
     // Notifications
-    let (notifications, mut notif_rx) = broadcast::channel(5);
+    let (notifications, _notif_rx) = broadcast::channel(5);
 
     // Create the background updater
     create_background_update_service(
@@ -1047,7 +1046,7 @@ pub async fn start(
 #[cfg(unix)]
 fn shutdown_handler(
     mut shutdown_rx: mpsc::UnboundedReceiver<()>,
-    mut broadcast_tx: broadcast::Sender<Notification>,
+    broadcast_tx: broadcast::Sender<Notification>,
     current_transaction: Arc<tokio::sync::Mutex<()>>,
 ) -> anyhow::Result<Pin<Box<dyn std::future::Future<Output = ()>>>, anyhow::Error> {
     let mut sigint_listener = signal(SignalKind::interrupt())?;
@@ -1077,7 +1076,7 @@ fn shutdown_handler(
         };
 
         log::info!("Attempting to attain transaction lock...");
-        current_transaction.lock().await;
+        let _guard = current_transaction.lock().await;
         log::info!("Lock attained!");
 
         let _ = broadcast_tx.send(Notification::RpcStopping);
@@ -1153,12 +1152,10 @@ pub async fn start(
     pin_mut!(incoming);
     pin_mut!(inner_rx);
 
-    while let Some(Ok(conn)) =
-        tokio::select! {
-            next = incoming.next() => next,
-            _ = inner_rx.next() => None
-        }
-    {
+    while let Some(Ok(conn)) = tokio::select! {
+        next = incoming.next() => next,
+        _ = inner_rx.next() => None
+    } {
         let http = http.clone();
         let svc = svc.clone();
         let mut rx = rx.clone();

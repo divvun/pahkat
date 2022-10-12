@@ -87,7 +87,7 @@ impl PrefixPackageStore {
             .map_err(Error::InvalidPrefixPath)?;
         create_dir_all(&prefix_path.join("pkg")).map_err(Error::CreateDirFailed)?;
 
-        let (config, errors) = Config::load(&prefix_path, crate::config::Permission::ReadWrite);
+        let (config, _errors) = Config::load(&prefix_path, crate::config::Permission::ReadWrite);
         // TODO: handle errors
 
         let db_file_path = PrefixPackageStore::package_db_path(&config);
@@ -549,10 +549,10 @@ impl<'a> PackageDbConnection<'a> {
         log::trace!("Row id: {}", id);
         tx.execute(
             "DELETE FROM packages_dependencies WHERE package_id = ?",
-            &[id],
+            [id],
         )
         .unwrap();
-        tx.execute("DELETE FROM packages_files WHERE package_id = ?", &[id])
+        tx.execute("DELETE FROM packages_files WHERE package_id = ?", [id])
             .unwrap();
 
         {

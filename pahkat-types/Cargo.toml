@@ -5,21 +5,21 @@ authors = ["Brendan Molloy <brendan@bbqsrc.net>"]
 edition = "2018"
 
 [dependencies]
-serde = { version = "1.0.115", features = ["derive"] }
-url = { version = "2.1.1", features = ["serde"] }
-semver = { version = "0.10.0", features = ["serde"] }
-thiserror = "1.0.20"
-typed-builder = "0.9.0"
-structopt = { version = "0.3.16", optional = true }
-poem-openapi = { version = "1.2.36", features = ["swagger-ui", "url"], optional = true }
-fbs = "0.6"
-async-graphql = { version = "4.0.1", optional = true, features = ["url"] }
+serde = { version = "1.0.145", features = ["derive"] }
+url = { version = "2.3.1", features = ["serde"] }
+semver = { version = "1.0.14", features = ["serde"] }
+thiserror = "1.0.37"
+typed-builder = "0.10.0"
+structopt = { version = "0.3.26", optional = true }
+poem-openapi = { version = "2.0.16", features = ["swagger-ui", "url"], optional = true }
+fbs = "0.6.0"
+async-graphql = { version = "4.0.15", optional = true, features = ["url"] }
 
 [dev-dependencies]
-serde_json = "*"
-toml = "*"
+serde_json = "1.0.86"
+toml = "0.5.9"
 
 [build-dependencies]
-anyhow = "1.0.32"
-fbs-build = "0.1"
-fbs = "0.6"
+anyhow = "1.0.65"
+fbs-build = "0.1.0"
+fbs = "0.6.0"

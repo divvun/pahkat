@@ -10,7 +10,7 @@ use std::pin::Pin;
 use std::task::{self, Poll};
 
 pub async fn channel() -> (Signal, Watch, WatchStream<()>) {
-    let (tx, mut rx) = watch::channel(());
+    let (tx, rx) = watch::channel(());
     let mut watch_stream = WatchStream::new(rx.clone());
     watch_stream.next().await;
     (Signal { tx }, Watch { rx }, watch_stream)
@@ -43,7 +43,7 @@ enum State<F> {
 }
 
 impl Signal {
-    pub fn drain(mut self) -> Draining {
+    pub fn drain(self) -> Draining {
         let _ = self.tx.send(());
         Draining(Box::pin(async move { self.tx.closed().await }))
     }
