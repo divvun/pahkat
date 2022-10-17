@@ -32,22 +32,10 @@ pub async fn download<'a>(
         let pb = indicatif::ProgressBar::new(0);
         pb.set_style(indicatif::ProgressStyle::default_bar()
             .template("{spinner:.green} {prefix} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
-            .progress_chars("=>-"));
-        pb.set_prefix(&key.id);
-
-        // let progress = Box::new(move |cur, max| {
-        //     // pb.set_length(max);
-        //     // pb.set_position(cur);
-
-        //     // if cur >= max {
-        //     //     pb.finish_and_clear();
-        //     // }
-        //     true
-        // });
+            .expect("Invalid progress bar template!"));
+        pb.set_prefix(key.id.clone());
 
         let mut download = store.download(&key);
-
-        // pin_mut!(download);
 
         while let Some(event) = download.next().await {
             match event {

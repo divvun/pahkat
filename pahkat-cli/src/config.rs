@@ -28,7 +28,7 @@ pub(crate) async fn config<'a>(
                 let mut config = config.write().unwrap();
 
                 let repos = config.repos_mut();
-                repos.insert(url, RepoRecord { channel });
+                repos.insert(url, RepoRecord { channel })?;
 
                 Ok(())
             }
