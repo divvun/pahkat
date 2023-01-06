@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 pahkat-types = { path = "../pahkat-types", features = ["structopt"] }
-tokio = { version = "1.21.2", features = ["net"] }
+tokio = { version = "1.23.1", features = ["net"] }
 dialoguer = { version = "0.10.2", optional = true }
 url = "2.3.1"
 serde = "1.0.145"
