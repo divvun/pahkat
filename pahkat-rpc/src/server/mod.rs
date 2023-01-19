@@ -18,7 +18,7 @@ pub enum Error {
 }
 
 #[cfg(unix)]
-fn fix_path_perms(path: &std::path::Path) -> Result<(), Error> {
+fn fix_path_perms(path: &std::path::Path) -> Result<(), std::io::Error> {
     use std::{fs::Permissions, os::unix::fs::PermissionsExt};
 
     let meta = std::fs::metadata(path)?;
@@ -29,7 +29,7 @@ fn fix_path_perms(path: &std::path::Path) -> Result<(), Error> {
 }
 
 #[cfg(not(unix))]
-fn fix_path_perms(_path: &std::path::Path) -> Result<(), Error> {
+fn fix_path_perms(_path: &std::path::Path) -> Result<(), std::io::Error> {
     Ok(())
 }
 
