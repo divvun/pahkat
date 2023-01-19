@@ -13,4 +13,4 @@ exclude = [
 ]
 
 [patch.crates-io]
-windows-accesstoken = { git = "https://github.com/Eijebong/windows-accesstoken", branch = "fix-64-bits-builds" }
+libsqlite3-sys = { path = "../rusqlite/libsqlite3-sys" }
