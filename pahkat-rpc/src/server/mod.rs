@@ -24,7 +24,8 @@ fn fix_path_perms(path: &std::path::Path) -> Result<(), Error> {
     let meta = std::fs::metadata(path)?;
     let mut perms = meta.permissions();
     perms.set_mode(0o755);
-    std::fs::set_permissions(path, perms)
+    std::fs::set_permissions(path, perms)?;
+    Ok(())
 }
 
 #[cfg(not(unix))]
