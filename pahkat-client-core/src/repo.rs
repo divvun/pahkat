@@ -1044,7 +1044,14 @@ pub(crate) fn resolve_package_set(
             if candidate.action == PackageActionType::Install
                 && candidate.status == PackageStatus::UpToDate
             {
-                None
+                // We can not trust the UpToDate status on MacOS. If a dependency gets manually deleted, 
+                // it might appear up to date to pahkat but in fact, does not exist. 
+                // So it needs to be installed every time.
+                if cfg!(target_os = "macos") {
+                    Some(candidate)
+                } else {
+                    None
+                }
             } else if candidate.action == PackageActionType::Uninstall
                 && candidate.status == PackageStatus::NotInstalled
             {
