@@ -11,6 +11,8 @@ use typed_builder::TypedBuilder;
 pub struct Request<'a> {
     pub repo_path: Cow<'a, Path>,
     pub id: Cow<'a, str>,
+    pub name: Option<Cow<'a, pahkat_types::LangTagMap<String>>>,
+    pub description: Option<Cow<'a, pahkat_types::LangTagMap<String>>>,
     pub channel: Option<Cow<'a, str>>,
     pub version: Cow<'a, Version>,
     pub target: Cow<'a, pahkat_types::payload::Target>,
@@ -24,6 +26,10 @@ pub struct PartialRequest<'a> {
     pub repo_path: Option<&'a Path>,
     #[builder(default)]
     pub id: Option<&'a str>,
+    #[builder(default)]
+    pub name: Option<&'a pahkat_types::LangTagMap<String>>,
+    #[builder(default)]
+    pub description: Option<&'a pahkat_types::LangTagMap<String>>,
     #[builder(default)]
     pub platform: Option<&'a str>,
     #[builder(default)]
@@ -169,6 +175,8 @@ impl<'a> crate::Request for Request<'a> {
         Ok(Request {
             repo_path,
             id,
+            name: partial.name.map(|x| Cow::Borrowed(x)),
+            description: partial.description.map(|x| Cow::Borrowed(x)),
             channel,
             version,
             target: Cow::Owned(target),
@@ -217,6 +225,17 @@ pub fn update<'a>(request: Request<'a>) -> Result<(), Error> {
     log::debug!("Loaded {}", pkg_path.display());
 
     let channel = request.channel.as_ref().map(|x| x.deref().to_string());
+
+    // Update name and description if provided
+    if let Some(name) = request.name.as_ref() {
+        log::debug!("Setting name to {:?}", &name);
+        descriptor.name = name.deref().clone();
+    }
+
+    if let Some(description) = request.description.as_ref() {
+        log::debug!("Setting description to {:?}", &description);
+        descriptor.description = description.deref().clone();
+    }
 
     // Check if a release exists that meets this criteria
     let release = match descriptor

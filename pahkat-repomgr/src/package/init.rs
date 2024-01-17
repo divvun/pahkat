@@ -10,8 +10,8 @@ use typed_builder::TypedBuilder;
 pub struct Request<'a> {
     pub repo_path: Cow<'a, Path>,
     pub id: Cow<'a, str>,
-    pub name: Cow<'a, str>,
-    pub description: Cow<'a, str>,
+    pub name: Cow<'a, pahkat_types::LangTagMap<String>>,
+    pub description: Cow<'a, pahkat_types::LangTagMap<String>>,
     pub tags: Cow<'a, [String]>,
 }
 
@@ -113,22 +113,24 @@ impl<'a> crate::Request for Request<'a> {
         };
 
         let name = match partial.name {
-            Some(name) => Cow::Borrowed(name),
+            Some(name) => Cow::Owned(crate::make_lang_tag_map(name.into())),
             None => Cow::Owned(
                 Input::<String>::new()
                     .with_prompt("Package name (in English)")
                     .interact()
+                    .map(crate::make_lang_tag_map)
                     .map_err(|_| RequestError::InvalidInput)?,
             ),
         };
 
         let description = match partial.description {
-            Some(description) => Cow::Borrowed(description),
+            Some(description) => Cow::Owned(crate::make_lang_tag_map(description.into())),
             None => Cow::Owned(
                 Input::<String>::new()
                     .with_prompt("Package description (in English)")
                     .allow_empty(true)
                     .interact()
+                    .map(crate::make_lang_tag_map)
                     .map_err(|_| RequestError::InvalidInput)?,
             ),
         };
@@ -188,8 +190,8 @@ pub fn init<'a>(request: Request<'a>) -> Result<(), Error> {
         .build();
     let package = pahkat_types::package::Descriptor::builder()
         .package(data)
-        .name(crate::make_lang_tag_map(request.name.into_owned()))
-        .description(crate::make_lang_tag_map(request.description.into_owned()))
+        .name(request.name.into_owned())
+        .description(request.description.into_owned())
         .build();
 
     // Create the directory for this identifier
