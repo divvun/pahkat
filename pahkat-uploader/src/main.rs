@@ -161,7 +161,7 @@ fn names_and_descs(release: &mut Release, metadata_json: &Path) -> Result<()> {
 
     // DEBUG
     // dbg!(&release);
-    println!("{}", serde_json::to_string(&release)?);
+    // println!("{}", serde_json::to_string(&release)?);
     Ok(())
 }
 
