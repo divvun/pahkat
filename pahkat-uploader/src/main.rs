@@ -97,6 +97,12 @@ async fn main() -> anyhow::Result<()> {
                     .with_context(|| format!("could not read metadata from {path:?}"))?;
             }
 
+            if let Some(path) = upload.manifest_toml {
+                let package_type = upload.package_type.unwrap();
+                names_and_descs_toml(&mut release, &path, &package_type)
+                    .with_context(|| format!("could not read metadata from {path:?}"))?;
+            }
+
             let client = reqwest::Client::new();
             let mut retries = 0;
 
@@ -155,6 +161,33 @@ fn names_and_descs(release: &mut Release, metadata_json: &Path) -> Result<()> {
 
     // DEBUG
     // dbg!(&release);
-    eprintln!("{}", serde_json::to_string(&release)?);
+    println!("{}", serde_json::to_string(&release)?);
+    Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Manifest {
+    speller: SpellerMeta
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct SpellerMeta {
+    name: BTreeMap<String, String>,
+    description: BTreeMap<String, String>,
+}
+
+fn names_and_descs_toml(release: &mut Release, metadata_toml: &Path, package_type: &PackageType) -> Result<()> {
+    let manifest = std::fs::read_to_string(metadata_toml)?;
+    let manifest: Manifest = toml::from_str(&manifest)?;
+    let metadata = match package_type {
+        PackageType::Speller => manifest.speller,
+    };
+
+    release.name = Some(metadata.name);
+    release.description = Some(metadata.description);
+
+    // DEBUG
+    // dbg!(&release);
+    // println!("{}", serde_json::to_string(&release)?);
     Ok(())
 }
