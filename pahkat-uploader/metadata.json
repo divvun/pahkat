@@ -1,0 +1,14 @@
+{
+    "fit": {
+      "name": "Meänkieli-näppäimistöt",
+      "description": "Näppäimistöt Meänkielille UiT:n Divvun-ryhmästä ja Giellatekno-ryhmästä."
+    },
+    "en": {
+      "name": "Meänkieli Keyboards",
+      "description": "Keyboards for the Meänkieli language from the Divvun and Giellatekno groups at UiT."
+    },
+    "nb": {
+      "name": "Meänkieli tastatur",
+      "description": "Tastatur for Meänkieli fra Divvun-gruppa ved UiT."
+    }
+}
