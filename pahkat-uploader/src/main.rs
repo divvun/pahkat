@@ -136,8 +136,8 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn names_and_descs(release: &mut Release, path: &Path) -> Result<()> {
-    let metadata = std::fs::read_to_string(path)?;
+fn names_and_descs(release: &mut Release, metadata_json: &Path) -> Result<()> {
+    let metadata = std::fs::read_to_string(metadata_json)?;
     // assume json is like: {en: {name: "", description: ""}}
     let metadata: BTreeMap<String, BTreeMap<String, String>> = serde_json::from_str(&metadata)?;
     // convert to {name: {en: ""}, description: {en: ""}}
