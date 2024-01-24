@@ -172,8 +172,8 @@ struct Manifest {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct SpellerMeta {
-    name: BTreeMap<String, String>,
-    description: BTreeMap<String, String>,
+    name: LangTagMap<String>,
+    description: LangTagMap<String>,
 }
 
 fn names_and_descs_toml(
