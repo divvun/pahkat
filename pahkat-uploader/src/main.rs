@@ -2,9 +2,9 @@ use anyhow::{Context, Result};
 use pahkat_types::LangTagMap;
 use serde::{Deserialize, Serialize};
 use serde_json;
-use structopt::clap::arg_enum;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use structopt::clap::arg_enum;
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
@@ -167,7 +167,7 @@ fn names_and_descs(release: &mut Release, metadata_json: &Path) -> Result<()> {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Manifest {
-    speller: SpellerMeta
+    speller: SpellerMeta,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -176,7 +176,11 @@ struct SpellerMeta {
     description: BTreeMap<String, String>,
 }
 
-fn names_and_descs_toml(release: &mut Release, metadata_toml: &Path, package_type: &PackageType) -> Result<()> {
+fn names_and_descs_toml(
+    release: &mut Release,
+    metadata_toml: &Path,
+    package_type: &PackageType,
+) -> Result<()> {
     let manifest = std::fs::read_to_string(metadata_toml)?;
     let manifest: Manifest = toml::from_str(&manifest)?;
     let metadata = match package_type {
