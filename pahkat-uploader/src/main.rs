@@ -12,7 +12,7 @@ struct Upload {
     pub url: String,
 
     #[structopt(short = "P", long)]
-    pub release_meta_path: PathBuf,
+    pub release_meta: PathBuf,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[structopt(short, long)]
@@ -72,7 +72,7 @@ async fn main() -> anyhow::Result<()> {
             let auth =
                 std::env::var("PAHKAT_API_KEY").context("could not read env PAHKAT_API_KEY")?;
 
-            let release = std::fs::read_to_string(upload.release_meta_path)?;
+            let release = std::fs::read_to_string(upload.release_meta)?;
             let mut release: Release = toml::from_str(&release)?;
 
             if let Some(path) = upload.metadata_json {
