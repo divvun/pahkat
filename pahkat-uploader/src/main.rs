@@ -2,9 +2,16 @@ use anyhow::{Context, Result};
 use pahkat_types::LangTagMap;
 use serde::{Deserialize, Serialize};
 use serde_json;
+use structopt::clap::arg_enum;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
+
+#[derive(StructOpt)]
+enum Args {
+    Release(Release),
+    Upload(Upload),
+}
 
 #[derive(StructOpt, Serialize, Deserialize)]
 struct Upload {
@@ -15,14 +22,24 @@ struct Upload {
     pub release_meta: PathBuf,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[structopt(short, long)]
+    #[structopt(long)]
     pub metadata_json: Option<PathBuf>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[structopt(long, requires("package-type"))]
+    pub manifest_toml: Option<PathBuf>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[structopt(long, possible_values = &PackageType::variants(), case_insensitive = true)]
+    pub package_type: Option<PackageType>,
 }
 
-#[derive(StructOpt)]
-enum Args {
-    Release(Release),
-    Upload(Upload),
+arg_enum! {
+    #[derive(Debug, Serialize, Deserialize)]
+    enum PackageType {
+        Speller,
+        // to be expanded with grammar checkers and other types in the future
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, structopt::StructOpt)]
