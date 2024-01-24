@@ -178,10 +178,10 @@ struct SpellerMeta {
 
 fn names_and_descs_toml(
     release: &mut Release,
-    metadata_toml: &Path,
+    manifest_toml: &Path,
     package_type: &PackageType,
 ) -> Result<()> {
-    let manifest = std::fs::read_to_string(metadata_toml)?;
+    let manifest = std::fs::read_to_string(manifest_toml)?;
     let manifest: Manifest = toml::from_str(&manifest)?;
     let metadata = match package_type {
         PackageType::Speller => manifest.speller,
