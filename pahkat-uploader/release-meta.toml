@@ -1,0 +1,22 @@
+version = '1.0'
+channel = 'nightly'
+
+[target]
+platform = 'macos'
+
+[target.dependencies]
+
+[target.payload]
+type = 'MacOSPackage'
+url = 'http://test/'
+pkg_id = 'test'
+targets = [
+'system',
+'user',
+]
+requires_reboot = [
+'install',
+'uninstall',
+]
+size = 1
+installed_size = 1

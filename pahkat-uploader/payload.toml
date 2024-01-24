@@ -1,6 +1,0 @@
-type = 'MacOSPackage'
-url = 'http://test/'
-pkg_id = 'test'
-size = 1
-installed_size = 1
-
