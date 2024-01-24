@@ -2,7 +2,7 @@
 
 `pahkat-uploader` is a command line utility that has two responsibilities:
 1. Creating a `metadata.toml` for a release to be uploaded to a pahkat index using [`pahkat-reposrv`](https://github.com/divvun/pahkat-reposrv).
-2. Uploading the `metadata.toml` generated in step 1 via `pahkat-reposrv`.
+2. Uploading the `metadata.toml` generated in step 1, along with optional other metadata, via `pahkat-reposrv`.
 
 It is used by CI to do both of the above.
 
@@ -18,14 +18,14 @@ pahkat-uploader upload -u https://pahkat.thetc.se/main/packages/keyboard-fit -P 
 
 ### Adding additional metadata to the release
 
-As of version 2.XXXXXX it's possible to update a package's `name` and `description` fields.
+As of version 2.3 it's possible to update a package's `name` and `description` fields.
 
 There are 2 ways to do this:
-1. Using the `--metadata-json` option to supply a json file (see format below)
-2. Using the `--additional-meta` option to supply a toml file (see format below)
+1. Using the `--metadata-json` option to supply a json file, used for keyboards
+2. Using the `--manifest-toml` option to supply a toml file and the `--package-type` option to supply package type (at the time of this writing, only `speller` is supported. It will be expanded to include grammar checkers and other types in the future.) 
 
-#### Supplying `name` and `description` data via json
-This is currently used when uploading keyboard releases. The json file you provide with the `--metadata-json` option should be formatted like this:
+#### Supplying additional metadata for keyboard releases
+The json file you provide with the `--metadata-json` option should be formatted like this:
 ```json
 {
   "fit": {
@@ -43,18 +43,30 @@ This is currently used when uploading keyboard releases. The json file you provi
   ...
 }
 ```
-`pahkat-uploader` will convert it to the necessary format. This format is used because it's what is used in [`xxx.kbdgen/project.yaml`](https://github.com/giellalt/keyboard-fit/blob/main/fit.kbdgen/project.yaml)
+`pahkat-uploader` will convert it to the necessary format. This format is used because it's the format used by [`xxx.kbdgen/project.yaml`](https://github.com/giellalt/keyboard-fit/blob/main/fit.kbdgen/project.yaml) files.
 
-#### Supplying `name` and `description` data via toml
-This is currently used when uploaded spellers, and will later be expanded to include grammar checkers and speech synthesis. The toml file you provide with the `--additional-meta` should be formatted like this:
+A full command that supplies a `metadata.json` might look like this:
+
+```bash
+pahkat-uploader upload -u https://pahkat.thetc.se/main/packages/keyboard-fit --release-meta ./metadata.toml --metadata-json ./metadata.json
+```
+
+#### Supplying additional metadata when for `lang-xxx` releases (spellers, grammar checkers, etc) via `manifest.toml`
+This is currently used when uploading spellers, and will later be expanded to include grammar checkers and other types. The toml file you provide with the `--manifest-toml` option should be formatted like this:
 ```toml
-[name]
+[speller.name]
 en = "name"
 sv = "namn"
 ...
 
-[description]
+[speller.description]
 en = "description"
 sv = "beskrivning"
 ...
+```
+
+A full command that supplies a `manifest.toml` might look like:
+
+```bash
+pahkat-uploader upload --url http://test.com  --release-meta release-meta.toml --manifest-toml manifest.toml --package-type speller
 ```
