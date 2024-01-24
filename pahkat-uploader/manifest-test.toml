@@ -1,0 +1,19 @@
+version = "0.1.1"
+
+[speller.name]
+en = "Meänkieli"
+fi = "Meänkieli"
+
+[speller.description]
+en = "Meänkieli spellchecker"
+fi = "Meänkieli oikolukija"
+
+[macos]
+system_pkg_id = "no.divvun.MacDivvun.fit"
+
+[windows]
+system_product_code = "{77575EA4-966E-4F26-B956-06FC1CE3C3D6}_is1"
+legacy_product_codes = [
+    { value = "47877A58-DF15-40AF-ABB4-C6C2CE41EE2D", kind = "nsis" },
+    { value = "8F506290-ECCD-484E-B335-63DFDB31245D", kind = "nsis" }
+]
