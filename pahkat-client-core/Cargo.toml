@@ -46,7 +46,7 @@ async-stream = "0.3.3"
 stream-cancel = "0.8.1"
 anyhow = "1.0.65"
 crossbeam-queue = "0.2.3"
-whoami = "1.2.3"
+whoami = "1.5.0"
 pathos = "0.3.0"
 iref = "1.4"
 
