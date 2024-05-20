@@ -93,7 +93,7 @@ pub(crate) fn requires_update(store: &dyn PackageStore) -> bool {
     is_requiring_update
 }
 
-#[cfg(windows)]
+#[cfg(feature = "windows")]
 pub async fn install(_store: &dyn PackageStore) -> Result<(), Box<dyn Error>> {
     super::windows::initiate_self_update()?;
     // Wait some time for the impending shutdown
@@ -129,6 +129,16 @@ pub async fn install(store: &dyn PackageStore) -> Result<(), Box<dyn Error>> {
         .args(&["stop", "no.divvun.pahkatd"])
         .spawn()?;
     Ok(())
+}
+
+#[cfg(feature = "prefix")]
+pub(crate) async fn package_store() -> Box<dyn PackageStore> {
+    unimplemented!();
+}
+
+#[cfg(feature = "prefix")]
+pub async fn install(_store: &dyn PackageStore) -> Result<(), Box<dyn Error>> {
+    unimplemented!();
 }
 
 pub(crate) async fn self_update() -> Result<bool, Box<dyn Error>> {

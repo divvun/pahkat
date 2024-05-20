@@ -747,8 +747,12 @@ use std::path::Path;
 #[inline(always)]
 #[cfg(feature = "prefix")]
 async fn store(config_path: Option<&Path>) -> anyhow::Result<Arc<dyn PackageStore>> {
+    use anyhow::Context;
+
     let config_path = config_path.ok_or_else(|| anyhow::anyhow!("No prefix path specified"))?;
-    let store = pahkat_client::PrefixPackageStore::open(config_path)?;
+    let store = pahkat_client::PrefixPackageStore::open(config_path)
+        .await
+        .with_context(|| format!("Failed to open prefix store at {config_path:?}",))?;
     let store = Arc::new(store);
 
     if store.config().read().unwrap().repos().len() == 0 {
