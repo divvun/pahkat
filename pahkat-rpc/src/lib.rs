@@ -1010,7 +1010,7 @@ pub async fn start(
     );
 
     let endpoint = endpoint(path)?;
-    log::debug!("Endpoint created successfully.");
+    log::debug!("Endpoint created successfully `{:?}`.", path);
     let store = store(config_path).await?;
     log::debug!("Created store.");
 
