@@ -25,4 +25,7 @@ pub enum ProcessError {
 
     #[error("Unknown error")]
     Unknown(process::Output),
+
+    #[error("Plist error")]
+    Plist(#[from] plist::Error),
 }

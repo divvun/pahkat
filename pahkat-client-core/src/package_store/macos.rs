@@ -312,7 +312,17 @@ impl MacOSPackageStore {
             None => return Ok(PackageStatus::NotInstalled),
         };
 
-        let status = self::cmp::cmp(&pkg_info.pkg_version, &release.version);
+        let real_version =
+            get_detailed_package_version(&pkg_info.pkgid, target).unwrap_or_else(|e| {
+                log::warn!(
+                    "Couldn't get real version number from info.plist {}: {:?}",
+                    pkg_info.pkgid,
+                    e
+                );
+                pkg_info.pkg_version
+            });
+
+        let status = self::cmp::cmp(&real_version, &release.version);
 
         status
     }
@@ -391,9 +401,40 @@ fn get_package_info(
 
     let plist_data = String::from_utf8(output.stdout).expect("plist should always be valid UTF-8");
     let cursor = Cursor::new(plist_data);
-    let plist: MacOSPackageExportPlist =
-        plist::from_reader(cursor).expect("plist should always be valid");
+    let plist: MacOSPackageExportPlist = plist::from_reader(cursor)?;
     return Ok(plist);
+}
+
+// pkgutil truncates everything after x.x.x in a version string
+// so we need to get the full version from the Info.plist
+fn get_detailed_package_version(
+    bundle_id: &str,
+    target: InstallTarget,
+) -> Result<String, ProcessError> {
+    let pkg_plist: MacOSPackageExportPlist = get_package_info(bundle_id, target)?;
+    let bundle_plist = pkg_plist
+        .paths
+        .keys()
+        .find(|k| k.ends_with("Contents/Info.plist"))
+        .ok_or_else(|| {
+            log::warn!("No Info.plist for {}", bundle_id);
+            ProcessError::Io(io::Error::new(
+                io::ErrorKind::NotFound,
+                "No Info.plist found",
+            ))
+        })?;
+    let bundle_path = format!("/{}/{}", pkg_plist.install_location, bundle_plist);
+
+    #[derive(Deserialize)]
+    struct BundlePlist {
+        #[serde(rename = "CFBundleShortVersionString")]
+        version: String,
+    }
+
+    let raw_plist = std::fs::read(&bundle_path).map_err(ProcessError::Io)?;
+    let data: BundlePlist = plist::from_bytes(&raw_plist)?;
+
+    Ok(data.version)
 }
 
 fn install_macos_package(pkg_path: &Path, target: InstallTarget) -> Result<(), ProcessError> {
