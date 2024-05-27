@@ -26,6 +26,8 @@ pub enum ProcessError {
     #[error("Unknown error")]
     Unknown(process::Output),
 
+    // #[cfg(feature = "prefix")]
+    #[cfg(all(target_os = "macos", feature = "macos"))]
     #[error("Plist error")]
     Plist(#[from] plist::Error),
 }
