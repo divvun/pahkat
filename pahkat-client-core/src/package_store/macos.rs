@@ -313,7 +313,7 @@ impl MacOSPackageStore {
         };
 
         let real_version =
-            get_detailed_package_version(&pkg_info.pkgid, target).unwrap_or_else(|e| {
+            detailed_package_version(&pkg_info.pkgid, target).unwrap_or_else(|e| {
                 log::warn!(
                     "Couldn't get real version number from info.plist {}: {:?}",
                     pkg_info.pkgid,
@@ -322,9 +322,15 @@ impl MacOSPackageStore {
                 pkg_info.pkg_version
             });
 
-        let status = self::cmp::cmp(&real_version, &release.version);
+        let status = match self::cmp::cmp(&real_version, &release.version) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("Invalid version: {:?}, assuming not installed", e);
+                PackageStatus::NotInstalled
+            }
+        };
 
-        status
+        Ok(status)
     }
 }
 
@@ -407,7 +413,7 @@ fn get_package_info(
 
 // pkgutil truncates everything after x.x.x in a version string
 // so we need to get the full version from the Info.plist
-fn get_detailed_package_version(
+fn detailed_package_version(
     bundle_id: &str,
     target: InstallTarget,
 ) -> Result<String, ProcessError> {
@@ -415,7 +421,7 @@ fn get_detailed_package_version(
     let bundle_plist = pkg_plist
         .paths
         .keys()
-        .find(|k| k.ends_with("Contents/Info.plist"))
+        .find(|k| k.ends_with("Info.plist"))
         .ok_or_else(|| {
             log::warn!("No Info.plist for {}", bundle_id);
             ProcessError::Io(io::Error::new(

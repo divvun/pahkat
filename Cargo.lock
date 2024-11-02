@@ -1794,7 +1794,7 @@ checksum = "afb2e1c3ee07430c2cf76151675e583e0f19985fa6efae47d6848a3e2c824f85"
 
 [[package]]
 name = "pahkat-cli"
-version = "2.1.1"
+version = "2.3.0"
 dependencies = [
  "anyhow",
  "directories",
@@ -1810,7 +1810,7 @@ dependencies = [
 
 [[package]]
 name = "pahkat-client"
-version = "2.1.1"
+version = "2.3.0"
 dependencies = [
  "android_log",
  "anyhow",
@@ -1855,7 +1855,7 @@ dependencies = [
 
 [[package]]
 name = "pahkat-repomgr"
-version = "2.1.1"
+version = "2.3.0"
 dependencies = [
  "anyhow",
  "dialoguer",
@@ -1875,7 +1875,7 @@ dependencies = [
 
 [[package]]
 name = "pahkat-rpc"
-version = "2.1.1"
+version = "2.3.0"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -1914,7 +1914,7 @@ dependencies = [
 
 [[package]]
 name = "pahkat-types"
-version = "2.1.1"
+version = "2.3.0"
 dependencies = [
  "anyhow",
  "async-graphql",
