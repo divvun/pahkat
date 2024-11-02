@@ -11,6 +11,3 @@ members = [
 exclude = [
     "pahkat-uploader",
 ]
-
-[patch.crates-io]
-libsqlite3-sys = { path = "../rusqlite/libsqlite3-sys" }
