@@ -110,7 +110,7 @@ pub extern "C" fn pahkat_android_init(#[marshal(cffi::PathBufMarshaler)] contain
 #[no_mangle]
 pub extern "C" fn pahkat_str_free(ptr: *const libc::c_char) {
     if !ptr.is_null() {
-        unsafe { CString::from_raw(ptr as *mut _) };
+        drop(unsafe { CString::from_raw(ptr as *mut _) });
     }
 }
 
